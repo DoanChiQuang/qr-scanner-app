@@ -240,6 +240,7 @@
                 let {
                     state,
                     config: {
+                        videoId,
                         selectors
                     }
                 } = _self;
@@ -264,7 +265,7 @@
 
                     await state.codeReader.decodeFromVideoDevice(
                         devices[0].deviceId,
-                        config.videoId,
+                        videoId,
                         (result, error) => {
                             if (result) {
                                 _self.handleScanResult(result.text);
