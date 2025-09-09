@@ -321,7 +321,7 @@
                         // Alert
                         return;
                     }
-                    state.ticketDetail = _self.getTicketDetail(content);
+                    state.ticketDetail = await _self.getTicketDetail(content);
                     alert('Ticket Detail: ' + JSON.stringify(state.ticketDetail));
                     if (state.ticketDetail.is_checkin) {
                         _self.updateDOM(statusCode.USER_CHECKEDIN);
@@ -363,7 +363,7 @@
                     url: _self.getApiUrl('getTicketDetail'),
                     method: 'POST',
                     data: {
-                        content
+                        content: content
                     },
                     success: (response) => {
                         console.log(response);
