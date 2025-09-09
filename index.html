@@ -115,6 +115,7 @@
                 `);
                 $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(selectors.qrScannerInfoSection).html('');
+
                 _self.refs.video = document.getElementById(videoId);
             },
 
@@ -212,7 +213,8 @@
             async grantCameraPermissions() {
                 let _self = this;
                 let {
-                    state
+                    state,
+                    refs
                 } = _self;
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({
@@ -256,22 +258,19 @@
 
                     state.isScanning = true;
                     $(selectors.qrScannerBtnStartScan).prop('disabled', true);
-                    $(selectors.qrScannerInstruction).html('Đang quét mã QR...');
 
-                    const devices = await state.codeReader.listVideoInputDevices();
-                    if (!devices.length) {
-                        throw new Error('No Camera Devices Found');
-                    }
-
-                    await state.codeReader.decodeFromVideoDevice(
-                        undefined,
-                        videoId,
-                        (result, error) => {
-                            if (result) {
-                                _self.handleScanResult(result.text);
-                            }
+                    const deviceId = state.stream.getVideoTracks()[0].getSettings().deviceId;
+                    state.codeReader.decodeFromVideoDevice(deviceId,videoId).then((result) => {
+                        if (result) {
+                            _self.handleScanResult(result.text);
                         }
-                    );
+                        _self.stopScanner();
+                    }).catch((error) => {
+                        if (state.isScanning) {
+                            _self.setError('Scanning Error:', error);
+                            _self.stopScanner();
+                        }
+                    });
                 } catch (error) {
                     _self.setError(error.message);
                     _self.stopScanner();
