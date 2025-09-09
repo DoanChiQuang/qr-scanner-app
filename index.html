@@ -195,10 +195,10 @@
 
                 $(selectors.qrScannerBtnStartScan).click(async function () {
                     const granted = await _self.grantCameraPermissions();
-                    // state.codeReader
-                    //     .decodeOnceFromVideoDevice(undefined, 'video')
-                    //     .then(result => console.log(result.text))
-                    //     .catch(error => _self.setError(error));
+                    state.codeReader
+                        .decodeOnceFromVideoDevice(undefined, 'video')
+                        .then(result => console.log(result.text))
+                        .catch(error => _self.setError(error));
                 });
             },
 
