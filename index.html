@@ -259,8 +259,7 @@
                     state.isScanning = true;
                     $(selectors.qrScannerBtnStartScan).prop('disabled', true);
 
-                    const deviceId = state.stream.getVideoTracks()[0].getSettings().deviceId;
-                    state.codeReader.decodeFromVideoDevice(deviceId,videoId).then((result) => {
+                    state.codeReader.decodeOnceFromVideoDevice(undefined, videoId).then((result) => {
                         if (result) {
                             _self.handleScanResult(result.text);
                         }
