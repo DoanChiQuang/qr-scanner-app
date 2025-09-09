@@ -303,19 +303,37 @@
 
             async handleScanResult(data) {
                 let _self = this;
-                let {
-                    state,
-                    config: {
-                        statusCode,
-                        apis
-                    }
-                } = _self;
+                // let {
+                //     state,
+                //     config: {
+                //         statusCode,
+                //         apis
+                //     }
+                // } = _self;
                 try {
-                    alert(data);
+                    const result = _self.deobfuscateData(data);
+                    alert(result);
                 } catch (error) {
                     _self.setError(error.message);
                 }
             },
+
+            deobfuscateData(encoded, secret = 'sEcReT123') {
+                const b64 = encoded.split('').reverse().join('');
+                const base64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+                let raw = '';
+                try { raw = atob(base64); } catch (e) { raw = ''; }
+                return raw.replaceAll(secret, '');
+            },
+
+            parseScannedData(data) {
+                if (!data || typeof data !== 'string') return { version: '', fields: [] };
+                const parts = data.split('|');
+                return {
+                    version: parts[0] || '',
+                    fields: parts.slice(1)
+                };
+            }
         };
     </script>
 </body>
