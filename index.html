@@ -352,32 +352,27 @@
                 };
             },
 
-            getTicketDetail(content) {
-                console.log('Fetching ticket detail for content:', content);
+            async getTicketDetail(content) {
                 let _self = this;
 
-                let data = null;
-                if (!content) return data;
-
-                $.ajax({
-                    url: _self.getApiUrl('getTicketDetail'),
-                    method: 'POST',
-                    data: {
-                        content: content
-                    },
-                    success: (response) => {
-                        console.log(response);
-                        if (response && response.code == 200 && response.data) {
-                            data = response.data;
-                        }
-                    },
-                    error: (xhr, status, error) => {
-                        console.log(error);
-                        // Alert
+                if (!content) {
+                    return null;
+                }
+                try {
+                    const response = await fetch(_self.getApiUrl('getTicketDetail'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: content })
+                    });
+                    const result = await response.json();
+                    if (result && result.code === 200 && result.data) {
+                        return result.data;
                     }
-                });
-
-                return data;
+                    return null;
+                } catch (error) {
+                    _self.setError('Api Error: ' + error.message);
+                    return null;
+                }
             },
 
             getApiUrl(endpoint) {
