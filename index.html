@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <div class="wrapper">
+        <div class="header">
+        </div>
+        <div class="scanner-frame" id="scanner-frame-container">
+        </div>
+        <div class="instruction-text">
+        </div>
+        <div class="info-section">
+        </div>
+        <a href="#" title="" class="btn start">Press to Scan</a>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const codeReader = new ZXing.BrowserQRCodeReader();
+            CheckinModule.init(codeReader);
+        });
+
+        const CheckinModule = {
+            config: {
+                videoId: 'qr-video',
+                apis: {
+                    getInfo: '',
+                    checkin: '',
+                },
+                selectors: {
+                    qrScannerContainer: '#scanner-frame-container',
+                    qrScannerHeader: '.header',
+                    qrScannerInstruction: '.instruction-text',
+                    qrScannerInfoSection: '.info-section',
+                    qrScannerBtnStartScan: '.btn.start',
+                },
+                statusCode: {
+                    SCAN_QRCODE_RESET: 0,
+                    SCAN_QRCODE_ERROR: 1,
+                    USER_CHECKEDIN: 2,
+                    USER_CONFIRMATION: 3,
+                    USER_CONFIRMATION_SUCCESS: 4,
+                    USER_CONFIRMATION_ERROR: 5,
+                }
+            },
+
+            state: {
+                stream: null,
+                isGrantedCameraPermission: false,
+                codeReader: null,
+                isInitialized: false,
+                isScanning: false,
+                userInfo: null,
+                error: null
+            },
+
+            refs: {
+                video: null,
+                qrScanner: null
+            },
+
+            init(codeReader = null) {
+                let _self = this;
+                let {
+                    state
+                } = _self;
+                if (state.isInitialized) {
+                    this.setError('Checkin Module Already Initialized');
+                    return;
+                };
+                state.isInitialized = true;
+
+                if (state.codeReader) {
+                    this.setError('ZXing Library Already Initialized');
+                    return;
+                }
+                state.codeReader = codeReader;
+
+                _self.setupDOM();
+                _self.bindEvents();
+
+                console.log('--- Checkin Module Initialized ---');
+            },
+
+            setupDOM() {
+                let _self = this;
+                let {
+                    selectors,
+                    videoId
+                } = _self.config;
+
+                $(selectors.qrScannerHeader).html('');
+                $(selectors.qrScannerContainer).html(`
+                    <div class="scanner-line"></div>
+                    <video id="qr-video" width="100%" height="100%"></video>
+                `);
+                $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét').removeClass('error');
+                $(selectors.qrScannerInfoSection).html('');
+                _self.refs.video = document.getElementById(videoId);
+            },
+
+            updateDOM(code) {
+                let _self = this;
+                let {
+                    selectors,
+                    statusCode
+                } = _self.config;
+
+                $(selectors.qrScannerHeader).html('');
+                $(selectors.qrScannerInstruction).html('').removeClass('error');
+                $(selectors.qrScannerInfoSection).html('');
+
+                switch (code) {
+                    case statusCode.SCAN_QRCODE_ERROR:
+                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="error">Mã checkin không hợp lệ</p>');
+                        $(selectors.qrScannerInstruction).html('Vui lòng kiểm tra lại thông tin').addClass('error');
+                        break;
+                    case statusCode.USER_CHECKEDIN:
+                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="checked">Đã checkin</p>');
+                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('', 'Đã checkin'));
+                        break;
+                    case statusCode.USER_CONFIRMATION:
+                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="">Xác nhận checkin</p>');
+                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
+                        break;
+                    case statusCode.USER_CONFIRMATION_SUCCESS:
+                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="confirmed">Xác nhận checkin</p>');
+                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('confirmed', 'Đã checkin'));
+                        break;
+                    case statusCode.USER_CONFIRMATION_ERROR:
+                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="error">Xác nhận không thành công vui lòng thử lại</p>');
+                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
+                        break;
+                    default:
+                        _self.setError('Status Code Not Found');
+                        break;
+                }
+            },
+
+            generateInfoRows(statusClass = '', statusText = '') {
+                let _self = this;
+                let {
+                    userInfo
+                } = _self.state;
+
+                if (!userInfo) return '';
+                return `
+                    <div class="info-row"><span>Trạng thái:</span><span class="${statusClass}">${statusText}</span></div>
+                    <div class="info-row"><span>Họ tên:</span><span>${userInfo.fullName}</span></div>
+                    <div class="info-row"><span>Số điện thoại:</span><span>${userInfo.phone}</span></div>
+                    <div class="info-row"><span>Hạng vé:</span><span>${userInfo.ticketClass}</span></div>
+                    <div class="info-row"><span>Loại vé:</span><span>${userInfo.ticketType}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra:</span><span>${userInfo.eventDate}</span></div>
+                `;
+            },
+
+            setError(error) {
+                let _self = this;
+                _self.state.error = error;
+                console.error(error);
+            },
+
+            destroy() {
+                let _self = this;
+                let {
+                    state
+                } = _self;
+                _self.stopScanner();
+                state.isInitialized = false;
+                console.log('--- Checkin Module Destroyed ---');
+            },
+
+            bindEvents() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+                $(selectors.qrScannerBtnStartScan).click(async function () {
+                    const granted = await _self.grantCameraPermissions();
+                    // state.codeReader
+                    //     .decodeOnceFromVideoDevice(undefined, 'video')
+                    //     .then(result => console.log(result.text))
+                    //     .catch(error => _self.setError(error));
+                });
+            },
+
+            async grantCameraPermissions() {
+                let _self = this;
+                let {
+                    state
+                } = _self;
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment'
+                        }
+                    });
+                    state.stream = stream;
+                    state.isGrantedCameraPermission = true;
+                    return true;
+                } catch (error) {
+                    state.isGrantedCameraPermission = false;
+                    _self.setError('Camera Access Denied: ' + error.message);
+                    return false;
+                }
+            },
+
+            toggleScanner() {
+                let _self = this;;
+                _self.state.isScanning ? _self.stopScanner() : _self.startScanner();
+            },
+
+            async startScanner() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        selectors
+                    }
+                } = _self;
+                try {
+                    if (state.isScanning) {
+                        throw new Error('Scanner already running');
+                    }
+
+                    if (!state.isGrantedCameraPermission) {
+                        const granted = await this.grantCameraPermissions();
+                        if (!granted) return;
+                    }
+
+                    state.isScanning = true;
+                    $(selectors.qrScannerBtnStartScan).prop('disabled', true);
+                    $(selectors.qrScannerInstruction).html('Đang quét mã QR...');
+
+                    const devices = await state.codeReader.listVideoInputDevices();
+                    if (!devices.length) {
+                        throw new Error('No Camera Devices Found');
+                    }
+
+                    await state.codeReader.decodeFromVideoDevice(
+                        devices[0].deviceId,
+                        config.videoId,
+                        (result, error) => {
+                            if (result) {
+                                _self.handleScanResult(result.text);
+                            }
+                            if (error && state.isScanning) {
+                                _self.setError('Scanning error:', error);
+                            }
+                        }
+                    );
+                } catch (error) {
+                    _self.setError(error.message);
+                    _self.stopScanner();
+                }
+            },
+
+            async stopScanner() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        selectors
+                    }
+                } = _self;
+                try {
+                    if (!state.isScanning) return;
+
+                    state.isScanning = false;
+                    await state.codeReader.reset();
+                    $(selectors.qrScannerBtnStartScan).prop('disabled', false);
+                    $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét');
+
+                    if (state.stream) {
+                        state.stream.getTracks().forEach(track => track.stop());
+                        state.stream = null;
+                    }
+                } catch (error) {
+                    this.setError(error.message);
+                }
+            },
+
+            async handleScanResult(data) {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        statusCode,
+                        apis
+                    }
+                } = _self;
+                try {
+                    _self.stopScanner();
+                    const response = await $.ajax({
+                        url: apis.getInfo,
+                        method: 'POST',
+                        data: {
+                            qrCode: data
+                        },
+                        dataType: 'json'
+                    });
+
+                    if (!response.success) {
+                        throw new Error(response.message || 'Invalid QR code');
+                    }
+
+                    state.userInfo = response.data;
+                    if (response.data.checkedIn) {
+                        _self.updateStatus(statusCode.USER_CHECKEDIN);
+                    } else {
+                        _self.updateStatus(statusCode.USER_CONFIRMATION);
+                    }
+                } catch (error) {
+                    _self.updateStatus(statusCode.SCAN_QRCODE_ERROR);
+                    _self.setError(error.message);
+                }
+            },
+        };
+    </script>
+</body>
+
+</html>
