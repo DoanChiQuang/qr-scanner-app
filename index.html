@@ -19,6 +19,8 @@
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
 </head>
 
 <body>
@@ -351,6 +353,7 @@
             },
 
             getTicketDetail(content) {
+                console.log('Fetching ticket detail for content:', content);
                 let _self = this;
 
                 let data = null;
@@ -363,11 +366,13 @@
                         content
                     },
                     success: (response) => {
+                        console.log(response);
                         if (response && response.code == 200 && response.data) {
                             data = response.data;
                         }
                     },
                     error: (xhr, status, error) => {
+                        console.log(error);
                         // Alert
                     }
                 });
