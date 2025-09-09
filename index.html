@@ -205,11 +205,7 @@
                 } = _self;
 
                 $(selectors.qrScannerBtnStartScan).click(async function () {
-                    const granted = await _self.grantCameraPermissions();
-                    state.codeReader
-                        .decodeOnceFromVideoDevice(undefined, 'qr-video')
-                        .then(result => console.log(result.text))
-                        .catch(error => _self.setError(error));
+                    _self.toggleScanner();
                 });
             },
 
@@ -249,7 +245,7 @@
                 } = _self;
                 try {
                     if (state.isScanning) {
-                        throw new Error('Scanner already running');
+                        throw new Error('Scanner Already Running');
                     }
 
                     if (!state.isGrantedCameraPermission) {
@@ -319,28 +315,8 @@
                     }
                 } = _self;
                 try {
-                    _self.stopScanner();
-                    const response = await $.ajax({
-                        url: apis.getInfo,
-                        method: 'POST',
-                        data: {
-                            qrCode: data
-                        },
-                        dataType: 'json'
-                    });
-
-                    if (!response.success) {
-                        throw new Error(response.message || 'Invalid QR code');
-                    }
-
-                    state.userInfo = response.data;
-                    if (response.data.checkedIn) {
-                        _self.updateStatus(statusCode.USER_CHECKEDIN);
-                    } else {
-                        _self.updateStatus(statusCode.USER_CONFIRMATION);
-                    }
+                    alert(data);
                 } catch (error) {
-                    _self.updateStatus(statusCode.SCAN_QRCODE_ERROR);
                     _self.setError(error.message);
                 }
             },
