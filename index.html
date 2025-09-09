@@ -197,7 +197,7 @@
                 $(selectors.qrScannerBtnStartScan).click(async function () {
                     const granted = await _self.grantCameraPermissions();
                     state.codeReader
-                        .decodeOnceFromVideoDevice(undefined, 'video')
+                        .decodeOnceFromVideoDevice(undefined, 'qr-video')
                         .then(result => console.log(result.text))
                         .catch(error => _self.setError(error));
                 });
