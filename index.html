@@ -81,8 +81,11 @@
             init(codeReader = null) {
                 let _self = this;
                 let {
-                    state
+                    state,
+                    config
                 } = _self;
+
+                console.log(config);
                 if (state.isInitialized) {
                     this.setError('Checkin Module Already Initialized');
                     return;
@@ -349,17 +352,12 @@
 
             getTicketDetail(content) {
                 let _self = this;
-                let {
-                    config: {
-                        apis
-                    }
-                } = _self;
 
                 let data = null;
                 if (!content) return data;
 
                 $.ajax({
-                    url: apis.getTicketDetail,
+                    url: _self.getApiUrl('getTicketDetail'),
                     method: 'POST',
                     data: {
                         content
@@ -375,6 +373,17 @@
                 });
 
                 return data;
+            },
+
+            getApiUrl(endpoint) {
+                let _self = this;
+                let {
+                    config: {
+                        baseUrl,
+                        apis
+                    }
+                } = _self;
+                return baseUrl + (apis[endpoint] || '');
             }
         };
     </script>
