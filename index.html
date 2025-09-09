@@ -317,6 +317,7 @@
                         return;
                     }
                     state.ticketDetail = _self.getTicketDetail(content);
+                    alert('Ticket Detail: ' + JSON.stringify(state.ticketDetail));
                     if (state.ticketDetail.is_checkin) {
                         _self.updateDOM(statusCode.USER_CHECKEDIN);
                         return;
