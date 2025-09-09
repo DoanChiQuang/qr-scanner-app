@@ -41,9 +41,10 @@
 
         const CheckinModule = {
             config: {
+                baseUrl: 'https://api.esportsfan.net/',
                 videoId: 'qr-video',
                 apis: {
-                    getInfo: '',
+                    getTicketDetail: 'ticket/detail',
                     checkin: '',
                 },
                 selectors: {
@@ -69,13 +70,12 @@
                 codeReader: null,
                 isInitialized: false,
                 isScanning: false,
-                userInfo: null,
+                ticketDetail: null,
                 error: null
             },
 
             refs: {
-                video: null,
-                qrScanner: null
+                video: null
             },
 
             init(codeReader = null) {
@@ -165,17 +165,17 @@
             generateInfoRows(statusClass = '', statusText = '') {
                 let _self = this;
                 let {
-                    userInfo
+                    ticketDetail
                 } = _self.state;
 
-                if (!userInfo) return '';
+                if (!ticketDetail) return '';
                 return `
                     <div class="info-row"><span>Trạng thái:</span><span class="${statusClass}">${statusText}</span></div>
-                    <div class="info-row"><span>Họ tên:</span><span>${userInfo.fullName}</span></div>
-                    <div class="info-row"><span>Số điện thoại:</span><span>${userInfo.phone}</span></div>
-                    <div class="info-row"><span>Hạng vé:</span><span>${userInfo.ticketClass}</span></div>
-                    <div class="info-row"><span>Loại vé:</span><span>${userInfo.ticketType}</span></div>
-                    <div class="info-row"><span>Ngày diễn ra:</span><span>${userInfo.eventDate}</span></div>
+                    <div class="info-row"><span>Họ tên:</span><span>${ticketDetail.fullName}</span></div>
+                    <div class="info-row"><span>Số điện thoại:</span><span>${ticketDetail.phone}</span></div>
+                    <div class="info-row"><span>Hạng vé:</span><span>${ticketDetail.ticketClass}</span></div>
+                    <div class="info-row"><span>Loại vé:</span><span>${ticketDetail.ticketType}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra:</span><span>${ticketDetail.eventDate}</span></div>
                 `;
             },
 
@@ -303,16 +303,27 @@
 
             async handleScanResult(data) {
                 let _self = this;
-                // let {
-                //     state,
-                //     config: {
-                //         statusCode,
-                //         apis
-                //     }
-                // } = _self;
+                let {
+                    state,
+                    config: {
+                        statusCode
+                    }
+                } = _self;
                 try {
-                    const result = _self.deobfuscateData(data);
-                    alert(result);
+                    const content = _self.deobfuscateData(data);
+                    const result = _self.parseScannedData(content);
+                    if (result.version != 1 || result.fields.length == 0) {
+                        // Alert
+                        return;
+                    }
+                    state.ticketDetail = _self.getTicketDetail(content);
+                    if (state.ticketDetail.is_checkedin) {
+                        _self.updateDOM(statusCode.USER_CHECKEDIN);
+                        return;
+                    } else {
+                        _self.updateDOM(statusCode.USER_CONFIRMATION);
+                        return;
+                    }
                 } catch (error) {
                     _self.setError(error.message);
                 }
@@ -333,6 +344,36 @@
                     version: parts[0] || '',
                     fields: parts.slice(1)
                 };
+            },
+
+            getTicketDetail(content) {
+                let _self = this;
+                let {
+                    config: {
+                        apis
+                    }
+                } = _self;
+
+                let data = null;
+                if (!content) return data;
+
+                $.ajax({
+                    url: apis.getTicketDetail,
+                    method: 'POST',
+                    data: {
+                        content
+                    },
+                    success: (response) => {
+                        if (response && response.code == 200 && response.data) {
+                            data = response.data;
+                        }
+                    },
+                    error: (xhr, status, error) => {
+                        // Alert
+                    }
+                });
+
+                return data;
             }
         };
     </script>
