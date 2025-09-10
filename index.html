@@ -168,6 +168,7 @@
                         break;
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html('<img src="qrcode.png" alt="">');
+                        $(selectors.qrScannerInstruction).html('Thông báo: Vé đang đợi xác nhận').addClass('checked');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
                         $(selectors.qrScannerBtnConfirm).show();
                         break;
