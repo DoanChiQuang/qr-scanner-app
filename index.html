@@ -7,6 +7,7 @@
     <title>Document</title>
 
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <style>
         #qr-video {
             width: 100%;
@@ -15,10 +16,23 @@
             display: block;
             border-radius: 16px;
         }
+
+        .btn-group {
+            width: 100%;
+            max-width: 295px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
     </style>
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 </head>
@@ -33,7 +47,11 @@
         </div>
         <div class="info-section">
         </div>
-        <a href="#" title="" class="btn start">Press to Scan</a>
+        <div class="btn-group">
+            <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
+            <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
+            <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
+        </div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -54,15 +72,14 @@
                     qrScannerHeader: '.header',
                     qrScannerInstruction: '.instruction-text',
                     qrScannerInfoSection: '.info-section',
-                    qrScannerBtnStartScan: '.btn.start',
+                    qrScannerBtnResetScan: '#btn-reset-scan',
+                    qrScannerBtnStartScan: '#btn-start-scan',
+                    qrScannerBtnConfirm: '#btn-confirm',
                 },
                 statusCode: {
-                    SCAN_QRCODE_RESET: 0,
-                    SCAN_QRCODE_ERROR: 1,
-                    USER_CHECKEDIN: 2,
-                    USER_CONFIRMATION: 3,
-                    USER_CONFIRMATION_SUCCESS: 4,
-                    USER_CONFIRMATION_ERROR: 5,
+                    USER_CHECKEDIN: 1,
+                    USER_CONFIRMATION: 2,
+                    USER_CONFIRMATION_SUCCESS: 3,
                 }
             },
 
@@ -87,7 +104,6 @@
                     config
                 } = _self;
 
-                console.log(config);
                 if (state.isInitialized) {
                     this.setError('Checkin Module Already Initialized');
                     return;
@@ -121,6 +137,8 @@
                 $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(selectors.qrScannerInfoSection).html('');
 
+                $(selectors.qrScannerBtnConfirm).hide();
+
                 _self.refs.video = document.getElementById(videoId);
             },
 
@@ -136,33 +154,17 @@
                 $(selectors.qrScannerInfoSection).html('');
 
                 switch (code) {
-                    case statusCode.SCAN_QRCODE_ERROR:
-                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
-                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="error">Mã checkin không hợp lệ</p>');
-                        $(selectors.qrScannerInstruction).html('Vui lòng kiểm tra lại thông tin').addClass('error');
-                        break;
                     case statusCode.USER_CHECKEDIN:
                         $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
-                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="checked">Đã checkin</p>');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('', 'Đã checkin'));
                         break;
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
-                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="">Xác nhận checkin</p>');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
                         $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
-                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="confirmed">Xác nhận checkin</p>');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('confirmed', 'Đã checkin'));
-                        break;
-                    case statusCode.USER_CONFIRMATION_ERROR:
-                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
-                        $(selectors.qrScannerHeader).html('<h1 class="title">Thông báo</h1><p class="error">Xác nhận không thành công vui lòng thử lại</p>');
-                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
-                        break;
-                    default:
-                        _self.setError('Status Code Not Found');
                         break;
                 }
             },
@@ -187,7 +189,7 @@
             setError(error) {
                 let _self = this;
                 _self.state.error = error;
-                alert(error);
+                _self.showToast(error, 'error', 5000);
                 console.error(error);
             },
 
@@ -271,12 +273,13 @@
                         _self.stopScanner();
                     }).catch((error) => {
                         if (state.isScanning) {
-                            _self.setError('Scanning Error:', error);
+                            console.error(error);
+                            _self.setError('Scanning Error: ', error);
                             _self.stopScanner();
                         }
                     });
                 } catch (error) {
-                    _self.setError(error.message);
+                    _self.setError('Scanning Error' + error.message);
                     _self.stopScanner();
                 }
             },
@@ -383,6 +386,23 @@
                     }
                 } = _self;
                 return baseUrl + (apis[endpoint] || '');
+            },
+
+            showToast(message, type = 'info', duration = 3000) {
+                let bgColor = 'linear-gradient(to right, #00b09b, #96c93d)';
+                if (type === 'error') {
+                    bgColor = 'linear-gradient(to right, #ff5f6d, #ffc371)';
+                } else if (type === 'success') {
+                    bgColor = 'linear-gradient(to right, #56ab2f, #a8e063)';
+                }
+                Toastify({
+                    text: message,
+                    duration: duration,
+                    close: true,
+                    gravity: "top",
+                    position: "center",
+                    backgroundColor: bgColor,
+                }).showToast();
             }
         };
     </script>
