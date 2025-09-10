@@ -66,7 +66,7 @@
                 videoId: 'qr-video',
                 apis: {
                     getTicketDetail: 'ticket/detail',
-                    checkin: '',
+                    confirmCheckin: 'confirm-checkin',
                 },
                 selectors: {
                     qrScannerContainer: '#scanner-frame-container',
@@ -188,7 +188,7 @@
                     <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('HH:mm DD-MM-YYYY') : ''}</span></div>
                     ${ticketDetail?.gifts
                         ? `<div class="info-row">
-                                <span>Quà: </span><span>${ticketDetail.gifts?.name} - ${ticketDetail.gifts?.option} - ${ticketDetail.gifts?.quantity} - ${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'}</span>
+                                <span>Quà: </span><span>${ticketDetail.gifts?.name} - Size: ${ticketDetail.gifts?.option} - Qty: ${ticketDetail.gifts?.quantity} (${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'})</span>
                             </div>`
                         : ''
                     }
@@ -359,6 +359,31 @@
                 }
             },
 
+            async handleConfirmCheckin() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        statusCode
+                    }
+                } = _self;
+                try {
+                    if (!state.ticketDetail || state.ticketDetail.ticket_code) {
+                        _self.setError('No Ticket to Confirm');
+                        return;
+                    }
+                    const isConfirm = await _self.confirmCheckin(state.ticketDetail.ticket_code);
+                    if (isConfirm) {
+                        _self.updateDOM(statusCode.USER_CONFIRMATION_SUCCESS);
+                        _self.showToast('Check-in Successful', 'success', 5000);
+                    } else {
+                        _self.setError('Check-in Failed');
+                    }
+                } catch (error) {
+                    _self.setError(error.message);
+                }
+            },
+
             deobfuscateData(encoded, secret = 'sEcReT123') {
                 const b64 = encoded.split('').reverse().join('');
                 const base64 = b64.replace(/-/g, '+').replace(/_/g, '/');
@@ -389,13 +414,36 @@
                         body: JSON.stringify({ content: content })
                     });
                     const result = await response.json();
-                    if (result && result.code === 200 && result.data) {
+                    if (result && result.code == 200 && result.data) {
                         return result.data;
                     }
                     return null;
                 } catch (error) {
                     _self.setError('Api Error: ' + error.message);
                     return null;
+                }
+            },
+
+            async confirmCheckin(code) {
+                let _self = this;
+
+                if (!code) {
+                    return false;
+                }
+                try {
+                    const response = await fetch(_self.getApiUrl('confirmCheckin'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ticket_code: code })
+                    });
+                    const result = await response.json();
+                    if (result && result.code == 200) {
+                        return true;
+                    }
+                    return false;
+                } catch (error) {
+                    _self.setError('Api Error: ' + error.message);
+                    return false;
                 }
             },
 
