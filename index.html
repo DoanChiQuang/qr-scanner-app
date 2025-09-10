@@ -174,13 +174,13 @@
                 } = _self;
 
                 if (state.isInitialized) {
-                    this.setError('Checkin Module Already Initialized');
+                    _self.setError('Checkin Module Already Initialized');
                     return;
                 };
                 state.isInitialized = true;
 
                 if (state.codeReader) {
-                    this.setError('ZXing Library Already Initialized');
+                    _self.setError('ZXing Library Already Initialized');
                     return;
                 }
                 state.codeReader = codeReader;
@@ -236,18 +236,18 @@
                 switch (code) {
                     case statusCode.USER_CHECKEDIN:
                         $(selectors.qrScannerContainer).html(`<img src="${ICONS.REMOVE}" alt="">`);
-                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Đã checkin'));
+                        $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('error', 'Đã checkin'));
                         $(selectors.qrScannerBtnConfirm).hide();
                         $(selectors.qrScannerBtnNextScan).show();
                         break;
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html(`<img src="${ICONS.CLOCK}" alt="">`);
-                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('checked', 'Chưa checkin'));
+                        $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('checked', 'Chưa checkin'));
                         $(selectors.qrScannerBtnConfirm).show();
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
                         $(selectors.qrScannerContainer).html(`<img src="${ICONS.CHECK}" alt="">`);
-                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('confirmed', 'Đã checkin'));
+                        $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('confirmed', 'Đã checkin'));
                         $(selectors.qrScannerBtnConfirm).hide();
                         $(selectors.qrScannerBtnNextScan).show();
                         break;
@@ -360,7 +360,6 @@
 
             nextScanner() {
                 let _self = this;
-                _self.stopScanner();
                 _self.setupDOM();
                 _self.startScanner();
             },
@@ -378,6 +377,7 @@
                 try {
                     if (state.isScanning) {
                         _self.setError('Scanner Already Running');
+                        return;
                     }
 
                     if (!state.isGrantedCameraPermission) {
@@ -433,7 +433,7 @@
                         state.stream = null;
                     }
                 } catch (error) {
-                    this.setError(error.message);
+                    _self.setError(error.message);
                 }
             },
 
@@ -517,12 +517,10 @@
             async getTicketDetail(content) {
                 let _self = this;
 
-                _self.state.loading = true;
                 _self.toggleLoading(true);
                 let data = null;
 
                 if (!content) {
-                    _self.state.loading = false;
                     _self.toggleLoading(false);
                     return data;
                 }
@@ -540,7 +538,6 @@
                 } catch (error) {
                     _self.setError('Api Error: ' + error.message);
                 } finally {
-                    _self.state.loading = false;
                     _self.toggleLoading(false);
                 }
 
@@ -550,12 +547,10 @@
             async confirmCheckin(params = { ticket_code: null, order_gift_id: null }) {
                 let _self = this;
 
-                _self.state.loading = true;
                 _self.toggleLoading(true);
                 let data = false;
 
                 if (!params.ticket_code || !params.order_gift_id) {
-                    _self.state.loading = false;
                     _self.toggleLoading(false);
                     return data;
                 }
@@ -572,7 +567,6 @@
                 } catch (error) {
                     _self.setError('Api Error: ' + error.message);
                 } finally {
-                    _self.state.loading = false;
                     _self.toggleLoading(false);
                 }
 
