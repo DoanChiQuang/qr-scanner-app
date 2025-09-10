@@ -277,7 +277,8 @@
                     state,
                     config: {
                         videoId,
-                        selectors
+                        selectors,
+                        timeoutDuration
                     }
                 } = _self;
                 try {
@@ -293,6 +294,11 @@
                     state.isScanning = true;
                     $(selectors.qrScannerBtnStartScan).hide();
 
+                    state.timeoutId = setTimeout(() => {
+                        _self.resetScanner();
+                        _self.setError('Scan Timeout. Please try again.');
+                    }, timeoutDuration);
+
                     state.codeReader.decodeOnceFromVideoDevice(undefined, videoId).then((result) => {
                         if (result) {
                             _self.handleScanResult(result.text);
@@ -307,6 +313,11 @@
                 } catch (error) {
                     _self.setError('Scanning Error' + error.message);
                     _self.stopScanner();
+                } finally {
+                    if (state.timeoutId) {
+                        clearTimeout(state.timeoutId);
+                        state.timeoutId = null;
+                    }
                 }
             },
 
@@ -339,14 +350,8 @@
                     state,
                     config: {
                         statusCode,
-                        timeoutDuration
                     }
                 } = _self;
-
-                state.timeoutId = setTimeout(() => {
-                    _self.resetScanner();
-                    _self.setError('Scan Timeout. Please try again.');
-                }, timeoutDuration);
 
                 try {
                     const content = _self.deobfuscateData(data);
@@ -365,11 +370,6 @@
                     }
                 } catch (error) {
                     _self.setError(error.message);
-                } finally {
-                    if (state.timeoutId) {
-                        clearTimeout(state.timeoutId);
-                        state.timeoutId = null;
-                    }
                 }
             },
 
