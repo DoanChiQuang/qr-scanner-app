@@ -287,7 +287,7 @@
                     }
 
                     if (!state.isGrantedCameraPermission) {
-                        const granted = await this.grantCameraPermissions();
+                        const granted = await _self.grantCameraPermissions();
                         if (!granted) return;
                     }
 
