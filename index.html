@@ -34,6 +34,11 @@
             height: 50%;
             object-fit: contain;
         }
+
+        hr {
+            border: none;
+            border-top: 1px dashed #000;
+        }
     </style>
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -204,7 +209,7 @@
                         `
                         : ''
                     }
-                    <div class="info-row"><hr></div>
+                    <hr>
                     <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
                     <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
                     <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
