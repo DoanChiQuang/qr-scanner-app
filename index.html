@@ -82,7 +82,7 @@
                     USER_CONFIRMATION: 2,
                     USER_CONFIRMATION_SUCCESS: 3,
                 },
-                timeoutDuration: 10000
+                timeoutDuration: 5000
             },
 
             state: {
@@ -309,15 +309,15 @@
                             _self.setError('Scanning Error: ', error);
                             _self.stopScanner();
                         }
+                    }).finally(() => {
+                        if (state.timeoutId) {
+                            clearTimeout(state.timeoutId);
+                            state.timeoutId = null;
+                        }
                     });
                 } catch (error) {
                     _self.setError('Scanning Error' + error.message);
                     _self.stopScanner();
-                } finally {
-                    if (state.timeoutId) {
-                        clearTimeout(state.timeoutId);
-                        state.timeoutId = null;
-                    }
                 }
             },
 
