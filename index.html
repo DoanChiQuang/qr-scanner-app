@@ -215,6 +215,10 @@
                 $(selectors.qrScannerBtnStartScan).click(async function () {
                     _self.toggleScanner();
                 });
+
+                $(selectors.qrScannerBtnResetScan).click(async function () {
+                    _self.resetScanner();
+                });
             },
 
             async grantCameraPermissions() {
@@ -244,6 +248,12 @@
                 _self.state.isScanning ? _self.stopScanner() : _self.startScanner();
             },
 
+            resetScanner() {
+                let _self = this;
+                _self.stopScanner();
+                _self.setupDOM();
+            },
+
             async startScanner() {
                 let _self = this;
                 let {
@@ -256,11 +266,6 @@
                 try {
                     if (state.isScanning) {
                         throw new Error('Scanner Already Running');
-                    }
-
-                    if (state.stream) {
-                        state.stream.getTracks().forEach(track => track.stop());
-                        state.stream = null;
                     }
 
                     if (!state.isGrantedCameraPermission) {
@@ -276,7 +281,6 @@
                             _self.handleScanResult(result.text);
                         }
                         _self.stopScanner();
-                        _self.setupDOM();
                     }).catch((error) => {
                         if (state.isScanning) {
                             console.error(error);
@@ -407,7 +411,9 @@
                     close: true,
                     gravity: "top",
                     position: "center",
-                    backgroundColor: bgColor,
+                    style: {
+                        background: bgColor,
+                    }
                 }).showToast();
             }
         };
