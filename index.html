@@ -140,7 +140,6 @@
                 $(selectors.qrScannerBtnConfirm).hide();
 
                 _self.refs.video = document.getElementById(videoId);
-                console.log(_self.refs.video);
             },
 
             updateDOM(code) {
@@ -259,6 +258,11 @@
                         throw new Error('Scanner Already Running');
                     }
 
+                    if (state.stream) {
+                        state.stream.getTracks().forEach(track => track.stop());
+                        state.stream = null;
+                    }
+
                     if (!state.isGrantedCameraPermission) {
                         const granted = await this.grantCameraPermissions();
                         if (!granted) return;
@@ -272,6 +276,7 @@
                             _self.handleScanResult(result.text);
                         }
                         _self.stopScanner();
+                        _self.setupDOM();
                     }).catch((error) => {
                         if (state.isScanning) {
                             console.error(error);
