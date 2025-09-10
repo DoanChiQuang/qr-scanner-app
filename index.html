@@ -140,6 +140,13 @@
                     USER_CONFIRMATION: 2,
                     USER_CONFIRMATION_SUCCESS: 3,
                 },
+                assets: {
+                    ICONS: {
+                        CHECK: 'icon-check.png',
+                        CLOCK: 'icon-clock.png',
+                        REMOVE: 'icon-remove.png',
+                    }
+                },
                 timeoutDuration: 5000
             },
 
@@ -215,6 +222,9 @@
             updateDOM(code) {
                 let _self = this;
                 let {
+                    assets: {
+                        ICONS
+                    },
                     selectors,
                     statusCode
                 } = _self.config;
@@ -225,18 +235,18 @@
 
                 switch (code) {
                     case statusCode.USER_CHECKEDIN:
-                        $(selectors.qrScannerContainer).html('<img src="remove.png" alt="">');
+                        $(selectors.qrScannerContainer).html(`<img src="${ICONS.REMOVE}" alt="">`);
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Đã checkin'));
                         $(selectors.qrScannerBtnConfirm).hide();
                         $(selectors.qrScannerBtnNextScan).show();
                         break;
                     case statusCode.USER_CONFIRMATION:
-                        $(selectors.qrScannerContainer).html('<img src="clock.png" alt="">');
+                        $(selectors.qrScannerContainer).html(`<img src="${ICONS.CLOCK}" alt="">`);
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('checked', 'Chưa checkin'));
                         $(selectors.qrScannerBtnConfirm).show();
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
-                        $(selectors.qrScannerContainer).html('<img src="check.png" alt="">');
+                        $(selectors.qrScannerContainer).html(`<img src="${ICONS.CHECK}" alt="">`);
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('confirmed', 'Đã checkin'));
                         $(selectors.qrScannerBtnConfirm).hide();
                         $(selectors.qrScannerBtnNextScan).show();
@@ -524,7 +534,7 @@
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
-                        console.log('Ticket Detail:', result.data);
+                        // console.log('Ticket Detail:', result.data);
                         data = result.data;
                     }
                 } catch (error) {
