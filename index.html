@@ -307,6 +307,10 @@
                     _self.resetScanner();
                 });
 
+                $(selectors.qrScannerBtnNextScan).click(function () {
+                    _self.nextScanner();
+                });
+
                 $(selectors.qrScannerBtnConfirm).click(function () {
                     _self.handleConfirmCheckin();
                 });
@@ -338,6 +342,13 @@
                 let _self = this;
                 _self.stopScanner();
                 _self.setupDOM();
+            },
+
+            nextScanner() {
+                let _self = this;
+                _self.stopScanner();
+                _self.setupDOM();
+                _self.startScanner();
             },
 
             async startScanner() {
