@@ -81,10 +81,12 @@
                     USER_CHECKEDIN: 1,
                     USER_CONFIRMATION: 2,
                     USER_CONFIRMATION_SUCCESS: 3,
-                }
+                },
+                timeoutDuration: 10000
             },
 
             state: {
+                timeoutId: null,
                 stream: null,
                 isGrantedCameraPermission: false,
                 codeReader: null,
@@ -134,6 +136,7 @@
                 } = _self;
 
                 state.ticketDetail = null;
+                state.error = null;
 
                 $(selectors.qrScannerHeader).html('');
                 $(selectors.qrScannerContainer).html(`
@@ -335,13 +338,15 @@
                 let {
                     state,
                     config: {
-                        statusCode
+                        statusCode,
+                        timeoutDuration
                     }
                 } = _self;
 
-                // setInterval(() => {
-                //     _self.resetScanner();
-                // }, 10000);
+                state.timeoutId = setTimeout(() => {
+                    _self.resetScanner();
+                    _self.setError('Scan Timeout. Please try again.');
+                }, timeoutDuration);
 
                 try {
                     const content = _self.deobfuscateData(data);
@@ -360,6 +365,11 @@
                     }
                 } catch (error) {
                     _self.setError(error.message);
+                } finally {
+                    if (state.timeoutId) {
+                        clearTimeout(state.timeoutId);
+                        state.timeoutId = null;
+                    }
                 }
             },
 
