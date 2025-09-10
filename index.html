@@ -83,6 +83,7 @@
             },
 
             state: {
+                loading: false,
                 timeoutId: null,
                 stream: null,
                 isGrantedCameraPermission: false,
@@ -161,7 +162,8 @@
 
                 switch (code) {
                     case statusCode.USER_CHECKEDIN:
-                        $(selectors.qrScannerContainer).html('<img src="qrcode.png" alt="">');
+                        $(selectors.qrScannerContainer).html('<img src="icons8-check.gif" alt="">');
+                        $(selectors.qrScannerInstruction).html('Thông báo: Vé đã được sử dụng').addClass('error');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('', 'Đã checkin'));
                         break;
                     case statusCode.USER_CONFIRMATION:
@@ -419,8 +421,11 @@
             async getTicketDetail(content) {
                 let _self = this;
 
+                _self.state.loading = true;
+                let data = null;
+
                 if (!content) {
-                    return null;
+                    return data;
                 }
                 try {
                     const response = await fetch(_self.getApiUrl('getTicketDetail'), {
@@ -430,13 +435,15 @@
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
-                        return result.data;
+                        data = result.data;
                     }
-                    return null;
                 } catch (error) {
                     _self.setError('Api Error: ' + error.message);
-                    return null;
+                } finally {
+                    _self.state.loading = false;
                 }
+
+                return data;
             },
 
             async confirmCheckin(code) {
