@@ -250,12 +250,12 @@
                 return `
                     <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
                     <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
-                    <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.event_time ? `(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})` : ''}</span></div>
+                    <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.event_time ? `(${moment.unix(ticketDetail.used_time).format('HH:mm DD/MM')})` : ''}</span></div>
                     ${ticketDetail?.gifts
                         ? `
                             <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
                             <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
-                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'}</span></div>
+                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
                         `
                         : ''
                     }
