@@ -338,6 +338,11 @@
                         statusCode
                     }
                 } = _self;
+
+                setInterval(() => {
+                    _self.resetScanner();
+                }, 10000);
+
                 try {
                     const content = _self.deobfuscateData(data);
                     const result = _self.parseScannedData(content);
@@ -367,6 +372,7 @@
                     }
                 } = _self;
                 try {
+                    console.log(state);
                     if (!state.ticketDetail || state.ticketDetail.ticket_code) {
                         _self.setError('No Ticket to Confirm');
                         return;
