@@ -40,8 +40,6 @@
 
 <body>
     <div class="wrapper">
-        <div class="header">
-        </div>
         <div class="scanner-frame" id="scanner-frame-container">
         </div>
         <div class="instruction-text">
@@ -70,7 +68,6 @@
                 },
                 selectors: {
                     qrScannerContainer: '#scanner-frame-container',
-                    qrScannerHeader: '.header',
                     qrScannerInstruction: '.instruction-text',
                     qrScannerInfoSection: '.info-section',
                     qrScannerBtnResetScan: '#btn-reset-scan',
@@ -138,7 +135,6 @@
                 state.ticketDetail = null;
                 state.error = null;
 
-                $(selectors.qrScannerHeader).html('');
                 $(selectors.qrScannerContainer).html(`
                     <div class="scanner-line"></div>
                     <video id="qr-video" width="100%" height="100%"></video>
@@ -283,7 +279,7 @@
                 } = _self;
                 try {
                     if (state.isScanning) {
-                        throw new Error('Scanner Already Running');
+                        _self.setError('Scanner Already Running');
                     }
 
                     if (!state.isGrantedCameraPermission) {
@@ -303,17 +299,16 @@
                         if (result) {
                             _self.handleScanResult(result.text);
                         }
-                        _self.stopScanner();
                     }).catch((error) => {
                         if (state.isScanning) {
                             _self.setError('Scanning Error: ', error);
-                            _self.stopScanner();
                         }
                     }).finally(() => {
                         if (state.timeoutId) {
                             clearTimeout(state.timeoutId);
                             state.timeoutId = null;
                         }
+                        _self.stopScanner();
                     });
                 } catch (error) {
                     _self.setError('Scanning Error' + error.message);
@@ -361,6 +356,10 @@
                         return;
                     }
                     state.ticketDetail = await _self.getTicketDetail(content);
+                    if (!state.ticketDetail) {
+                        _self.setError('Ticket Not Found or Invalid');
+                        return;
+                    }
                     if (state.ticketDetail.is_checkin) {
                         _self.updateDOM(statusCode.USER_CHECKEDIN);
                         return;
