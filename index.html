@@ -188,10 +188,12 @@
                     <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('HH:mm DD-MM-YYYY') : ''}</span></div>
                     ${ticketDetail?.gifts
                         ? `
-                            <div class="info-row"><span>Quà: </span><span>${ticketDetail.gifts.name}</span></div>
-                            <div class="info-row"><span>- Size: </span><span>${ticketDetail.gifts.option}</span></div>
-                            <div class="info-row"><span>- Số lượng: </span><span>${ticketDetail.gifts.quantity}</span></div>
-                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'}</span></div>
+                            <div class="info-row">
+                                <span>Quà: </span><span>${ticketDetail.gifts?.name}</span>
+                                <span>, Size: </span><span>${ticketDetail.gifts?.option}</span>
+                                <span>, Số lượng: </span><span>${ticketDetail.gifts?.quantity}</span>
+                                <span>, Trạng thái: </span><span>${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'}</span>
+                            </div>
                         `
                         : ''
                     }
@@ -342,11 +344,10 @@
                     const content = _self.deobfuscateData(data);
                     const result = _self.parseScannedData(content);
                     if (result.version != 1 || result.fields.length == 0) {
-                        // Alert
+                        _self.setError('Invalid QR Code Data');
                         return;
                     }
                     state.ticketDetail = await _self.getTicketDetail(content);
-                    console.log(state.ticketDetail);
                     if (state.ticketDetail.is_checkin) {
                         _self.updateDOM(statusCode.USER_CHECKEDIN);
                         return;
