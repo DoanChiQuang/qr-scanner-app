@@ -185,7 +185,7 @@
                     <div class="info-row"><span>Số điện thoại: </span><span>${ticketDetail.contact_phone}</span></div>
                     <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
                     <div class="info-row"><span>Loại vé: </span><span>${ticketDetail.status}</span></div>
-                    <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment(ticketDetail.event_time, 'HH:mm DD-MM-YYYY') : ''}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('HH:mm DD-MM-YYYY') : ''}</span></div>
                 `;
             },
 
