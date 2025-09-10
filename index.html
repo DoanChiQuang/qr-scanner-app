@@ -164,26 +164,21 @@
                 } = _self.config;
 
                 $(selectors.qrScannerHeader).html('');
-                $(selectors.qrScannerInstruction).html('').removeClass('error');
-                $(selectors.qrScannerInstruction).html('').removeClass('checked');
-                $(selectors.qrScannerInstruction).html('').removeClass('confirmed');
+                $(selectors.qrScannerInstruction).html('');
                 $(selectors.qrScannerInfoSection).html('');
 
                 switch (code) {
                     case statusCode.USER_CHECKEDIN:
                         $(selectors.qrScannerContainer).html('<img src="remove.png" alt="">');
-                        $(selectors.qrScannerInstruction).html('Thông báo: Vé đã được sử dụng').addClass('error');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Đã checkin'));
                         break;
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html('<img src="clock.png" alt="">');
-                        $(selectors.qrScannerInstruction).html('Thông báo: Vé đang đợi xác nhận').addClass('checked');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('checked', 'Chưa checkin'));
                         $(selectors.qrScannerBtnConfirm).show();
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
                         $(selectors.qrScannerContainer).html('<img src="check.png" alt="">');
-                        $(selectors.qrScannerInstruction).html('Thông báo: Xác nhận thành công').addClass('confirmed');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('confirmed', 'Đã checkin'));
                         $(selectors.qrScannerBtnConfirm).hide();
                         break;
@@ -198,20 +193,21 @@
 
                 if (!ticketDetail) return '';
                 return `
-                    <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
-                    <div class="info-row"><span>Họ tên: </span><span>${ticketDetail.contact_name}</span></div>
-                    <div class="info-row"><span>Số điện thoại: </span><span>${ticketDetail.contact_phone}</span></div>
-                    <div class="info-row"><span>Email: </span><span>${ticketDetail.contact_email}</span></div>
                     <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
-                    <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('HH:mm DD-MM-YYYY') : ''}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
+                    <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
                     ${ticketDetail?.gifts
                         ? `
-                            <div class="info-row"><span>Quà: </span><span>${ticketDetail.gifts?.name} (${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'})</span></div>
+                            <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
                             <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
-                            <div class="info-row"><span>- Số lượng: </span><span>${ticketDetail.gifts?.quantity}</span></div>
+                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'}</span></div>
                         `
                         : ''
                     }
+                    <div class="info-row"><hr></div>
+                    <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
+                    <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
+                    <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
                 `;
             },
 
