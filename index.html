@@ -227,16 +227,16 @@
                     }
                 } = _self;
 
-                $(selectors.qrScannerBtnStartScan).click(async function () {
+                $(selectors.qrScannerBtnStartScan).click(function () {
                     _self.startScanner();
                 });
 
-                $(selectors.qrScannerBtnResetScan).click(async function () {
+                $(selectors.qrScannerBtnResetScan).click(function () {
                     _self.resetScanner();
                 });
 
-                $(selectors.qrScannerBtnConfirm).click(async function () {
-
+                $(selectors.qrScannerBtnConfirm).click(function () {
+                    _self.handleConfirmCheckin();
                 });
             },
 
