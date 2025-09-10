@@ -33,6 +33,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
 </head>
@@ -138,6 +139,7 @@
                 $(selectors.qrScannerInfoSection).html('');
 
                 $(selectors.qrScannerBtnConfirm).hide();
+                $(selectors.qrScannerBtnStartScan).show();
 
                 _self.refs.video = document.getElementById(videoId);
             },
@@ -178,12 +180,12 @@
 
                 if (!ticketDetail) return '';
                 return `
-                    <div class="info-row"><span>Trạng thái:</span><span class="${statusClass}">${statusText}</span></div>
-                    <div class="info-row"><span>Họ tên:</span><span>${ticketDetail.contact_name}</span></div>
-                    <div class="info-row"><span>Số điện thoại:</span><span>${ticketDetail.contact_phone}</span></div>
-                    <div class="info-row"><span>Hạng vé:</span><span>${ticketDetail.ticket_class_name}</span></div>
-                    <div class="info-row"><span>Loại vé:</span><span>${ticketDetail.status}</span></div>
-                    <div class="info-row"><span>Ngày diễn ra:</span><span>${ticketDetail.event_time}</span></div>
+                    <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
+                    <div class="info-row"><span>Họ tên: </span><span>${ticketDetail.contact_name}</span></div>
+                    <div class="info-row"><span>Số điện thoại: </span><span>${ticketDetail.contact_phone}</span></div>
+                    <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
+                    <div class="info-row"><span>Loại vé: </span><span>${ticketDetail.status}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment(ticketDetail.event_time, 'HH:mm DD-MM-YYYY') : ''}</span></div>
                 `;
             },
 
