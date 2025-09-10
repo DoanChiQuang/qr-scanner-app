@@ -161,6 +161,7 @@
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
+                        $(selectors.qrScannerBtnConfirm).show();
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
                         $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
@@ -274,7 +275,7 @@
                     }
 
                     state.isScanning = true;
-                    $(selectors.qrScannerBtnStartScan).prop('disabled', true);
+                    $(selectors.qrScannerBtnStartScan).hide();
 
                     state.codeReader.decodeOnceFromVideoDevice(undefined, videoId).then((result) => {
                         if (result) {
@@ -335,6 +336,7 @@
                         return;
                     }
                     state.ticketDetail = await _self.getTicketDetail(content);
+                    console.log(state.ticketDetail);
                     if (state.ticketDetail.is_checkin) {
                         _self.updateDOM(statusCode.USER_CHECKEDIN);
                         return;
