@@ -157,16 +157,16 @@
 
                 switch (code) {
                     case statusCode.USER_CHECKEDIN:
-                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerContainer).html('<img src="qrcode.png" alt="">');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('', 'Đã checkin'));
                         break;
                     case statusCode.USER_CONFIRMATION:
-                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerContainer).html('<img src="qrcode.png" alt="">');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Chưa checkin'));
                         $(selectors.qrScannerBtnConfirm).show();
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
-                        $(selectors.qrScannerContainer).html('<img src="images/qrcode.png" alt="">');
+                        $(selectors.qrScannerContainer).html('<img src="qrcode.png" alt="">');
                         $(selectors.qrScannerInfoSection).html(this.generateInfoRows('confirmed', 'Đã checkin'));
                         break;
                 }
