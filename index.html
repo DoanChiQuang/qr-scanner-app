@@ -402,7 +402,9 @@
                         _self.setError('No Ticket to Confirm');
                         return;
                     }
-                    const isConfirm = await _self.confirmCheckin(state.ticketDetail.ticket_code);
+                    let ticketCode = state.ticketDetail.ticket_code;
+                    let orderGiftId = state.ticketDetail.gifts ? state.ticketDetail.gifts.order_gift_id : null;
+                    const isConfirm = await _self.confirmCheckin({ ticket_code: ticketCode, order_gift_id: orderGiftId });
                     if (isConfirm) {
                         _self.updateDOM(statusCode.USER_CONFIRMATION_SUCCESS);
                         _self.showToast('Check-in Successful', 'success', 5000);
@@ -438,6 +440,7 @@
                 let data = null;
 
                 if (!content) {
+                    _self.state.loading = false;
                     return data;
                 }
                 try {
@@ -459,27 +462,33 @@
                 return data;
             },
 
-            async confirmCheckin(code) {
+            async confirmCheckin(params = { ticket_code: null, order_gift_id: null }) {
                 let _self = this;
 
-                if (!code) {
-                    return false;
+                _self.state.loading = true;
+                let data = false;
+
+                if (!params.ticket_code || !params.order_gift_id) {
+                    _self.state.loading = false;
+                    return data;
                 }
                 try {
                     const response = await fetch(_self.getApiUrl('confirmCheckin'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ticket_code: code })
+                        body: JSON.stringify(params)
                     });
                     const result = await response.json();
                     if (result && result.code == 200) {
-                        return true;
+                        data = true;
                     }
-                    return false;
                 } catch (error) {
                     _self.setError('Api Error: ' + error.message);
-                    return false;
+                } finally {
+                    _self.state.loading = false;
                 }
+
+                return data;
             },
 
             getApiUrl(endpoint) {
