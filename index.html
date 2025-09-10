@@ -28,6 +28,12 @@
             left: 50%;
             transform: translateX(-50%);
         }
+
+        .scanner-frame img {
+            width: 50%;
+            height: 50%;
+            object-fit: contain;
+        }
     </style>
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -140,6 +146,7 @@
                     <div class="scanner-line"></div>
                     <video id="qr-video" width="100%" height="100%"></video>
                 `);
+
                 $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(selectors.qrScannerInfoSection).html('');
 
@@ -166,7 +173,7 @@
                     case statusCode.USER_CHECKEDIN:
                         $(selectors.qrScannerContainer).html('<img src="remove.png" alt="">');
                         $(selectors.qrScannerInstruction).html('Thông báo: Vé đã được sử dụng').addClass('error');
-                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('', 'Đã checkin'));
+                        $(selectors.qrScannerInfoSection).html(this.generateInfoRows('error', 'Đã checkin'));
                         break;
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html('<img src="clock.png" alt="">');
