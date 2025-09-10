@@ -192,9 +192,11 @@
                     <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
                     <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('HH:mm DD-MM-YYYY') : ''}</span></div>
                     ${ticketDetail?.gifts
-                        ? `<div class="info-row">
-                                <span>Quà: </span><span>${ticketDetail.gifts?.name} - Size: ${ticketDetail.gifts?.option} - Qty: ${ticketDetail.gifts?.quantity} (${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'})</span>
-                            </div>`
+                        ? `
+                            <div class="info-row"><span>Quà: </span><span>${ticketDetail.gifts?.name} (${ticketDetail.gifts.status == 1 ? 'Chưa nhận' : 'Đã nhận'})</span></div>
+                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
+                            <div class="info-row"><span>- Số lượng: </span><span>${ticketDetail.gifts?.quantity}</span></div>
+                        `
                         : ''
                     }
                 `;
