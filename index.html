@@ -179,11 +179,11 @@
                 if (!ticketDetail) return '';
                 return `
                     <div class="info-row"><span>Trạng thái:</span><span class="${statusClass}">${statusText}</span></div>
-                    <div class="info-row"><span>Họ tên:</span><span>${ticketDetail.fullName}</span></div>
-                    <div class="info-row"><span>Số điện thoại:</span><span>${ticketDetail.phone}</span></div>
-                    <div class="info-row"><span>Hạng vé:</span><span>${ticketDetail.ticketClass}</span></div>
-                    <div class="info-row"><span>Loại vé:</span><span>${ticketDetail.ticketType}</span></div>
-                    <div class="info-row"><span>Ngày diễn ra:</span><span>${ticketDetail.eventDate}</span></div>
+                    <div class="info-row"><span>Họ tên:</span><span>${ticketDetail.contact_name}</span></div>
+                    <div class="info-row"><span>Số điện thoại:</span><span>${ticketDetail.contact_phone}</span></div>
+                    <div class="info-row"><span>Hạng vé:</span><span>${ticketDetail.ticket_class_name}</span></div>
+                    <div class="info-row"><span>Loại vé:</span><span>${ticketDetail.status}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra:</span><span>${ticketDetail.event_time}</span></div>
                 `;
             },
 
@@ -284,7 +284,6 @@
                         _self.stopScanner();
                     }).catch((error) => {
                         if (state.isScanning) {
-                            console.error(error);
                             _self.setError('Scanning Error: ', error);
                             _self.stopScanner();
                         }
