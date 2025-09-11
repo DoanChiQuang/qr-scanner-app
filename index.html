@@ -157,7 +157,7 @@
                     const response = await fetch(_self.getApiUrl('getAccountInfo'), {
                         method: 'GET',
                         headers: { 'Content-Type': 'application/json' },
-                        // credentials: 'include'
+                        credentials: 'include'
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
@@ -588,6 +588,7 @@
                     const response = await fetch(_self.getApiUrl('getTicketDetail'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify({ content: content })
                     });
                     const result = await response.json();
@@ -618,6 +619,7 @@
                     const response = await fetch(_self.getApiUrl('confirmCheckin'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
                         body: JSON.stringify(params)
                     });
                     const result = await response.json();
