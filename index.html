@@ -124,7 +124,7 @@
                     }
                 } = _self;
 
-                $(selectors.btnLogin).prop('disabled', true).text('Logging in...');
+                $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
 
                 let email = $('#email').val();
                 let password = $('#password').val();
