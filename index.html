@@ -113,12 +113,14 @@
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const codeReader = new ZXing.BrowserQRCodeReader();
             AuthModule.init();
             if (!AuthModule.isLoggedIn()) {
+                console.log('User not logged in');
                 // window.location.href = '/order/checkin/login';
                 return;
             }
+            console.log('User is logged in');
+            const codeReader = new ZXing.BrowserQRCodeReader();
             CheckinModule.init(codeReader);
         });
 
