@@ -140,9 +140,11 @@
             init() {
                 let _self = this;
                 _self.getAccountInfo().then(info => {
+                    console.log('Account Info:', info);
                     if (info) {
                         _self.state.accountInfo = info;
                     }
+                    console.log('Account Info:', _self.state.accountInfo);
                 });
                 console.log('--- Auth Module Initialized ---');
             },
@@ -163,7 +165,6 @@
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
-                        console.log('Account Info:', result.data);
                         data = result.data;
                     } else {
                         alert('Error: ' + (result.message || 'Unknown Error'));
