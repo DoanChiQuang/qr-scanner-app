@@ -114,17 +114,83 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const codeReader = new ZXing.BrowserQRCodeReader();
+            AuthModule.init();
+            if (!AuthModule.isLoggedIn()) {
+                window.location.href = '/order/checkin/login';
+                return;
+            }
             CheckinModule.init(codeReader);
         });
+
+        const AuthModule = {
+            config: {
+                baseUrl: 'https://api.esportsfan.net/',
+                apis: {
+                    getAccountInfo: 'account/info',
+                }
+            },
+
+            state: {
+                accountInfo: null,
+                error: null
+            },
+
+            init() {
+                let _self = this;
+                _self.getAccountInfo().then(info => {
+                    if (info) {
+                        _self.state.accountInfo = info;
+                    }
+                });
+                console.log('--- Auth Module Initialized ---');
+            },
+
+            isLoggedIn() {
+                let _self = this;
+                return _self.state.accountInfo != null;
+            },
+
+            async getAccountInfo() {
+                let _self = this;
+                let data = null;
+                try {
+                    const response = await fetch(_self.getApiUrl('getAccountInfo'), {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    const result = await response.json();
+                    if (result && result.code == 200 && result.data) {
+                        console.log('Account Info:', result.data);
+                        data = result.data;
+                    } else {
+                        alert('Error: ' + (result.message || 'Unknown Error'));
+                    }
+                } catch (error) {
+                    alert('Api Error: ' + error.message);
+                }
+                return data;
+            },
+
+            getApiUrl(endpoint) {
+                let _self = this;
+                let {
+                    config: {
+                        baseUrl,
+                        apis
+                    }
+                } = _self;
+                return baseUrl + (apis[endpoint] || '');
+            },
+        };
 
         const CheckinModule = {
             config: {
                 baseUrl: 'https://api.esportsfan.net/',
-                videoId: 'qr-video',
                 apis: {
                     getTicketDetail: 'ticket/detail',
                     confirmCheckin: 'ticket/confirm-checkin',
                 },
+                videoId: 'qr-video',
                 selectors: {
                     qrScannerContainer: '#scanner-frame-container',
                     qrScannerInstruction: '.instruction-text',
@@ -160,10 +226,6 @@
                 isScanning: false,
                 ticketDetail: null,
                 error: null
-            },
-
-            refs: {
-                video: null
             },
 
             init(codeReader = null) {
@@ -215,8 +277,6 @@
                 $(selectors.qrScannerBtnConfirm).hide();
                 $(selectors.qrScannerBtnNextScan).hide();
                 $(selectors.qrScannerBtnStartScan).show();
-
-                _self.refs.video = document.getElementById(videoId);
             },
 
             updateDOM(code) {
@@ -333,8 +393,7 @@
             async grantCameraPermissions() {
                 let _self = this;
                 let {
-                    state,
-                    refs
+                    state
                 } = _self;
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({
