@@ -115,9 +115,11 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await AuthModule.init();
             if (!AuthModule.isLoggedIn()) {
-                window.location.href = '/login.html';
+                window.location.href = '/qr-scanner-app/login.html';
                 return;
             }
+
+            // Initialize ZXing & Checkin Module
             const codeReader = new ZXing.BrowserQRCodeReader();
             CheckinModule.init(codeReader);
         });
