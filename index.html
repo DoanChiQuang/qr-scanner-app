@@ -8,80 +8,6 @@
 
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <style>
-        #qr-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            border-radius: 16px;
-        }
-
-        .btn-group {
-            width: 100%;
-            max-width: 295px;
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .scanner-frame img {
-            width: 50%;
-            height: 50%;
-            object-fit: contain;
-        }
-
-        hr {
-            margin: 12px 0;
-            border: none;
-            border-top: 1px dashed #000;
-        }
-
-        small {
-            font-size: 12px;
-        }
-
-        /* Loading Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #F5C000;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
@@ -92,43 +18,42 @@
 </head>
 
 <body>
-    <div class="wrapper">
-        <div class="scanner-frame" id="scanner-frame-container">
-        </div>
-        <div class="instruction-text">
-        </div>
-        <div class="info-section">
-        </div>
-        <div class="btn-group">
-            <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-            <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-            <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
-            <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
-        </div>
-
-        <!-- Loading Modal -->
-        <div class="modal" id="modal">
-            <div class="spinner"></div>
-        </div>
+    <div id="main">
+    </div>
+    <div class="modal" id="modal">
+        <div class="spinner"></div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
-            await AuthModule.init();
-            if (!AuthModule.isLoggedIn()) {
-                window.location.href = '/qr-scanner-app/login.html';
-                return;
-            }
-
-            // Initialize ZXing & Checkin Module
-            const codeReader = new ZXing.BrowserQRCodeReader();
-            CheckinModule.init(codeReader);
+            await App.init();
         });
+
+        const App = {
+            async init() {
+                // Initialize Auth Module
+                await AuthModule.init();
+
+                // Check User is Logged In
+                if (!AuthModule.isLoggedIn()) {
+                    AuthModule.render();
+                    return;
+                }
+                // Initialize ZXing & Checkin Module
+                const codeReader = new ZXing.BrowserQRCodeReader();
+                CheckinModule.init(codeReader);
+            }
+        };
 
         const AuthModule = {
             config: {
                 baseUrl: 'https://demo-api.esportsfan.net/',
                 apis: {
                     getAccountInfo: 'account/info',
+                    login: 'account/login',
+                },
+                selectors: {
+                    main: '#main',
+                    btnLogin: '#btn-login',
                 }
             },
 
@@ -146,9 +71,72 @@
                 console.log('--- Auth Module Initialized ---');
             },
 
+            render() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    },
+                } = _self;
+                $(selectors.main).html(`
+                    <div class="header">
+                        <h1 class="title">Login</h1>
+                    </div>
+                    <form id="form">
+                        <label for="email">Email</label>
+                        <input type="text" id="email" name="email" required><br><br>
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required><br><br>
+                        <a href="#" class="btn" id="btn-login">Submit</a>
+                    </form>
+                `);
+
+                _self.setupDOM();
+                _self.bindEvents();
+            },
+
+            setupDOM() { },
+
+            bindEvents() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+                $(document).on('click', selectors.btnLogin, function (e) {
+                    e.preventDefault();
+                    _self.handleSubmitLogin();
+                });
+            },
+
             isLoggedIn() {
                 let _self = this;
                 return _self.state.accountInfo != null;
+            },
+
+            async handleSubmitLogin() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    }
+                } = _self;
+                let email = $('#email').val();
+                let password = $('#password').val();
+                if (!email || !password) {
+                    alert('Please enter email and password');
+                    return;
+                }
+
+                let result = await _self.login({ email: email, password: password });
+                if (result && result.session_id && result.account) {
+                    _self.state.accountInfo = result.account;
+                    window.location.reload();
+                } else {
+                    alert('Login failed. Please check your credentials.');
+                }
             },
 
             async getAccountInfo() {
@@ -159,6 +147,30 @@
                         method: 'GET',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include'
+                    });
+                    const result = await response.json();
+                    if (result && result.code == 200 && result.data) {
+                        data = result.data;
+                    } else {
+                        alert('Error: ' + (result.message || 'Unknown Error'));
+                    }
+                } catch (error) {
+                    alert('Api Error: ' + error.message);
+                }
+                return data;
+            },
+
+            async login(params = { email: null, password: null }) {
+                let _self = this;
+                let data = null;
+                if (!params.email || !params.password) {
+                    return data;
+                }
+                try {
+                    const response = await fetch(_self.getApiUrl('login'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(params)
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
@@ -196,11 +208,13 @@
                     qrScannerContainer: '#scanner-frame-container',
                     qrScannerInstruction: '.instruction-text',
                     qrScannerInfoSection: '.info-section',
+                    qrScannerBtnGroup: '.btn-group',
                     qrScannerBtnResetScan: '#btn-reset-scan',
                     qrScannerBtnStartScan: '#btn-start-scan',
                     qrScannerBtnNextScan: '#btn-next-scan',
                     qrScannerBtnConfirm: '#btn-confirm',
-                    modal: '#modal'
+                    modal: '#modal',
+                    main: '#main',
                 },
                 statusCode: {
                     USER_CHECKEDIN: 1,
@@ -248,10 +262,34 @@
                 }
                 state.codeReader = codeReader;
 
-                _self.setupDOM();
-                _self.bindEvents();
+                _self.render();
 
                 console.log('--- Checkin Module Initialized ---');
+            },
+
+            render() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+                $(selectors.main).html(`
+                    <div class="wrapper">
+                        <div class="scanner-frame" id="scanner-frame-container">
+                        </div>
+                        <div class="instruction-text">
+                        </div>
+                        <div class="info-section">
+                        </div>
+                        <div class="btn-group">
+                        </div>
+                    </div>
+                `);
+
+                _self.setupDOM();
+                _self.bindEvents();
             },
 
             setupDOM() {
@@ -274,6 +312,13 @@
 
                 $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(selectors.qrScannerInfoSection).html('');
+
+                $(selectors.qrScannerBtnGroup).html(`
+                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
+                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
+                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
+                    <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
+                `);
 
                 $(selectors.qrScannerBtnConfirm).hide();
                 $(selectors.qrScannerBtnNextScan).hide();
@@ -374,19 +419,20 @@
                     }
                 } = _self;
 
-                $(selectors.qrScannerBtnStartScan).click(function () {
+
+                $(document).on('click', selectors.qrScannerBtnStartScan, function () {
                     _self.startScanner();
                 });
 
-                $(selectors.qrScannerBtnResetScan).click(function () {
+                $(document).on('click', selectors.qrScannerBtnResetScan, function () {
                     _self.resetScanner();
                 });
 
-                $(selectors.qrScannerBtnNextScan).click(function () {
+                $(document).on('click', selectors.qrScannerBtnNextScan, function () {
                     _self.nextScanner();
                 });
 
-                $(selectors.qrScannerBtnConfirm).click(function () {
+                $(document).on('click', selectors.qrScannerBtnConfirm, function () {
                     _self.handleConfirmCheckin();
                 });
             },
