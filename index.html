@@ -17,7 +17,7 @@
     <script>eruda.init();</script>
 
     <!-- Captcha -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" ; async defer></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 
 <body>
@@ -30,6 +30,7 @@
     <script>
         const siteKey = '0x4AAAAAAAOOjy5Nup_zy_9p';
         const baseUrl = 'https://api.esportsfan.net/';
+        const enableCaptcha = false;
 
         document.addEventListener('DOMContentLoaded', async () => {
             await App.init();
@@ -199,14 +200,18 @@
             },
 
             renderTurnstile(func) {
+                if (!enableCaptcha) {
+                    func(null);
+                    return;
+                }
                 if (window.turnstile) {
                     turnstile.render('#turnstile-container', {
                         sitekey: siteKey,
                         callback: function (token) {
                             func(token);
                         },
-                        'error-callback': function () {
-                            alert('Captcha Error. Please try again.');
+                        'error-callback': function (error) {
+                            alert(error);
                         }
                     });
                 }
