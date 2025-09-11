@@ -15,15 +15,22 @@
     <script src="moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
+
+    <!-- Captcha -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" ; async defer></script>
 </head>
 
 <body>
     <div id="main">
     </div>
+    <div id="turnstile-container"></div>
     <div class="modal" id="modal">
         <div class="spinner"></div>
     </div>
     <script>
+        const siteKey = '0x4AAAAAAAOOjy5Nup_zy_9p';
+        const baseUrl = 'https://api.esportsfan.net/';
+
         document.addEventListener('DOMContentLoaded', async () => {
             await App.init();
         });
@@ -46,7 +53,6 @@
 
         const AuthModule = {
             config: {
-                baseUrl: 'https://api.esportsfan.net/',
                 apis: {
                     getAccountInfo: 'account/info',
                     login: 'account/login',
@@ -107,7 +113,9 @@
 
                 $(document).on('click', selectors.btnLogin, function (e) {
                     e.preventDefault();
-                    _self.handleSubmitLogin();
+                    _self.renderTurnstile(function (token) {
+                        _self.handleSubmitLogin(token);
+                    });
                 });
             },
 
@@ -116,7 +124,8 @@
                 return _self.state.accountInfo != null;
             },
 
-            async handleSubmitLogin() {
+            async handleSubmitLogin(token) {
+                console.log(token);
                 let _self = this;
                 let {
                     config: {
@@ -132,7 +141,7 @@
                         throw new Error("Please enter email and password");
                     }
 
-                    let result = await _self.login({ email: email, password: password });
+                    let result = await _self.login({ email: email, password: password, _token: token });
                     if (result && result.session_id && result.account) {
                         _self.state.accountInfo = result.account;
                         window.location.reload();
@@ -189,11 +198,24 @@
                 return data;
             },
 
+            renderTurnstile(func) {
+                if (window.turnstile) {
+                    turnstile.render('#turnstile-container', {
+                        sitekey: siteKey,
+                        callback: function (token) {
+                            func(token);
+                        },
+                        'error-callback': function () {
+                            alert('Captcha Error. Please try again.');
+                        }
+                    });
+                }
+            },
+
             getApiUrl(endpoint) {
                 let _self = this;
                 let {
                     config: {
-                        baseUrl,
                         apis
                     }
                 } = _self;
@@ -203,7 +225,6 @@
 
         const CheckinModule = {
             config: {
-                baseUrl: 'https://api.esportsfan.net/',
                 apis: {
                     getTicketDetail: 'ticket/detail',
                     confirmCheckin: 'ticket/confirm-checkin',
@@ -690,7 +711,6 @@
                 let _self = this;
                 let {
                     config: {
-                        baseUrl,
                         apis
                     }
                 } = _self;
