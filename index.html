@@ -115,8 +115,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await AuthModule.init();
             if (!AuthModule.isLoggedIn()) {
-                console.log('User not logged in');
-                // window.location.href = '/order/checkin/login';
+                window.location.href = '/login.html';
                 return;
             }
             const codeReader = new ZXing.BrowserQRCodeReader();
