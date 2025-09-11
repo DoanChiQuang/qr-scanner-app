@@ -182,8 +182,6 @@
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
                         data = result.data;
-                    } else {
-                        alert('Error: ' + (result.message || 'Unknown Error'));
                     }
                 } catch (error) {
                     alert('Api Error: ' + error.message);
