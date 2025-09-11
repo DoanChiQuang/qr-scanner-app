@@ -119,7 +119,6 @@
                 // window.location.href = '/order/checkin/login';
                 return;
             }
-            console.log('User is logged in');
             const codeReader = new ZXing.BrowserQRCodeReader();
             CheckinModule.init(codeReader);
         });
@@ -137,15 +136,12 @@
                 error: null
             },
 
-            init() {
+            async init() {
                 let _self = this;
-                _self.getAccountInfo().then(info => {
-                    console.log('Account Info:', info);
-                    if (info) {
-                        _self.state.accountInfo = info;
-                    }
-                    console.log('Account Info:', _self.state.accountInfo);
-                });
+                let info = await _self.getAccountInfo();
+                if (info) {
+                    _self.state.accountInfo = info;
+                }
                 console.log('--- Auth Module Initialized ---');
             },
 
