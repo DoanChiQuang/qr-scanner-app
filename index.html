@@ -170,7 +170,8 @@
                     const response = await fetch(_self.getApiUrl('login'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(params)
+                        body: JSON.stringify(params),
+                        credentials: 'include'
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
