@@ -125,21 +125,24 @@
                 } = _self;
 
                 $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
+                try {
+                    let email = $('#email').val();
+                    let password = $('#password').val();
+                    if (!email || !password) {
+                        throw new Error("Please enter email and password");
+                    }
 
-                let email = $('#email').val();
-                let password = $('#password').val();
-                if (!email || !password) {
-                    alert('Please enter email and password');
-                    return;
+                    let result = await _self.login({ email: email, password: password });
+                    if (result && result.session_id && result.account) {
+                        _self.state.accountInfo = result.account;
+                        window.location.reload();
+                    } else {
+                        throw new Error("Login failed. Please check your credentials.");
+                    }
+                } catch (error) {
+                    alert(error.message);
                 }
-
-                let result = await _self.login({ email: email, password: password });
-                if (result && result.session_id && result.account) {
-                    _self.state.accountInfo = result.account;
-                    window.location.reload();
-                } else {
-                    alert('Login failed. Please check your credentials.');
-                }
+                $(selectors.btnLogin).prop('disabled', false).text('Submit').removeClass('grey');
             },
 
             async getAccountInfo() {
