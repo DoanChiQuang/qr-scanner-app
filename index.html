@@ -112,8 +112,8 @@
         </div>
     </div>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            AuthModule.init();
+        document.addEventListener('DOMContentLoaded', async () => {
+            await AuthModule.init();
             if (!AuthModule.isLoggedIn()) {
                 console.log('User not logged in');
                 // window.location.href = '/order/checkin/login';
