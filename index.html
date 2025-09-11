@@ -33,11 +33,11 @@
         const enableCaptcha = false;
 
         document.addEventListener('DOMContentLoaded', async () => {
-            await App.init();
+            await App.start();
         });
 
         const App = {
-            async init() {
+            async start() {
                 // Initialize Auth Module
                 await AuthModule.init();
 
