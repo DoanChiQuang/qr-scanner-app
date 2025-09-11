@@ -123,6 +123,9 @@
                         selectors
                     }
                 } = _self;
+
+                $(selectors.btnLogin).prop('disabled', true).text('Logging in...');
+
                 let email = $('#email').val();
                 let password = $('#password').val();
                 if (!email || !password) {
