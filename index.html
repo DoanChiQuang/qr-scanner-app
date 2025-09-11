@@ -116,7 +116,7 @@
             const codeReader = new ZXing.BrowserQRCodeReader();
             AuthModule.init();
             if (!AuthModule.isLoggedIn()) {
-                window.location.href = '/order/checkin/login';
+                // window.location.href = '/order/checkin/login';
                 return;
             }
             CheckinModule.init(codeReader);
