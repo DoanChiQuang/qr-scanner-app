@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <?php echo $this->headTitle($this->title); ?>
+    <link type="image/x-icon" href="<?php echo $this->static('images/graphics/favicon.ico') ?>" rel="shortcut icon" />
+    <meta http-equiv="X-UA-Compatible" content="IE=100" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="FPT Online" />
+    <!-- ZXing Library -->
+    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+    </script>
+
+    <link rel="stylesheet" href="<?php echo $this->static('css/qr-scanner.css') ?>" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <link rel="preload" as="script" href="<?php echo $this->static('js/libs/jquery.min.js') ?>" />
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="<?php echo $this->static('js/libs/jquery.min.js') ?>"></script>
+    <script src="<?php echo $this->static('js/libs/moment.min.js') ?>"></script>
+
+    <!-- Captcha -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+
+<body>
+    <div id="main">
+    </div>
+    <div id="turnstile-container"></div>
+    <div class="modal" id="modal">
+        <div class="spinner"></div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            await App.start();
+        });
+
+        const Common = {
+            config: {
+                siteKey: '0x4AAAAAAAOOjy5Nup_zy_9p',
+                baseUrl: 'https://api.esportsfan.net/',
+            },
+
+            logger(module, type, message, data = null) {
+                if (type == 'error') {
+                    console.error(`[${module}] [${type}] ${message}`);
+                } else {
+                    console.log(`[${module}] [${type}] ${message}`);
+                }
+                if (data) {
+                    console.log(data);
+                }
+            },
+
+            showToast(message, type = 'info', duration = 3000) {
+                let bgColor = 'linear-gradient(to right, #00b09b, #96c93d)';
+                if (type === 'error') {
+                    bgColor = 'linear-gradient(to right, #ff5f6d, #ffc371)';
+                } else if (type === 'success') {
+                    bgColor = 'linear-gradient(to right, #56ab2f, #a8e063)';
+                }
+                Toastify({
+                    text: message,
+                    duration: duration,
+                    close: true,
+                    gravity: "top",
+                    position: "center",
+                    style: {
+                        background: bgColor,
+                    }
+                }).showToast();
+            }
+        };
+
+        const App = {
+            async start() {
+                // Initialize Auth Module
+                await AuthModule.init();
+
+                // Check User is Logged In
+                if (!AuthModule.isLoggedIn()) {
+                    AuthModule.render();
+                    return;
+                }
+                // Initialize ZXing & Checkin Module
+                const codeReader = new ZXing.BrowserQRCodeReader();
+                CheckinModule.init(codeReader);
+            }
+        };
+
+        const AuthModule = {
+            config: {
+                apis: {
+                    getAccountInfo: 'account/info',
+                    login: 'account/login',
+                },
+                selectors: {
+                    main: '#main',
+                    form: '#form',
+                    btnLogin: '#btn-login',
+                }
+            },
+
+            state: {
+                accountInfo: null,
+                error: null
+            },
+
+            async init() {
+                let _self = this;
+                let info = await _self.getAccountInfo();
+                if (info) {
+                    _self.state.accountInfo = info;
+                }
+                console.log('--- Auth Module Initialized ---');
+            },
+
+            render() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    },
+                } = _self;
+                $(selectors.main).html(`
+                    <div class="header">
+                        <h1 class="title">Login</h1>
+                    </div>
+                    <form id="form" method="POST">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required><br><br>
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required><br><br>
+                        <button type="submit" class="btn" id="btn-login">Submit</button>
+                    </form>
+                `);
+
+                _self.bindEvents();
+            },
+
+            setError(error, statusCode = 400) {
+                let _self = this;
+                _self.state.error = error;
+                if (statusCode == 400) {
+                    Common.showToast(error, 'error', 5000);
+                }
+                Common.logger('AuthModule', 'error', error);
+            },
+
+            bindEvents() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+                $(document).on('submit', selectors.form, function(e) {
+                    e.preventDefault();
+                    $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
+                    _self.renderTurnstile(async function(token) {
+                        await _self.handleSubmitLogin(token);
+                        $(selectors.btnLogin).prop('disabled', false).text('Submit').removeClass('grey');
+                    });
+                });
+            },
+
+            isLoggedIn() {
+                let _self = this;
+                return _self.state.accountInfo != null;
+            },
+
+            async handleSubmitLogin(token) {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+                try {
+                    let email = $('#email').val();
+                    let password = $('#password').val();
+                    if (!email || !password) {
+                        throw new Error("Please enter email and password");
+                    }
+
+                    let result = await _self.login({
+                        email: email,
+                        password: password,
+                        _token: token
+                    });
+                    if (result && result.session_id && result.account) {
+                        _self.state.accountInfo = result.account;
+                        window.location.reload();
+                    } else {
+                        throw new Error('Login failed. Please check your credentials');
+                    }
+                } catch (error) {
+                    _self.setError(error.message);
+                }
+            },
+
+            async getAccountInfo() {
+                let _self = this;
+                let data = null;
+                try {
+                    const response = await fetch(_self.getApiUrl('getAccountInfo'), {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+                    const result = await response.json();
+                    if (result && result.code == 200 && result.data) {
+                        data = result.data;
+                    }
+                } catch (error) {
+                    _self.setError(`[API][${_self.getApiUrl('getAccountInfo')}]: ` + error.message, 500);
+                }
+                return data;
+            },
+
+            async login(params = {
+                email: null,
+                password: null
+            }) {
+                let _self = this;
+                let data = null;
+                if (!params.email || !params.password) {
+                    return data;
+                }
+                try {
+                    const response = await fetch(_self.getApiUrl('login'), {
+                        method: 'POST',
+                        body: JSON.stringify(params),
+                        credentials: 'include'
+                    });
+                    const result = await response.json();
+                    if (result && result.code == 200 && result.data) {
+                        data = result.data;
+                    } else {
+                        throw new Error(result.message || 'Failed to fetch');
+                    }
+                } catch (error) {
+                    _self.setError(`[API][${_self.getApiUrl('login')}]: ` + error.message, 500);
+                }
+                return data;
+            },
+
+            renderTurnstile(func) {
+                let _self = this;
+                if (window.turnstile) {
+                    turnstile.render('#turnstile-container', {
+                        sitekey: Common.config.siteKey,
+                        callback: function(token) {
+                            func(token);
+                        },
+                        'error-callback': function(error) {
+                            _self.setError('Captcha verification failed. Please try again');
+                        }
+                    });
+                }
+            },
+
+            getApiUrl(endpoint) {
+                let _self = this;
+                let {
+                    config: {
+                        apis
+                    }
+                } = _self;
+                return Common.config.baseUrl + (apis[endpoint] || '');
+            }
+        };
+
+        const CheckinModule = {
+            config: {
+                apis: {
+                    getTicketDetail: 'ticket/detail',
+                    confirmCheckin: 'ticket/confirm-checkin',
+                },
+                videoId: 'qr-video',
+                selectors: {
+                    qrScannerContainer: '#scanner-frame-container',
+                    qrScannerInstruction: '.instruction-text',
+                    qrScannerInfoSection: '.info-section',
+                    qrScannerBtnGroup: '.btn-group',
+                    qrScannerBtnResetScan: '#btn-reset-scan',
+                    qrScannerBtnStartScan: '#btn-start-scan',
+                    qrScannerBtnNextScan: '#btn-next-scan',
+                    qrScannerBtnConfirm: '#btn-confirm',
+                    modal: '#modal',
+                    main: '#main',
+                },
+                statusCode: {
+                    USER_CHECKEDIN: 1,
+                    USER_CONFIRMATION: 2,
+                    USER_CONFIRMATION_SUCCESS: 3,
+                },
+                assets: {
+                    ICONS: {
+                        CHECK: '<?= $this->static('images/graphics/icon-check.png'); ?>',
+                        CLOCK: '<?= $this->static('images/graphics/icon-clock.png'); ?>',
+                        REMOVE: '<?= $this->static('images/graphics/icon-remove.png'); ?>',
+                    }
+                },
+                timeoutDuration: 5000
+            },
+
+            state: {
+                loading: false,
+                timeoutId: null,
+                stream: null,
+                isGrantedCameraPermission: false,
+                codeReader: null,
+                isInitialized: false,
+                isScanning: false,
+                ticketDetail: null,
+                error: null
+            },
+
+            init(codeReader = null) {
+                let _self = this;
+                let {
+                    state,
+                    config
+                } = _self;
+
+                if (state.isInitialized) {
+                    _self.setError('Checkin Module Already Initialized', 500);
+                    return;
+                };
+                state.isInitialized = true;
+
+                if (state.codeReader) {
+                    _self.setError('ZXing Library Already Initialized', 500);
+                    return;
+                }
+                state.codeReader = codeReader;
+
+                _self.render();
+
+                console.log('--- Checkin Module Initialized ---');
+            },
+
+            render() {
+                let _self = this;
+                let {
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+                $(selectors.main).html(`
+                    <div class="wrapper">
+                        <div class="scanner-frame" id="scanner-frame-container">
+                        </div>
+                        <div class="instruction-text">
+                        </div>
+                        <div class="info-section">
+                        </div>
+                        <div class="btn-group">
+                        </div>
+                    </div>
+                `);
+
+                _self.setupDOM();
+                _self.bindEvents();
+            },
+
+            setupDOM() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        selectors,
+                        videoId
+                    }
+                } = _self;
+
+                state.ticketDetail = null;
+                state.error = null;
+
+                $(selectors.qrScannerContainer).html(`
+                    <div class="scanner-line"></div>
+                    <video id="qr-video" width="100%" height="100%"></video>
+                `);
+
+                $(selectors.qrScannerInstruction).html('Đặt mã QR vào khung để quét').removeClass('error');
+                $(selectors.qrScannerInfoSection).html('');
+
+                $(selectors.qrScannerBtnGroup).html(`
+                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
+                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
+                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
+                    <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
+                `);
+
+                $(selectors.qrScannerBtnResetScan).hide();
+                $(selectors.qrScannerBtnConfirm).hide();
+                $(selectors.qrScannerBtnNextScan).hide();
+                $(selectors.qrScannerBtnStartScan).show();
+            },
+
+            updateDOM(code) {
+                let _self = this;
+                let {
+                    assets: {
+                        ICONS
+                    },
+                    selectors,
+                    statusCode
+                } = _self.config;
+
+                $(selectors.qrScannerInstruction).html('');
+                $(selectors.qrScannerInfoSection).html('');
+
+                $(selectors.qrScannerBtnResetScan).hide();
+                $(selectors.qrScannerBtnStartScan).hide();
+                $(selectors.qrScannerBtnNextScan).hide();
+                $(selectors.qrScannerBtnConfirm).hide();
+
+                switch (code) {
+                    case statusCode.USER_CHECKEDIN:
+                        $(selectors.qrScannerContainer).html(`<img src="${ICONS.REMOVE}" alt="">`);
+                        $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('error', 'Đã checkin'));
+                        $(selectors.qrScannerBtnNextScan).show();
+                        break;
+                    case statusCode.USER_CONFIRMATION:
+                        $(selectors.qrScannerContainer).html(`<img src="${ICONS.CLOCK}" alt="">`);
+                        $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('checked', 'Chưa checkin'));
+                        $(selectors.qrScannerBtnResetScan).show();
+                        $(selectors.qrScannerBtnConfirm).show();
+                        break;
+                    case statusCode.USER_CONFIRMATION_SUCCESS:
+                        $(selectors.qrScannerContainer).html(`<img src="${ICONS.CHECK}" alt="">`);
+                        $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('confirmed', 'Đã checkin'));
+                        $(selectors.qrScannerBtnNextScan).show();
+                        break;
+                }
+            },
+
+            generateInfoRows(statusClass = '', statusText = '') {
+                let _self = this;
+                let {
+                    ticketDetail
+                } = _self.state;
+
+                if (!ticketDetail) return '';
+                return `
+                    <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
+                    <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
+                    <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
+                    ${ticketDetail?.gifts
+                        ? `
+                            <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
+                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
+                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
+                        `
+                        : ''
+                    }
+                    <hr>
+                    <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
+                    <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
+                    <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
+                `;
+            },
+
+            setError(error, statusCode = 400) {
+                let _self = this;
+                _self.state.error = error;
+                if (statusCode == 400) {
+                    Common.showToast(error, 'error', 5000);
+                }
+                Common.logger('CheckinModule', 'error', error);
+            },
+
+            toggleLoading(isLoading) {
+                let _self = this;
+                let {
+                    selectors
+                } = _self.config;
+                _self.state.loading = isLoading;
+                $(selectors.modal).toggleClass('active', isLoading);
+            },
+
+            destroy() {
+                let _self = this;
+                let {
+                    state
+                } = _self;
+                _self.stopScanner();
+                state.isInitialized = false;
+                console.log('--- Checkin Module Destroyed ---');
+            },
+
+            bindEvents() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        selectors
+                    }
+                } = _self;
+
+
+                $(document).on('click', selectors.qrScannerBtnStartScan, function() {
+                    _self.startScanner();
+                });
+
+                $(document).on('click', selectors.qrScannerBtnResetScan, function() {
+                    _self.resetScanner();
+                });
+
+                $(document).on('click', selectors.qrScannerBtnNextScan, function() {
+                    _self.nextScanner();
+                });
+
+                $(document).on('click', selectors.qrScannerBtnConfirm, function() {
+                    _self.handleConfirmCheckin();
+                });
+            },
+
+            async grantCameraPermissions() {
+                let _self = this;
+                let {
+                    state
+                } = _self;
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment'
+                        }
+                    });
+                    state.stream = stream;
+                    state.isGrantedCameraPermission = true;
+                    return true;
+                } catch (error) {
+                    state.isGrantedCameraPermission = false;
+                    _self.setError('Camera Access Denied: ' + error.message);
+                    return false;
+                }
+            },
+
+            async resetScanner() {
+                let _self = this;
+                _self.stopScanner().then(() => {
+                    _self.setupDOM();
+                });
+            },
+
+            nextScanner() {
+                let _self = this;
+                _self.setupDOM();
+                _self.startScanner();
+            },
+
+            async startScanner() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        videoId,
+                        selectors,
+                        timeoutDuration
+                    }
+                } = _self;
+                Common.logger('CheckinModule', 'info', 'Step 1: Starting Scanner...');
+                try {
+                    if (state.isScanning) {
+                        _self.setError('Scanner Already Running');
+                        return;
+                    }
+
+                    state.isScanning = true;
+                    $(selectors.qrScannerBtnStartScan).hide();
+                    $(selectors.qrScannerBtnResetScan).show();
+
+                    Common.logger('CheckinModule', 'info', 'Step 2: Requesting Camera Permissions...');
+                    if (!state.isGrantedCameraPermission) {
+                        const granted = await _self.grantCameraPermissions();
+                        if (!granted) return;
+                    }
+
+                    state.timeoutId = setTimeout(() => {
+                        _self.resetScanner();
+                        _self.setError('Scan Timeout. Please try again');
+                    }, timeoutDuration);
+
+                    Common.logger('CheckinModule', 'info', 'Step 3: Starting QR Code Decoding...');
+                    state.codeReader.decodeOnceFromVideoDevice(undefined, videoId).then((result) => {
+                        if (result) {
+                            _self.handleScanResult(result.text);
+                        }
+                    }).catch((error) => {
+                        if (state.isScanning) {
+                            _self.setError('Scanning Error: ' + error.message);
+                        }
+                    }).finally(() => {
+                        _self.stopScanner();
+                    });
+                } catch (error) {
+                    _self.setError('Scanning Error' + error.message);
+                    _self.stopScanner();
+                }
+            },
+
+            async stopScanner() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        selectors
+                    }
+                } = _self;
+                try {
+                    if (!state.isScanning) return;
+
+                    if (document.getElementById(videoId).paused) return;
+
+                    state.isScanning = false;
+                    await state.codeReader.reset();
+
+                    if (state.stream) {
+                        state.stream.getTracks().forEach(track => track.stop());
+                        state.stream = null;
+                    }
+
+                    if (state.timeoutId) {
+                        clearTimeout(state.timeoutId);
+                        state.timeoutId = null;
+                    }
+                } catch (error) {
+                    _self.setError(error.message);
+                }
+            },
+
+            async handleScanResult(data) {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        statusCode,
+                    }
+                } = _self;
+
+                Common.logger('CheckinModule', 'info', 'Step 4: Handling Scan Result with data:', data);
+                try {
+                    const content = _self.deobfuscateData(data);
+                    const result = _self.parseScannedData(content);
+
+                    Common.logger('CheckinModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
+                    Common.logger('CheckinModule', 'info', 'Step 4.2: Parsed Result:', result);
+                    if (result.version != 1 || result.fields.length == 0) {
+                        _self.setError('Invalid QR Code Data');
+                        return;
+                    }
+                    state.ticketDetail = await _self.getTicketDetail(content);
+                    if (!state.ticketDetail) {
+                        _self.setError('Ticket Not Found or Invalid');
+                        return;
+                    }
+                    if (state.ticketDetail.is_checkin) {
+                        _self.updateDOM(statusCode.USER_CHECKEDIN);
+                        return;
+                    } else {
+                        _self.updateDOM(statusCode.USER_CONFIRMATION);
+                        return;
+                    }
+                } catch (error) {
+                    _self.setError(error.message);
+                }
+            },
+
+            async handleConfirmCheckin() {
+                let _self = this;
+                let {
+                    state,
+                    config: {
+                        statusCode
+                    }
+                } = _self;
+
+                Common.logger('CheckinModule', 'info', 'Step 5: Confirming Check-in with Ticket Detail:', state.ticketDetail);
+                try {
+                    if (!state.ticketDetail || !state.ticketDetail.ticket_code) {
+                        _self.setError('No Ticket to Confirm');
+                        return;
+                    }
+                    let ticketCode = state.ticketDetail.ticket_code;
+                    let orderGiftId = state.ticketDetail.gifts ? state.ticketDetail.gifts.order_gift_id : null;
+                    const isConfirm = await _self.confirmCheckin({
+                        ticket_code: ticketCode,
+                        order_gift_id: orderGiftId
+                    });
+                    if (isConfirm) {
+                        _self.updateDOM(statusCode.USER_CONFIRMATION_SUCCESS);
+                        Common.showToast('Check-in Successful', 'success', 5000);
+                    } else {
+                        _self.setError('Check-in Failed');
+                    }
+                } catch (error) {
+                    _self.setError(error.message);
+                }
+            },
+
+            deobfuscateData(encoded, secret = 'sEcReT123') {
+                const b64 = encoded.split('').reverse().join('');
+                const base64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+                let raw = '';
+                try {
+                    raw = atob(base64);
+                } catch (e) {
+                    raw = '';
+                }
+                return raw.replaceAll(secret, '');
+            },
+
+            parseScannedData(data) {
+                if (!data || typeof data !== 'string') return {
+                    version: '',
+                    fields: []
+                };
+                const parts = data.split('|');
+                return {
+                    version: parts[0] || '',
+                    fields: parts.slice(1)
+                };
+            },
+
+            async getTicketDetail(content) {
+                let _self = this;
+
+                _self.toggleLoading(true);
+                let data = null;
+
+                if (!content) {
+                    _self.toggleLoading(false);
+                    return data;
+                }
+                try {
+                    const response = await fetch(_self.getApiUrl('getTicketDetail'), {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            content: content
+                        })
+                    });
+                    const result = await response.json();
+                    Common.logger('CheckinModule', 'info', 'Step 4.3: Getting Ticket Detail with Response Data:', result);
+                    if (result && result.code == 200 && result.data) {
+                        data = result.data;
+                    }
+                } catch (error) {
+                    _self.setError(`[API][${_self.getApiUrl('getTicketDetail')}]: ` + error.message, 500);
+                } finally {
+                    _self.toggleLoading(false);
+                }
+
+                return data;
+            },
+
+            async confirmCheckin(params = {
+                ticket_code: null,
+                order_gift_id: null
+            }) {
+                let _self = this;
+
+                _self.toggleLoading(true);
+                let data = false;
+
+                if (!params.ticket_code) {
+                    _self.toggleLoading(false);
+                    return data;
+                }
+                try {
+                    const response = await fetch(_self.getApiUrl('confirmCheckin'), {
+                        method: 'POST',
+                        credentials: 'include',
+                        body: JSON.stringify(params)
+                    });
+                    const result = await response.json();
+                    Common.logger('CheckinModule', 'info', 'Step 5.1: Confirm Check-in Response Data:', result);
+                    if (result && result.code == 200) {
+                        data = true;
+                    }
+                } catch (error) {
+                    _self.setError(`[API][${_self.getApiUrl('confirmCheckin')}]: ` + error.message, 500);
+                } finally {
+                    _self.toggleLoading(false);
+                }
+
+                return data;
+            },
+
+            getApiUrl(endpoint) {
+                let _self = this;
+                let {
+                    config: {
+                        apis
+                    }
+                } = _self;
+                return Common.config.baseUrl + (apis[endpoint] || '');
+            }
+        };
+    </script>
+</body>
+
+</html>
