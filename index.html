@@ -28,24 +28,57 @@
         <div class="spinner"></div>
     </div>
     <script>
-        const siteKey = '0x4AAAAAAAOOjy5Nup_zy_9p';
-        const baseUrl = 'https://api.esportsfan.net/';
-        const enableCaptcha = false;
-
         document.addEventListener('DOMContentLoaded', async () => {
             await App.start();
         });
 
+        const Common = {
+            config: {
+                siteKey: '0x4AAAAAAAOOjy5Nup_zy_9p',
+                baseUrl: 'https://api.esportsfan.net/',
+            },
+
+            logger(module, type, message, data = null) {
+                if (type == 'error') {
+                    console.error(`[${module}] [${type}] ${message}`);
+                } else {
+                    console.log(`[${module}] [${type}] ${message}`);
+                }
+                if (data) {
+                    console.log(data);
+                }
+            },
+
+            showToast(message, type = 'info', duration = 3000) {
+                let bgColor = 'linear-gradient(to right, #00b09b, #96c93d)';
+                if (type === 'error') {
+                    bgColor = 'linear-gradient(to right, #ff5f6d, #ffc371)';
+                } else if (type === 'success') {
+                    bgColor = 'linear-gradient(to right, #56ab2f, #a8e063)';
+                }
+                Toastify({
+                    text: message,
+                    duration: duration,
+                    close: true,
+                    gravity: "top",
+                    position: "center",
+                    style: {
+                        background: bgColor,
+                    }
+                }).showToast();
+            }
+        };
+
         const App = {
             async start() {
                 // Initialize Auth Module
-                await AuthModule.init();
+                // await AuthModule.init();
 
                 // Check User is Logged In
-                if (!AuthModule.isLoggedIn()) {
-                    AuthModule.render();
-                    return;
-                }
+                // if (!AuthModule.isLoggedIn()) {
+                //     AuthModule.render();
+                //     return;
+                // }
                 // Initialize ZXing & Checkin Module
                 const codeReader = new ZXing.BrowserQRCodeReader();
                 CheckinModule.init(codeReader);
@@ -60,6 +93,7 @@
                 },
                 selectors: {
                     main: '#main',
+                    form: '#form',
                     btnLogin: '#btn-login',
                 }
             },
@@ -89,20 +123,26 @@
                     <div class="header">
                         <h1 class="title">Login</h1>
                     </div>
-                    <form id="form">
+                    <form id="form" method="POST">
                         <label for="email">Email</label>
                         <input type="email" id="email" name="email" required><br><br>
                         <label for="password">Password</label>
                         <input type="password" id="password" name="password" required><br><br>
-                        <a href="#" class="btn" id="btn-login">Submit</a>
+                        <button type="submit" class="btn" id="btn-login">Submit</button>
                     </form>
                 `);
 
-                _self.setupDOM();
                 _self.bindEvents();
             },
 
-            setupDOM() { },
+            setError(error, statusCode = 400) {
+                let _self = this;
+                _self.state.error = error;
+                if (statusCode == 400) {
+                    Common.showToast(error, 'error', 5000);
+                }
+                Common.logger('AuthModule', 'error', error);
+            },
 
             bindEvents() {
                 let _self = this;
@@ -112,10 +152,12 @@
                     }
                 } = _self;
 
-                $(document).on('click', selectors.btnLogin, function (e) {
+                $(document).on('submit', selectors.form, function (e) {
                     e.preventDefault();
-                    _self.renderTurnstile(function (token) {
-                        _self.handleSubmitLogin(token);
+                    $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
+                    _self.renderTurnstile(async function (token) {
+                        await _self.handleSubmitLogin(token);
+                        $(selectors.btnLogin).prop('disabled', false).text('Submit').removeClass('grey');
                     });
                 });
             },
@@ -126,7 +168,6 @@
             },
 
             async handleSubmitLogin(token) {
-                console.log(token);
                 let _self = this;
                 let {
                     config: {
@@ -134,7 +175,6 @@
                     }
                 } = _self;
 
-                $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
                 try {
                     let email = $('#email').val();
                     let password = $('#password').val();
@@ -142,17 +182,20 @@
                         throw new Error("Please enter email and password");
                     }
 
-                    let result = await _self.login({ email: email, password: password, _token: token });
+                    let result = await _self.login({
+                        email: email,
+                        password: password,
+                        _token: token
+                    });
                     if (result && result.session_id && result.account) {
                         _self.state.accountInfo = result.account;
                         window.location.reload();
                     } else {
-                        throw new Error("Login failed. Please check your credentials.");
+                        throw new Error('Login failed. Please check your credentials');
                     }
                 } catch (error) {
-                    alert(error.message);
+                    _self.setError(error.message);
                 }
-                $(selectors.btnLogin).prop('disabled', false).text('Submit').removeClass('grey');
             },
 
             async getAccountInfo() {
@@ -161,22 +204,22 @@
                 try {
                     const response = await fetch(_self.getApiUrl('getAccountInfo'), {
                         method: 'GET',
-                        headers: { 'Content-Type': 'application/json' },
                         credentials: 'include'
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
                         data = result.data;
-                    } else {
-                        alert('Error: ' + (result.message || 'Unknown Error'));
                     }
                 } catch (error) {
-                    alert('Api Error: ' + error.message);
+                    _self.setError(`[API][${_self.getApiUrl('getAccountInfo')}]: ` + error.message, 500);
                 }
                 return data;
             },
 
-            async login(params = { email: null, password: null }) {
+            async login(params = {
+                email: null,
+                password: null
+            }) {
                 let _self = this;
                 let data = null;
                 if (!params.email || !params.password) {
@@ -185,33 +228,31 @@
                 try {
                     const response = await fetch(_self.getApiUrl('login'), {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(params),
                         credentials: 'include'
                     });
                     const result = await response.json();
                     if (result && result.code == 200 && result.data) {
                         data = result.data;
+                    } else {
+                        throw new Error(result.message || 'Failed to fetch');
                     }
                 } catch (error) {
-                    alert('Api Error: ' + error.message);
+                    _self.setError(`[API][${_self.getApiUrl('login')}]: ` + error.message, 500);
                 }
                 return data;
             },
 
             renderTurnstile(func) {
-                if (!enableCaptcha) {
-                    func(null);
-                    return;
-                }
+                let _self = this;
                 if (window.turnstile) {
                     turnstile.render('#turnstile-container', {
-                        sitekey: siteKey,
+                        sitekey: Common.config.siteKey,
                         callback: function (token) {
                             func(token);
                         },
                         'error-callback': function (error) {
-                            alert(error);
+                            _self.setError('Captcha verification failed. Please try again');
                         }
                     });
                 }
@@ -224,8 +265,8 @@
                         apis
                     }
                 } = _self;
-                return baseUrl + (apis[endpoint] || '');
-            },
+                return Common.config.baseUrl + (apis[endpoint] || '');
+            }
         };
 
         const CheckinModule = {
@@ -282,13 +323,13 @@
                 } = _self;
 
                 if (state.isInitialized) {
-                    _self.setError('Checkin Module Already Initialized');
+                    _self.setError('Checkin Module Already Initialized', 500);
                     return;
                 };
                 state.isInitialized = true;
 
                 if (state.codeReader) {
-                    _self.setError('ZXing Library Already Initialized');
+                    _self.setError('ZXing Library Already Initialized', 500);
                     return;
                 }
                 state.codeReader = codeReader;
@@ -417,16 +458,20 @@
                 `;
             },
 
-            setError(error) {
+            setError(error, statusCode = 400) {
                 let _self = this;
                 _self.state.error = error;
-                _self.showToast(error, 'error', 5000);
-                console.error(error);
+                if (statusCode == 400) {
+                    Common.showToast(error, 'error', 5000);
+                }
+                Common.logger('CheckinModule', 'error', error);
             },
 
             toggleLoading(isLoading) {
                 let _self = this;
-                let { selectors } = _self.config;
+                let {
+                    selectors
+                } = _self.config;
                 _self.state.loading = isLoading;
                 $(selectors.modal).toggleClass('active', isLoading);
             },
@@ -511,12 +556,14 @@
                         timeoutDuration
                     }
                 } = _self;
+                Common.logger('CheckinModule', 'info', 'Step 1: Starting Scanner...');
                 try {
                     if (state.isScanning) {
                         _self.setError('Scanner Already Running');
                         return;
                     }
 
+                    Common.logger('CheckinModule', 'info', 'Step 2: Requesting Camera Permissions...');
                     if (!state.isGrantedCameraPermission) {
                         const granted = await _self.grantCameraPermissions();
                         if (!granted) return;
@@ -527,9 +574,10 @@
 
                     state.timeoutId = setTimeout(() => {
                         _self.resetScanner();
-                        _self.setError('Scan Timeout. Please try again.');
+                        _self.setError('Scan Timeout. Please try again');
                     }, timeoutDuration);
 
+                    Common.logger('CheckinModule', 'info', 'Step 3: Starting QR Code Decoding...');
                     state.codeReader.decodeOnceFromVideoDevice(undefined, videoId).then((result) => {
                         if (result) {
                             _self.handleScanResult(result.text);
@@ -583,9 +631,13 @@
                     }
                 } = _self;
 
+                Common.logger('CheckinModule', 'info', 'Step 4: Handling Scan Result with data:', data);
                 try {
                     const content = _self.deobfuscateData(data);
                     const result = _self.parseScannedData(content);
+
+                    Common.logger('CheckinModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
+                    Common.logger('CheckinModule', 'info', 'Step 4.2: Parsed Result:', result);
                     if (result.version != 1 || result.fields.length == 0) {
                         _self.setError('Invalid QR Code Data');
                         return;
@@ -615,6 +667,8 @@
                         statusCode
                     }
                 } = _self;
+
+                Common.logger('CheckinModule', 'info', 'Step 5: Confirming Check-in with Ticket Detail:', state.ticketDetail);
                 try {
                     if (!state.ticketDetail || !state.ticketDetail.ticket_code) {
                         _self.setError('No Ticket to Confirm');
@@ -622,10 +676,13 @@
                     }
                     let ticketCode = state.ticketDetail.ticket_code;
                     let orderGiftId = state.ticketDetail.gifts ? state.ticketDetail.gifts.order_gift_id : null;
-                    const isConfirm = await _self.confirmCheckin({ ticket_code: ticketCode, order_gift_id: orderGiftId });
+                    const isConfirm = await _self.confirmCheckin({
+                        ticket_code: ticketCode,
+                        order_gift_id: orderGiftId
+                    });
                     if (isConfirm) {
                         _self.updateDOM(statusCode.USER_CONFIRMATION_SUCCESS);
-                        _self.showToast('Check-in Successful', 'success', 5000);
+                        Common.showToast('Check-in Successful', 'success', 5000);
                     } else {
                         _self.setError('Check-in Failed');
                     }
@@ -638,12 +695,19 @@
                 const b64 = encoded.split('').reverse().join('');
                 const base64 = b64.replace(/-/g, '+').replace(/_/g, '/');
                 let raw = '';
-                try { raw = atob(base64); } catch (e) { raw = ''; }
+                try {
+                    raw = atob(base64);
+                } catch (e) {
+                    raw = '';
+                }
                 return raw.replaceAll(secret, '');
             },
 
             parseScannedData(data) {
-                if (!data || typeof data !== 'string') return { version: '', fields: [] };
+                if (!data || typeof data !== 'string') return {
+                    version: '',
+                    fields: []
+                };
                 const parts = data.split('|');
                 return {
                     version: parts[0] || '',
@@ -664,17 +728,18 @@
                 try {
                     const response = await fetch(_self.getApiUrl('getTicketDetail'), {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ content: content })
+                        body: JSON.stringify({
+                            content: content
+                        })
                     });
                     const result = await response.json();
+                    Common.logger('CheckinModule', 'info', 'Step 4.3: Getting Ticket Detail with Response Data:', result);
                     if (result && result.code == 200 && result.data) {
-                        // console.log('Ticket Detail:', result.data);
                         data = result.data;
                     }
                 } catch (error) {
-                    _self.setError('Api Error: ' + error.message);
+                    _self.setError(`[API][${_self.getApiUrl('getTicketDetail')}]: ` + error.message, 500);
                 } finally {
                     _self.toggleLoading(false);
                 }
@@ -682,7 +747,10 @@
                 return data;
             },
 
-            async confirmCheckin(params = { ticket_code: null, order_gift_id: null }) {
+            async confirmCheckin(params = {
+                ticket_code: null,
+                order_gift_id: null
+            }) {
                 let _self = this;
 
                 _self.toggleLoading(true);
@@ -695,16 +763,16 @@
                 try {
                     const response = await fetch(_self.getApiUrl('confirmCheckin'), {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
                         body: JSON.stringify(params)
                     });
                     const result = await response.json();
+                    Common.logger('CheckinModule', 'info', 'Step 5.1: Confirm Check-in Response Data:', result);
                     if (result && result.code == 200) {
                         data = true;
                     }
                 } catch (error) {
-                    _self.setError('Api Error: ' + error.message);
+                    _self.setError(`[API][${_self.getApiUrl('confirmCheckin')}]: ` + error.message, 500);
                 } finally {
                     _self.toggleLoading(false);
                 }
@@ -719,26 +787,7 @@
                         apis
                     }
                 } = _self;
-                return baseUrl + (apis[endpoint] || '');
-            },
-
-            showToast(message, type = 'info', duration = 3000) {
-                let bgColor = 'linear-gradient(to right, #00b09b, #96c93d)';
-                if (type === 'error') {
-                    bgColor = 'linear-gradient(to right, #ff5f6d, #ffc371)';
-                } else if (type === 'success') {
-                    bgColor = 'linear-gradient(to right, #56ab2f, #a8e063)';
-                }
-                Toastify({
-                    text: message,
-                    duration: duration,
-                    close: true,
-                    gravity: "top",
-                    position: "center",
-                    style: {
-                        background: bgColor,
-                    }
-                }).showToast();
+                return Common.config.baseUrl + (apis[endpoint] || '');
             }
         };
     </script>
