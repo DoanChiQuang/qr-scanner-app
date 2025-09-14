@@ -306,7 +306,6 @@
             state: {
                 loading: false,
                 timeoutId: null,
-                stream: null,
                 isGrantedCameraPermission: false,
                 codeReader: null,
                 isInitialized: false,
@@ -518,7 +517,6 @@
                             facingMode: 'environment'
                         }
                     });
-                    state.stream = stream;
                     state.isGrantedCameraPermission = true;
                     return true;
                 } catch (error) {
@@ -533,7 +531,12 @@
                     state
                 } = _self;
                 if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject) {
-                    _self.setError('Starting Scanner First');
+                    _self.setError('Preparing Scanner. Please wait...');
+                    return;
+                }
+
+                if (!state.codeReader?.stream) {
+                    _self.setError('Preparing Scanner. Please wait...');
                     return;
                 }
                 _self.stopScanner();
@@ -610,13 +613,14 @@
                 try {
                     state.isScanning = false;
 
-                    if (state.codeReader.videoElement && state.codeReader.videoElement.srcObject) {
+                    if (state.codeReader?.videoElement && state.codeReader.videoElement?.srcObject) {
                         state.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
                         state.codeReader.videoElement.srcObject = null;
                     }
 
-                    if (state.stream) {
-                        state.stream.getTracks().forEach(track => track.stop());
+                    if (state.codeReader?.stream) {
+                        state.codeReader.stream.getTracks().forEach(track => track.stop());
+                        state.codeReader.stream = null;
                     }
 
                     if (state.timeoutId) {
