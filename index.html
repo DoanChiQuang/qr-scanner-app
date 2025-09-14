@@ -72,13 +72,13 @@
         const App = {
             async start() {
                 // Initialize Auth Module
-                // await AuthModule.init();
+                await AuthModule.init();
 
                 // Check User is Logged In
-                // if (!AuthModule.isLoggedIn()) {
-                //     AuthModule.render();
-                //     return;
-                // }
+                if (!AuthModule.isLoggedIn()) {
+                    AuthModule.render();
+                    return;
+                }
                 // Initialize ZXing & Checkin Module
                 const codeReader = new ZXing.BrowserQRCodeReader();
                 CheckinModule.init(codeReader);
@@ -392,6 +392,7 @@
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
 
+                $(selectors.qrScannerBtnResetScan).hide();
                 $(selectors.qrScannerBtnConfirm).hide();
                 $(selectors.qrScannerBtnNextScan).hide();
                 $(selectors.qrScannerBtnStartScan).show();
@@ -407,26 +408,29 @@
                     statusCode
                 } = _self.config;
 
-                $(selectors.qrScannerHeader).html('');
                 $(selectors.qrScannerInstruction).html('');
                 $(selectors.qrScannerInfoSection).html('');
+
+                $(selectors.qrScannerBtnResetScan).hide();
+                $(selectors.qrScannerBtnStartScan).hide();
+                $(selectors.qrScannerBtnNextScan).hide();
+                $(selectors.qrScannerBtnConfirm).hide();
 
                 switch (code) {
                     case statusCode.USER_CHECKEDIN:
                         $(selectors.qrScannerContainer).html(`<img src="${ICONS.REMOVE}" alt="">`);
                         $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('error', 'Đã checkin'));
-                        $(selectors.qrScannerBtnConfirm).hide();
                         $(selectors.qrScannerBtnNextScan).show();
                         break;
                     case statusCode.USER_CONFIRMATION:
                         $(selectors.qrScannerContainer).html(`<img src="${ICONS.CLOCK}" alt="">`);
                         $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('checked', 'Chưa checkin'));
+                        $(selectors.qrScannerBtnResetScan).show();
                         $(selectors.qrScannerBtnConfirm).show();
                         break;
                     case statusCode.USER_CONFIRMATION_SUCCESS:
                         $(selectors.qrScannerContainer).html(`<img src="${ICONS.CHECK}" alt="">`);
                         $(selectors.qrScannerInfoSection).html(_self.generateInfoRows('confirmed', 'Đã checkin'));
-                        $(selectors.qrScannerBtnConfirm).hide();
                         $(selectors.qrScannerBtnNextScan).show();
                         break;
                 }
@@ -534,10 +538,11 @@
                 }
             },
 
-            resetScanner() {
+            async resetScanner() {
                 let _self = this;
-                _self.stopScanner();
-                _self.setupDOM();
+                _self.stopScanner().then(() => {
+                    _self.setupDOM();
+                });
             },
 
             nextScanner() {
@@ -563,14 +568,15 @@
                         return;
                     }
 
+                    state.isScanning = true;
+                    $(selectors.qrScannerBtnStartScan).hide();
+                    $(selectors.qrScannerBtnResetScan).show();
+
                     Common.logger('CheckinModule', 'info', 'Step 2: Requesting Camera Permissions...');
                     if (!state.isGrantedCameraPermission) {
                         const granted = await _self.grantCameraPermissions();
                         if (!granted) return;
                     }
-
-                    state.isScanning = true;
-                    $(selectors.qrScannerBtnStartScan).hide();
 
                     state.timeoutId = setTimeout(() => {
                         _self.resetScanner();
@@ -584,13 +590,9 @@
                         }
                     }).catch((error) => {
                         if (state.isScanning) {
-                            _self.setError('Scanning Error: ', error);
+                            _self.setError('Scanning Error: ' + error.message);
                         }
                     }).finally(() => {
-                        if (state.timeoutId) {
-                            clearTimeout(state.timeoutId);
-                            state.timeoutId = null;
-                        }
                         _self.stopScanner();
                     });
                 } catch (error) {
@@ -610,12 +612,19 @@
                 try {
                     if (!state.isScanning) return;
 
+                    if (document.getElementById(videoId).paused) return;
+
                     state.isScanning = false;
                     await state.codeReader.reset();
 
                     if (state.stream) {
                         state.stream.getTracks().forEach(track => track.stop());
                         state.stream = null;
+                    }
+
+                    if (state.timeoutId) {
+                        clearTimeout(state.timeoutId);
+                        state.timeoutId = null;
                     }
                 } catch (error) {
                     _self.setError(error.message);
@@ -756,7 +765,7 @@
                 _self.toggleLoading(true);
                 let data = false;
 
-                if (!params.ticket_code || !params.order_gift_id) {
+                if (!params.ticket_code) {
                     _self.toggleLoading(false);
                     return data;
                 }
