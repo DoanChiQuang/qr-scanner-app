@@ -530,18 +530,29 @@
                 let {
                     state
                 } = _self;
-                console.log(state.codeReader.videoElement);
-                console.log(state.codeReader.stream);
                 if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject) {
-                    _self.setError('Preparing Scanner. Please wait...');
+                    // _self.setError('Preparing Scanner. Please wait...');
                     return;
                 }
 
                 if (!state.codeReader?.stream) {
-                    _self.setError('Preparing Scanner. Please wait...');
+                    // _self.setError('Preparing Scanner. Please wait...');
                     return;
                 }
-                _self.stopScanner();
+                state.isScanning = false;
+
+                state.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
+                state.codeReader.videoElement.srcObject = null;
+
+                state.codeReader.stream.getTracks().forEach(track => track.stop());
+                state.codeReader.stream = null;
+
+                if (state.timeoutId) {
+                    clearTimeout(state.timeoutId);
+                    state.timeoutId = null;
+                }
+
+                await state.codeReader.reset();
                 _self.setupDOM();
             },
 
@@ -601,38 +612,6 @@
                 } catch (error) {
                     _self.setError('Scanning Error' + error.message);
                     _self.resetScanner();
-                }
-            },
-
-            async stopScanner() {
-                let _self = this;
-                let {
-                    state,
-                    config: {
-                        selectors
-                    }
-                } = _self;
-                try {
-                    state.isScanning = false;
-
-                    if (state.codeReader?.videoElement && state.codeReader.videoElement?.srcObject) {
-                        state.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
-                        state.codeReader.videoElement.srcObject = null;
-                    }
-
-                    if (state.codeReader?.stream) {
-                        state.codeReader.stream.getTracks().forEach(track => track.stop());
-                        state.codeReader.stream = null;
-                    }
-
-                    if (state.timeoutId) {
-                        clearTimeout(state.timeoutId);
-                        state.timeoutId = null;
-                    }
-
-                    await state.codeReader.reset();
-                } catch (error) {
-                    _self.setError(error.message);
                 }
             },
 
