@@ -596,11 +596,11 @@
                             _self.setError('Scanning Error: ' + error.message);
                         }
                     }).finally(() => {
-                        _self.stopScanner();
+                        _self.resetScanner();
                     });
                 } catch (error) {
                     _self.setError('Scanning Error' + error.message);
-                    _self.stopScanner();
+                    _self.resetScanner();
                 }
             },
 
