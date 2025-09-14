@@ -311,7 +311,6 @@
                 codeReader: null,
                 isInitialized: false,
                 isScanning: false,
-                canReset: false,
                 ticketDetail: null,
                 error: null
             },
@@ -529,16 +528,18 @@
             },
 
             async resetScanner() {
-                let _self = this;                
-                if (!_self.state.canReset) {
-                    _self.setError('Preparing to scan. Please wait...');
+                let _self = this;
+                let {
+                    state
+                } = _self;
+                if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject) {
+                    _self.setError('Starting Scanner First');
                     return;
                 }
-                _self.state.canReset = false;
                 _self.stopScanner();
                 _self.setupDOM();
             },
-            
+
             nextScanner() {
                 let _self = this;
                 _self.setupDOM();
@@ -556,12 +557,12 @@
                     }
                 } = _self;
                 Common.logger('CheckinModule', 'info', 'Step 1: Starting Scanner...');
-                try {                    
+                try {
                     if (state.isScanning) {
                         _self.setError('Scanner Already Running');
                         return;
                     }
-                    state.isScanning = true;                
+                    state.isScanning = true;
 
                     $(selectors.qrScannerBtnStartScan).hide();
                     $(selectors.qrScannerBtnResetScan).show();
@@ -570,12 +571,10 @@
                     if (!state.isGrantedCameraPermission) {
                         const granted = await _self.grantCameraPermissions();
                         if (!granted) {
-                            state.canReset = true;
                             _self.setError('Camera Access Denied');
                             return;
                         };
                     }
-                    state.canReset = true;
 
                     state.timeoutId = setTimeout(() => {
                         _self.resetScanner();
@@ -610,16 +609,22 @@
                 } = _self;
                 try {
                     state.isScanning = false;
-                    await state.codeReader.reset();                    
 
-                    if (state.stream) {                        
+                    if (state.codeReader.videoElement && state.codeReader.videoElement.srcObject) {
+                        state.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
+                        state.codeReader.videoElement.srcObject = null;
+                    }
+
+                    if (state.stream) {
                         state.stream.getTracks().forEach(track => track.stop());
                     }
 
-                    if (state.timeoutId) {                        
+                    if (state.timeoutId) {
                         clearTimeout(state.timeoutId);
                         state.timeoutId = null;
-                    }                    
+                    }
+
+                    await state.codeReader.reset();
                 } catch (error) {
                     _self.setError(error.message);
                 }
