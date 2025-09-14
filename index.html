@@ -72,13 +72,13 @@
         const App = {
             async start() {
                 // Initialize Auth Module
-                await AuthModule.init();
+                // await AuthModule.init();
 
                 // Check User is Logged In
-                if (!AuthModule.isLoggedIn()) {
-                    AuthModule.render();
-                    return;
-                }
+                // if (!AuthModule.isLoggedIn()) {
+                //     AuthModule.render();
+                //     return;
+                // }
                 // Initialize ZXing & Checkin Module
                 const codeReader = new ZXing.BrowserQRCodeReader();
                 CheckinModule.init(codeReader);
@@ -612,7 +612,7 @@
                 try {
                     if (!state.isScanning) return;
 
-                    if (document.getElementById(videoId).paused) return;
+                    console.log(state.codeReader);
 
                     state.isScanning = false;
                     await state.codeReader.reset();
