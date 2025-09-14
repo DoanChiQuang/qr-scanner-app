@@ -530,6 +530,8 @@
                 let {
                     state
                 } = _self;
+                console.log(state.codeReader.videoElement);
+                console.log(state.codeReader.stream);
                 if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject) {
                     _self.setError('Preparing Scanner. Please wait...');
                     return;
