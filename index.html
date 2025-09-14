@@ -311,6 +311,7 @@
                 codeReader: null,
                 isInitialized: false,
                 isScanning: false,
+                canReset: false,
                 ticketDetail: null,
                 error: null
             },
@@ -480,16 +481,6 @@
                 $(selectors.modal).toggleClass('active', isLoading);
             },
 
-            destroy() {
-                let _self = this;
-                let {
-                    state
-                } = _self;
-                _self.stopScanner();
-                state.isInitialized = false;
-                console.log('--- Checkin Module Destroyed ---');
-            },
-
             bindEvents() {
                 let _self = this;
                 let {
@@ -533,16 +524,18 @@
                     return true;
                 } catch (error) {
                     state.isGrantedCameraPermission = false;
-                    _self.setError('Camera Access Denied: ' + error.message);
                     return false;
                 }
             },
 
             async resetScanner() {
-                let _self = this;
-                _self.stopScanner().then(() => {
-                    _self.setupDOM();
-                });
+                let _self = this;                
+                if (!_self.state.canReset) {
+                    _self.setError('Preparing to scan. Please wait...');
+                    return;
+                }
+                _self.stopScanner();
+                _self.setupDOM();
             },
 
             nextScanner() {
@@ -562,21 +555,26 @@
                     }
                 } = _self;
                 Common.logger('CheckinModule', 'info', 'Step 1: Starting Scanner...');
-                try {
+                try {                    
                     if (state.isScanning) {
                         _self.setError('Scanner Already Running');
                         return;
                     }
+                    state.isScanning = true;                
 
-                    state.isScanning = true;
                     $(selectors.qrScannerBtnStartScan).hide();
                     $(selectors.qrScannerBtnResetScan).show();
 
                     Common.logger('CheckinModule', 'info', 'Step 2: Requesting Camera Permissions...');
                     if (!state.isGrantedCameraPermission) {
                         const granted = await _self.grantCameraPermissions();
-                        if (!granted) return;
+                        if (!granted) {
+                            state.canReset = true;
+                            _self.setError('Camera Access Denied');
+                            return;
+                        };
                     }
+                    state.canReset = true;
 
                     state.timeoutId = setTimeout(() => {
                         _self.resetScanner();
@@ -610,22 +608,17 @@
                     }
                 } = _self;
                 try {
-                    if (!state.isScanning) return;
-
-                    console.log(state.codeReader);
-
                     state.isScanning = false;
-                    await state.codeReader.reset();
-
-                    if (state.stream) {
+                    await state.codeReader.reset();                    
+                    
+                    if (state.stream) {                        
                         state.stream.getTracks().forEach(track => track.stop());
-                        state.stream = null;
                     }
 
-                    if (state.timeoutId) {
+                    if (state.timeoutId) {                        
                         clearTimeout(state.timeoutId);
                         state.timeoutId = null;
-                    }
+                    }                    
                 } catch (error) {
                     _self.setError(error.message);
                 }
