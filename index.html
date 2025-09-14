@@ -534,6 +534,7 @@
                     _self.setError('Preparing to scan. Please wait...');
                     return;
                 }
+                _self.state.canReset = false;
                 _self.stopScanner();
                 _self.setupDOM();
             },
@@ -610,7 +611,7 @@
                 try {
                     state.isScanning = false;
                     await state.codeReader.reset();                    
-                    
+
                     if (state.stream) {                        
                         state.stream.getTracks().forEach(track => track.stop());
                     }
