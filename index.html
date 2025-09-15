@@ -590,12 +590,14 @@
                     if (!state.isGrantedCameraPermission) {
                         const granted = await _self.grantCameraPermissions();
                         if (!granted) {
+                            state.hasResult = true;
                             _self.setError('Camera Access Denied');
                             return;
                         };
                     }
 
                     state.timeoutId = setTimeout(() => {
+                        state.hasResult = true;
                         _self.resetScanner();
                         _self.setError('Scan Timeout. Please try again');
                     }, timeoutDuration);
@@ -610,6 +612,7 @@
                             _self.setError('Scanning Error: ' + error.message);
                         }
                     }).finally(() => {
+                        console.log('--- Scan Process Finished ---');
                         state.hasResult = true;
                         _self.resetScanner();
                     });
