@@ -310,6 +310,7 @@
                 codeReader: null,
                 isInitialized: false,
                 isScanning: false,
+                hasResult: false,
                 ticketDetail: null,
                 error: null
             },
@@ -531,13 +532,14 @@
                     state
                 } = _self;
 
-                // if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject && !state.codeReader.stream) {
-                //     // _self.setError('Preparing Scanner. Please wait...');
-                //     return;
-                // }
+                if (!_self.hasResult && !state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject && !state.codeReader.stream) {
+                    _self.setError('Preparing Scanner. Please wait...');
+                    return;
+                }
 
                 // Enable Start Scan Button
                 state.isScanning = false;
+                state.hasResult = false;
 
                 // Stop Video Stream & Reset Code Reader
                 if (state.codeReader?.videoElement && state.codeReader.videoElement?.srcObject && state.codeReader.stream) {
@@ -608,6 +610,7 @@
                             _self.setError('Scanning Error: ' + error.message);
                         }
                     }).finally(() => {
+                        state.hasResult = true;
                         _self.resetScanner();
                     });
                 } catch (error) {
