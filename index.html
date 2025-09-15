@@ -532,7 +532,7 @@
                     state
                 } = _self;
 
-                if (!_self.hasResult && !state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject && !state.codeReader.stream) {
+                if (!state.hasResult && !state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject && !state.codeReader.stream) {
                     _self.setError('Preparing Scanner. Please wait...');
                     return;
                 }
@@ -590,14 +590,12 @@
                     if (!state.isGrantedCameraPermission) {
                         const granted = await _self.grantCameraPermissions();
                         if (!granted) {
-                            state.hasResult = true;
                             _self.setError('Camera Access Denied');
                             return;
                         };
                     }
 
                     state.timeoutId = setTimeout(() => {
-                        state.hasResult = true;
                         _self.resetScanner();
                         _self.setError('Scan Timeout. Please try again');
                     }, timeoutDuration);
