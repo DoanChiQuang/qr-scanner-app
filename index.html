@@ -530,28 +530,30 @@
                 let {
                     state
                 } = _self;
-                
-                if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject && !state.codeReader.stream) {
-                    // _self.setError('Preparing Scanner. Please wait...');
-                    return;
-                }                
+
+                // if (!state.codeReader?.videoElement && !state.codeReader.videoElement?.srcObject && !state.codeReader.stream) {
+                //     // _self.setError('Preparing Scanner. Please wait...');
+                //     return;
+                // }
 
                 // Enable Start Scan Button
                 state.isScanning = false;
 
                 // Stop Video Stream & Reset Code Reader
-                state.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
-                state.codeReader.videoElement.srcObject = null;
-                state.codeReader.stream.getTracks().forEach(track => track.stop());
-                state.codeReader.stream = null;
-                await state.codeReader.reset();
+                if (state.codeReader?.videoElement && state.codeReader.videoElement?.srcObject && state.codeReader.stream) {
+                    state.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
+                    state.codeReader.videoElement.srcObject = null;
+                    state.codeReader.stream.getTracks().forEach(track => track.stop());
+                    state.codeReader.stream = null;
+                    await state.codeReader.reset();
+                }
 
                 // Clear Timeout of Scanner after Init in Start Scanner
                 if (state.timeoutId) {
                     clearTimeout(state.timeoutId);
                     state.timeoutId = null;
                 }
-                
+
                 _self.setupDOM();
             },
 
