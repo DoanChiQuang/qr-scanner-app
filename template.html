@@ -96,13 +96,11 @@
 
             async init() {
                 let _self = this;
-                try {
-                    const info = await _self.getAccountInfo();
+                _self.getAccountInfo().then(info => {
                     _self.state.accountInfo = info;
-                } catch (error) {
-                    _self.state.accountInfo = null;
+                }).catch(() => {
                     ToastService.show('Session expired. Please log in again.', 'error', 5000);
-                }
+                });
                 Logger.log('AuthModule', 'info', 'Initialized');
                 return _self;
             }
@@ -149,8 +147,8 @@
 
             async handleLogin(token = null) {
                 let _self = this;
-                const email = $('email').val();
-                const password = $('password').val();
+                const email = $('#email').val();
+                const password = $('#password').val();
                 if (!email || !password) throw new Error('Please enter email and password');
 
                 const result = await ApiService.fetch('account/login', {
@@ -214,7 +212,7 @@
                 let _self = this;
                 if (_self.state.isInitialized) {
                     ToastService.show('Checkin Module Already Initialized', 'error', 5000);
-                    return this;
+                    return _self;
                 }
 
                 _self.state.isInitialized = true;
