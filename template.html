@@ -13,6 +13,8 @@
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
 </head>
 
 <body>
@@ -243,7 +245,7 @@
                     <div class="scanner-line"></div>
                     <video id="${_self.videoId}" width="100%" height="100%"></video>
                 `);
-                $(_self.selectors.instruction).html('Place QR code in frame to scan').removeClass('error');
+                $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(_self.selectors.info).html('');
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
@@ -270,18 +272,18 @@
                 switch (statusCode) {
                     case USER_CHECKEDIN:
                         $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Already checked in'));
+                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Đã Check-in'));
                         $(_self.selectors.btnNext).show();
                         break;
                     case USER_CONFIRMATION:
                         $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Not checked in'));
+                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Chưa Check-in'));
                         $(_self.selectors.btnReset).show();
                         $(_self.selectors.btnConfirm).show();
                         break;
                     case USER_CONFIRMATION_SUCCESS:
                         $(_self.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('confirmed', 'Checked in'));
+                        $(_self.selectors.info).html(_self.generateInfoRows('confirmed', 'Đã Check-in'));
                         $(_self.selectors.btnNext).show();
                         break;
                 }
