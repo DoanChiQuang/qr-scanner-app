@@ -574,13 +574,15 @@
                         photo: capturedPhoto || null
                     };
 
-                    const isConfirmed = await _self.confirmCheckin(params);
-                    if (isConfirmed) {
-                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                        ToastService.show('Check-in Successful', 'success', 5000);
-                    } else {
-                        throw new Error('Check-in Failed');
-                    }
+                    console.log('Confirm Check-in Params:', params);                    
+
+                    // const isConfirmed = await _self.confirmCheckin(params);
+                    // if (isConfirmed) {
+                    //     _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
+                    //     ToastService.show('Check-in Successful', 'success', 5000);
+                    // } else {
+                    //     throw new Error('Check-in Failed');
+                    // }
                 } catch (error) {
                     ToastService.show(error.message, 'error', 5000);
                 }
