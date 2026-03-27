@@ -1,32 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
-    <!-- <?php echo $this->headTitle($this->title); ?> -->    
+    <!-- <?php echo $this->headTitle($this->title); ?> -->
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
     <!-- ZXing Library -->
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <!-- <? if ($this->debug): ?> -->
-        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-        <script>
-            eruda.init();
-        </script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+    </script>
     <!-- <? endif; ?> -->
 
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="moment.min.js"></script>
 
     <!-- Captcha -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
 </head>
 
 <body>
@@ -212,7 +212,7 @@
                 btnGroup: '.btn-group',
                 btnReset: '#btn-reset-scan',
                 btnStart: '#btn-start-scan',
-                btnCapturePhoto: '#btn-capture-photo',
+                btnCapture: '#btn-capture',
                 btnConfirm: '#btn-confirm',
                 btnNext: '#btn-next-scan',
                 modal: '#modal'
@@ -225,15 +225,12 @@
                 ticketDetail: null,
                 codeReader: null,
                 timeoutId: null,
-                isCameraGranted: false,
-                capturedPhoto: null,
-                scannedContent: null
+                isCameraGranted: false
             };
 
             constructor() {
                 let _self = this;
                 _self.videoId = 'qr-video';
-                _self.canvasId = 'photo-canvas';
             }
 
             async init(codeReader) {
@@ -267,26 +264,23 @@
             setupDOM() {
                 let _self = this;
                 _self.state.ticketDetail = null;
-                _self.state.capturedPhoto = null;
-                _self.state.scannedContent = null;
                 $(_self.selectors.container).html(`
                     <div class="scanner-line"></div>
                     <video id="${_self.videoId}" width="100%" height="100%"></video>
-                    <canvas id="${_self.canvasId}" style="display:none;"></canvas>
                 `);
                 $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(_self.selectors.info).html('');
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
                     <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Capture Photo" class="btn green" id="btn-capture-photo">Capture Photo</a>
+                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture Picture</a>
                     <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
                 $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnCapturePhoto).hide();
                 $(_self.selectors.btnConfirm).hide();
                 $(_self.selectors.btnNext).hide();
+                $(_self.selectors.btnCapture).hide();
                 $(_self.selectors.btnStart).show();
             }
 
@@ -327,13 +321,11 @@
             generateInfoRows(statusClass, statusText) {
                 let _self = this;
                 const {
-                    ticketDetail,
-                    capturedPhoto
+                    ticketDetail
                 } = _self.state;
                 if (!ticketDetail) return 'Ticket Not Found or Invalid';
                 try {
                     return `
-                        ${capturedPhoto ? `<div class="info-row"><img src="${capturedPhoto}" alt="Captured Photo" style="width: 100%; max-width: 300px; border-radius: 8px; margin: 10px 0;"/></div>` : ''}
                         <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
                         <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
                         <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
@@ -363,9 +355,9 @@
                 let _self = this;
                 $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
                 $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
-                $(document).on('click', _self.selectors.btnCapturePhoto, () => _self.handleCapturePhoto());
                 $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
                 $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());
+                $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
             }
 
             async grantCameraPermissions() {
@@ -436,7 +428,8 @@
                 }
                 _self.state.isScanning = true;
                 $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnReset).show();
+                // $(_self.selectors.btnReset).show();
+                $(_self.selectors.btnCapture).show();
 
                 Logger.log('CheckinModule', 'info', 'Step 2: Requesting Camera Permissions...');
                 if (!_self.state.isCameraGranted && !await _self.grantCameraPermissions()) {
@@ -462,40 +455,46 @@
                     if (_self.state.isScanning) {
                         ToastService.show(`Scanning Error: ${error.message}`, 'error', 5000);
                     }
+                } finally {
                     _self.state.hasResult = true;
                     await _self.stopScanner();
                 }
             }
 
-            async handleCapturePhoto() {
+            async capturePicture() {
                 let _self = this;
-                try {
-                    const video = document.getElementById(_self.videoId);
-                    const canvas = document.getElementById(_self.canvasId);
-                    
-                    if (!video || !canvas) {
-                        throw new Error('Camera not ready');
-                    }
-                    
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    _self.state.capturedPhoto = canvas.toDataURL('image/jpeg', 0.8);
-                    Logger.log('CheckinModule', 'info', 'Photo captured successfully');
-                    
-                    // Stop the scanner and camera
-                    _self.state.hasResult = true;
-                    await _self.stopScanner();
-                    
-                    // Now process the scanned content and show ticket details
-                    await _self.processTicketDetails();
-                    
-                } catch (error) {
-                    Logger.log('CheckinModule', 'error', 'Failed to capture photo:', error.message);
-                    ToastService.show(`Photo capture failed: ${error.message}`, 'error', 5000);
+                const video = document.getElementById(_self.videoId);
+                if (!video || !video.srcObject) {
+                    ToastService.show('Camera not active', 'error', 3000);
+                    return;
                 }
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+                // Store for later use
+                _self.state.capturedImage = imageData;
+
+                $(_self.selectors.info).append(`
+                    <div class="captured-image">
+                        <img src="${_self.state.capturedImage}" style="max-width:100%; margin-top:10px; border:2px solid #56ab2f;">
+                    </div>
+                `);
+
+                try {
+                    const link = document.createElement('a');
+                    const now = moment().format('YYYYMMDD_HHmmss');
+                    link.download = `VM_${now}.jpg`;
+                    link.href = imageData;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    ToastService.show('Picture saved: VM_' + now + '.jpg', 'success', 1500);
+                } catch (e) {
+                    ToastService.show('Cannot auto-save image', 'error', 2000);
+                }                
             }
 
             async handleScanResult(data) {
@@ -512,37 +511,7 @@
                         throw new Error('Invalid QR Code Data');
                     }
 
-                    // Store the scanned content but don't show details yet
-                    _self.state.scannedContent = content;
-                    
-                    // Clear timeout since QR was successfully scanned
-                    if (_self.state.timeoutId) {
-                        clearTimeout(_self.state.timeoutId);
-                        _self.state.timeoutId = null;
-                    }
-                    
-                    // Show instruction and capture photo button
-                    $(_self.selectors.instruction).html('QR Code scanned! Now capture a photo').addClass('success');
-                    $(_self.selectors.btnReset).hide();
-                    $(_self.selectors.btnCapturePhoto).show();
-                    
-                    ToastService.show('QR Code Detected! Click "Capture Photo"', 'success', 3000);
-                } catch (error) {
-                    _self.state.hasResult = true;
-                    await _self.stopScanner();
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            async processTicketDetails() {
-                let _self = this;
-                Logger.log('CheckinModule', 'info', 'Step 5: Processing Ticket Details');
-                try {
-                    if (!_self.state.scannedContent) {
-                        throw new Error('No scanned data found');
-                    }
-
-                    _self.state.ticketDetail = await _self.getTicketDetail(_self.state.scannedContent);
+                    _self.state.ticketDetail = await _self.getTicketDetail(content);
                     if (!_self.state.ticketDetail) {
                         throw new Error('Ticket Not Found or Invalid');
                     }
@@ -552,7 +521,6 @@
                         Config.STATUS_CODES.USER_CONFIRMATION);
                 } catch (error) {
                     ToastService.show(error.message, 'error', 5000);
-                    _self.resetScanner();
                 }
             }
 
@@ -561,8 +529,7 @@
                 Logger.log('CheckinModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
                 try {
                     const {
-                        ticketDetail,
-                        capturedPhoto
+                        ticketDetail
                     } = _self.state;
                     if (!ticketDetail?.ticket_code) {
                         throw new Error('No Ticket to Confirm');
@@ -570,19 +537,16 @@
 
                     const params = {
                         ticket_code: ticketDetail.ticket_code,
-                        order_gift_id: ticketDetail.gifts?.order_gift_id || null,
-                        photo: capturedPhoto || null
+                        order_gift_id: ticketDetail.gifts?.order_gift_id || null
                     };
 
-                    console.log('Confirm Check-in Params:', params);                    
-
-                    // const isConfirmed = await _self.confirmCheckin(params);
-                    // if (isConfirmed) {
-                    //     _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                    //     ToastService.show('Check-in Successful', 'success', 5000);
-                    // } else {
-                    //     throw new Error('Check-in Failed');
-                    // }
+                    const isConfirmed = await _self.confirmCheckin(params);
+                    if (isConfirmed) {
+                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
+                        ToastService.show('Check-in Successful', 'success', 5000);
+                    } else {
+                        throw new Error('Check-in Failed');
+                    }
                 } catch (error) {
                     ToastService.show(error.message, 'error', 5000);
                 }
@@ -650,7 +614,12 @@
                 //     return;
                 // }
                 const codeReader = new ZXing.BrowserQRCodeReader();
-                await new CheckinModule().init(codeReader);
+                const checkinModule = await new CheckinModule().init(codeReader);
+
+                // Expose to window for debugging
+                window.debug = {
+                    checkinModule
+                };
             }
         }
 
