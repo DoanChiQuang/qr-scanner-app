@@ -41,6 +41,7 @@
             static TURNSTILE_SITE_KEY = '0x4AAAAAAAOOjy5Nup_zy_9p';
             static TIMEOUT_DURATION = 15000;
             static STATUS_CODES = {
+                USER_READY_CHECKIN: 1,
                 USER_READY_CHECKOUT: 2
             };
             static ICONS = {
@@ -152,6 +153,7 @@
                 $(document).on('click', '#card-checkin', async () => {
                     const codeReader = new ZXing.BrowserQRCodeReader();
                     const checkinModule = await new CheckinModule().init(codeReader);
+                    window.checkinModule = checkinModule;
                 });
                 $(document).on('click', '#card-checkout', async () => {
                     const codeReader = new ZXing.BrowserQRCodeReader();
@@ -812,16 +814,15 @@
                 btnGroup: '.btn-group',
                 btnReset: '#btn-reset-scan',
                 btnStart: '#btn-start-scan',
-                btnCapture: '#btn-capture',
                 btnConfirm: '#btn-confirm',
                 btnNext: '#btn-next-scan',
                 modal: '#modal'
             };
 
             state = {
+                data: null,
                 isInitialized: false,
                 hasResult: false,
-                ticketDetail: null,
                 scanner: null
             };
 
@@ -860,7 +861,6 @@
 
             setupDOM() {
                 let _self = this;
-                _self.state.ticketDetail = null;
                 $(_self.selectors.container).html(`
                     <div class="scanner-line"></div>
                     <video id="${_self.videoId}" width="100%" height="100%"></video>
@@ -869,24 +869,21 @@
                 $(_self.selectors.info).html('');
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture Picture</a>
+                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>            
                     <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
                 $(_self.selectors.btnReset).hide();
                 $(_self.selectors.btnConfirm).hide();
                 $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnCapture).hide();
                 $(_self.selectors.btnStart).show();
             }
 
             updateDOM(statusCode) {
                 let _self = this;
                 const {
-                    USER_CHECKEDIN,
-                    USER_CONFIRMATION,
-                    USER_CONFIRMATION_SUCCESS
+                    USER_READY_CHECKIN,
+                    USER_READY_CHECKOUT
                 } = Config.STATUS_CODES;
                 $(_self.selectors.instruction).html('');
                 $(_self.selectors.info).html('');
@@ -896,55 +893,38 @@
                 $(_self.selectors.btnConfirm).hide();
 
                 switch (statusCode) {
-                    case USER_CHECKEDIN:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Đã Check-in'));
-                        $(_self.selectors.btnNext).show();
-                        break;
-                    case USER_CONFIRMATION:
+                    case USER_READY_CHECKIN:
                         $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Chưa Check-in'));
-                        $(_self.selectors.btnReset).show();
+                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Sẵn sàng Check-in'));
                         $(_self.selectors.btnConfirm).show();
                         break;
-                    case USER_CONFIRMATION_SUCCESS:
+                    case USER_READY_CHECKOUT:
                         $(_self.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
                         $(_self.selectors.info).html(_self.generateInfoRows('confirmed', 'Đã Check-in'));
                         $(_self.selectors.btnNext).show();
+                        break;
+                    default:
+                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
+                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Không hợp lệ'));
+                        $(_self.selectors.btnReset).show();
                         break;
                 }
             }
 
             generateInfoRows(statusClass, statusText) {
-                let _self = this;
-                const {
-                    ticketDetail
-                } = _self.state;
-                if (!ticketDetail) return 'Ticket Not Found or Invalid';
+                let _self = this;                
                 try {
-                    return `
-                        <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
-                        <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
-                        ${ticketDetail?.gifts ? `
-                            <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
-                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
-                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
-                        ` : ''}
+                    return `                        
+                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>                        
                         <hr>
-                        ${Object.values(ticketDetail?.history || {}).map(item => `
-                            <div class="info-row">
-                                <span>Lịch sử ngày: </span>
-                                <span class="${item.is_checkin ? 'confirmed' : 'error'}">${item.event_time ? moment.unix(item.event_time).format('DD-MM-YYYY') : ''} <small>(${item.is_checkin ? 'Đã Check-in' : 'Chưa Check-in'})</small></span>
-                            </div>
-                        `).join('')}
-                        <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
-                        <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
-                        <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
+                        <div class="info-row"><span>BiB: <strong>123456</strong></span></div>
+                        <div class="info-row"><span>Họ tên: <strong>Đoàn Chí Quang</strong></span></div>
+                        <div class="info-row"><span>Số điện thoại: <strong>0909000999</strong></span></div>
+                        <div class="info-row"><span>Email: <strong>example@gmail.com</strong></span></div>
                     `;
                 } catch (error) {
                     Logger.log('CheckinModule', 'error', error.message);
-                    return 'Ticket Not Found or Invalid';
+                    return 'Thông tin không hợp lệ';
                 }
             }
 
@@ -953,8 +933,7 @@
                 $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
                 $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
                 $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
-                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());
-                $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
+                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());                
             }
 
             async resetScanner() {
@@ -980,7 +959,7 @@
                 let _self = this;
 
                 $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnCapture).show();
+                $(_self.selectors.btnReset).show();
 
                 await _self.state.scanner.startScan({
                     onSuccess: async (qrData) => {
@@ -999,22 +978,7 @@
                         _self.resetScanner();
                     }
                 });
-            }
-
-            async capturePicture() {
-                let _self = this;
-                await _self.state.scanner.capturePicture({
-                    showPreview: true,
-                    previewContainer: _self.selectors.info,
-                    onSuccess: (result) => {
-                        _self.state.capturedImage = result.objectUrl;
-                        Logger.log('CheckinModule', 'info', 'Picture captured:', result.filename);
-                    },
-                    onError: (error) => {
-                        Logger.log('CheckinModule', 'error', 'Capture failed:', error.message);
-                    }
-                });
-            }
+            }            
 
             async handleScanResult(data) {
                 let _self = this;
@@ -1030,14 +994,12 @@
                         throw new Error('Invalid QR Code Data');
                     }
 
-                    _self.state.ticketDetail = await _self.getTicketDetail(content);
-                    if (!_self.state.ticketDetail) {
-                        throw new Error('Ticket Not Found or Invalid');
-                    }
+                    // _self.state.data = await _self.getData(content);
+                    // if (!_self.state.data) {
+                    //     throw new Error('Data Not Found or Invalid');
+                    // }
 
-                    _self.updateDOM(_self.state.ticketDetail.is_checkin ?
-                        Config.STATUS_CODES.USER_CHECKEDIN :
-                        Config.STATUS_CODES.USER_CONFIRMATION);
+                    _self.updateDOM(1); // For Debug
                 } catch (error) {
                     ToastService.show(error.message, 'error', 5000);
                 }
@@ -1096,11 +1058,11 @@
                 };
             }
 
-            async getTicketDetail(content) {
+            async getData(content) {
                 let _self = this;
                 $(_self.selectors.modal).addClass('active');
                 try {
-                    return await ApiService.fetch('ticket/detail', {
+                    return await ApiService.fetch('', {
                         method: 'POST',
                         body: JSON.stringify({
                             content
@@ -1115,7 +1077,7 @@
                 let _self = this;
                 $(_self.selectors.modal).addClass('active');
                 try {
-                    return await ApiService.fetch('ticket/confirm-checkin', {
+                    return await ApiService.fetch('', {
                         method: 'POST',
                         body: JSON.stringify(params)
                     });
