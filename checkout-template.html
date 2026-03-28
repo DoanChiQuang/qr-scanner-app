@@ -669,9 +669,9 @@
                     Logger.log('CheckinModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
                     Logger.log('CheckinModule', 'info', 'Step 4.2: Parsed Result:', parsed);
 
-                    if (parsed.version != 1 || parsed.fields.length == 0) {
-                        throw new Error('Invalid QR Code Data');
-                    }
+                    // if (parsed.version != 1 || parsed.fields.length == 0) {
+                    //     throw new Error('Invalid QR Code Data');
+                    // }
 
                     // _self.state.data = await _self.getData(content);
                     // if (!_self.state.data) {
@@ -970,9 +970,9 @@
                     Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
                     Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
 
-                    if (parsed.version != 1 || parsed.fields.length == 0) {
-                        throw new Error('Invalid QR Code Data');
-                    }
+                    // if (parsed.version != 1 || parsed.fields.length == 0) {
+                    //     throw new Error('Invalid QR Code Data');
+                    // }
 
                     // _self.state.data = await _self.getData(content);
                     // if (!_self.state.data) {
