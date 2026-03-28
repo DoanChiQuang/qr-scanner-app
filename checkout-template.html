@@ -484,327 +484,6 @@
             }
         }
 
-        class CheckoutModule {
-            selectors = {
-                main: '#main',
-                container: '#scanner-frame-container',
-                instruction: '.instruction-text',
-                info: '.info-section',
-                btnGroup: '.btn-group',
-                btnReset: '#btn-reset-scan',
-                btnStart: '#btn-start-scan',
-                btnCapture: '#btn-capture',
-                btnConfirm: '#btn-confirm',
-                btnNext: '#btn-next-scan',
-                modal: '#modal'
-            };
-
-            state = {
-                isInitialized: false,
-                hasResult: false,
-                ticketDetail: null,
-                scanner: null
-            };
-
-            constructor() {
-                let _self = this;
-                _self.videoId = 'qr-video';
-            }
-
-            async init(codeReader) {
-                let _self = this;
-                if (_self.state.isInitialized) {
-                    ToastService.show('Checkout Module Already Initialized', 'error', 5000);
-                    return _self;
-                }
-
-                _self.state.isInitialized = true;
-                _self.state.scanner = new QRScannerLibrary(codeReader, _self.videoId);
-                _self.render();
-                Logger.log('CheckoutModule', 'info', 'Initialized');
-                return _self;
-            }
-
-            render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
-                    <div class="wrapper">
-                        <div class="scanner-frame" id="scanner-frame-container"></div>
-                        <div class="instruction-text"></div>
-                        <div class="info-section"></div>
-                        <div class="btn-group"></div>
-                    </div>
-                `);
-                _self.setupDOM();
-                _self.bindEvents();
-            }
-
-            setupDOM() {
-                let _self = this;
-                _self.state.ticketDetail = null;
-                $(_self.selectors.container).html(`
-                    <div class="scanner-line"></div>
-                    <video id="${_self.videoId}" width="100%" height="100%"></video>
-                `);
-                $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnGroup).html(`
-                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture Picture</a>
-                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
-                    <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
-                `);
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnConfirm).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnCapture).hide();
-                $(_self.selectors.btnStart).show();
-            }
-
-            updateDOM(statusCode) {
-                let _self = this;
-                const {
-                    USER_READY_CHECKOUT
-                } = Config.STATUS_CODES;
-                $(_self.selectors.instruction).html('');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnConfirm).hide();
-
-                switch (statusCode) {
-                    case USER_READY_CHECKOUT:
-                        $(_self.selectors.btnReset).show();
-                        $(_self.selectors.btnConfirm).show();
-                        break;
-                    // case USER_CHECKEDIN:
-                    //     $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                    //     $(_self.selectors.info).html(_self.generateInfoRows('error', 'Đã Check-in'));
-                    //     $(_self.selectors.btnNext).show();
-                    //     break;
-                    // case USER_CONFIRMATION:
-                    //     $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                    //     $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Chưa Check-in'));
-                    //     $(_self.selectors.btnReset).show();
-                    //     $(_self.selectors.btnConfirm).show();
-                    //     break;
-                    // case USER_CONFIRMATION_SUCCESS:
-                    //     $(_self.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
-                    //     $(_self.selectors.info).html(_self.generateInfoRows('confirmed', 'Đã Check-in'));
-                    //     $(_self.selectors.btnNext).show();
-                    //     break;
-                }
-            }
-
-            generateInfoRows(statusClass, statusText) {
-                let _self = this;
-                const {
-                    ticketDetail
-                } = _self.state;
-                if (!ticketDetail) return 'Ticket Not Found or Invalid';
-                try {
-                    return `
-                        <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
-                        <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
-                        ${ticketDetail?.gifts ? `
-                            <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
-                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
-                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
-                        ` : ''}
-                        <hr>
-                        ${Object.values(ticketDetail?.history || {}).map(item => `
-                            <div class="info-row">
-                                <span>Lịch sử ngày: </span>
-                                <span class="${item.is_checkin ? 'confirmed' : 'error'}">${item.event_time ? moment.unix(item.event_time).format('DD-MM-YYYY') : ''} <small>(${item.is_checkin ? 'Đã Check-in' : 'Chưa Check-in'})</small></span>
-                            </div>
-                        `).join('')}
-                        <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
-                        <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
-                        <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
-                    `;
-                } catch (error) {
-                    Logger.log('CheckoutModule', 'error', error.message);
-                    return 'Ticket Not Found or Invalid';
-                }
-            }
-
-            bindEvents() {
-                let _self = this;
-                $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
-                $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
-                $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
-                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckout());
-                $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
-            }
-
-            async resetScanner() {
-                let _self = this;
-                if (!_self.state.hasResult && !_self.state.scanner?.isScanning()) {
-                    ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
-                    return;
-                }
-                _self.state.hasResult = false;
-
-                await _self.state.scanner?.stopScan();
-
-                _self.setupDOM();
-            }
-
-            nextScanner() {
-                let _self = this;
-                _self.setupDOM();
-                _self.startScanner();
-            }
-
-            async startScanner() {
-                let _self = this;
-
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnReset).show();
-
-                await _self.state.scanner.startScan({
-                    onSuccess: async (qrData) => {
-                        _self.state.hasResult = true;
-                        await _self.handleScanResult(qrData);
-                    },
-                    onError: (error) => {
-                        _self.state.hasResult = true;
-                        Logger.log('CheckoutModule', 'error', error.message);
-                    },
-                    onTimeout: () => {
-                        _self.state.hasResult = true;
-                        _self.resetScanner();
-                    }
-                });
-            }
-
-            async capturePicture() {
-                let _self = this;
-                await _self.state.scanner.capturePicture({
-                    showPreview: true,
-                    previewContainer: _self.selectors.info,
-                    onSuccess: (result) => {
-                        _self.state.capturedBlob = result.blob;
-                        Logger.log('CheckoutModule', 'info', 'Picture captured:', result.filename);
-                    },
-                    onError: (error) => {
-                        Logger.log('CheckoutModule', 'error', 'Capture failed:', error.message);
-                    }
-                });
-            }
-
-            async handleScanResult(data) {
-                let _self = this;
-                Logger.log('CheckoutModule', 'info', 'Step 4: Handling Scan Result', data);
-                try {
-                    const content = _self.deobfuscateData(data);
-                    const parsed = _self.parseScannedData(content);
-
-                    Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
-                    Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
-
-                    if (parsed.version != 1 || parsed.fields.length == 0) {
-                        throw new Error('Invalid QR Code Data');
-                    }
-
-                    _self.state.ticketDetail = await _self.getTicketDetail(content);
-                    if (!_self.state.ticketDetail) {
-                        throw new Error('Ticket Not Found or Invalid');
-                    }
-
-                    _self.updateDOM(_self.state.ticketDetail.is_checkin ?
-                        Config.STATUS_CODES.USER_CHECKEDIN :
-                        Config.STATUS_CODES.USER_CONFIRMATION);
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            async handleConfirmCheckout() {
-                let _self = this;
-                Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
-                try {
-                    const {
-                        ticketDetail
-                    } = _self.state;
-                    if (!ticketDetail?.ticket_code) {
-                        throw new Error('No Ticket to Confirm');
-                    }
-
-                    const params = {
-                        ticket_code: ticketDetail.ticket_code,
-                        order_gift_id: ticketDetail.gifts?.order_gift_id || null
-                    };
-
-                    const isConfirmed = await _self.confirmCheckout(params);
-                    if (isConfirmed) {
-                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                        ToastService.show('Check-in Successful', 'success', 5000);
-                    } else {
-                        throw new Error('Check-in Failed');
-                    }
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            deobfuscateData(encoded, secret = 'sEcReT123') {
-                try {
-                    const b64 = encoded.split('').reverse().join('')
-                        .replace(/-/g, '+')
-                        .replace(/_/g, '/');
-                    return atob(b64).replaceAll(secret, '');
-                } catch {
-                    return '';
-                }
-            }
-
-            parseScannedData(data) {
-                if (!data || typeof data !== 'string') {
-                    return {
-                        version: '',
-                        fields: []
-                    };
-                }
-                const parts = data.split('|');
-                return {
-                    version: parts[0] || '',
-                    fields: parts.slice(1)
-                };
-            }
-
-            async getTicketDetail(content) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('ticket/detail', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            content
-                        })
-                    });
-                } finally {
-                    $(_self.selectors.modal).removeClass('active');
-                }
-            }
-
-            async confirmCheckout(params) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('ticket/confirm-checkin', {
-                        method: 'POST',
-                        body: JSON.stringify(params)
-                    });
-                } finally {
-                    $(_self.selectors.modal).removeClass('active');
-                }
-            }
-        }
-
         class CheckinModule {
             selectors = {
                 main: '#main',
@@ -912,7 +591,7 @@
             }
 
             generateInfoRows(statusClass, statusText) {
-                let _self = this;                
+                let _self = this;
                 try {
                     return `                        
                         <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>                        
@@ -933,7 +612,7 @@
                 $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
                 $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
                 $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
-                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());                
+                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());
             }
 
             async resetScanner() {
@@ -978,7 +657,7 @@
                         _self.resetScanner();
                     }
                 });
-            }            
+            }
 
             async handleScanResult(data) {
                 let _self = this;
@@ -1074,6 +753,307 @@
             }
 
             async confirmCheckin(params) {
+                let _self = this;
+                $(_self.selectors.modal).addClass('active');
+                try {
+                    return await ApiService.fetch('', {
+                        method: 'POST',
+                        body: JSON.stringify(params)
+                    });
+                } finally {
+                    $(_self.selectors.modal).removeClass('active');
+                }
+            }
+        }
+
+        class CheckoutModule {
+            selectors = {
+                main: '#main',
+                container: '#scanner-frame-container',
+                instruction: '.instruction-text',
+                info: '.info-section',
+                btnGroup: '.btn-group',
+                btnReset: '#btn-reset-scan',
+                btnStart: '#btn-start-scan',
+                btnCapture: '#btn-capture',
+                btnConfirm: '#btn-confirm',
+                btnNext: '#btn-next-scan',
+                modal: '#modal'
+            };
+
+            state = {
+                data: null,
+                isInitialized: false,
+                hasResult: false,
+                scanner: null
+            };
+
+            constructor() {
+                let _self = this;
+                _self.videoId = 'qr-video';
+            }
+
+            async init(codeReader) {
+                let _self = this;
+                if (_self.state.isInitialized) {
+                    ToastService.show('Checkout Module Already Initialized', 'error', 5000);
+                    return _self;
+                }
+
+                _self.state.isInitialized = true;
+                _self.state.scanner = new QRScannerLibrary(codeReader, _self.videoId);
+                _self.render();
+                Logger.log('CheckoutModule', 'info', 'Initialized');
+                return _self;
+            }
+
+            render() {
+                let _self = this;
+                $(_self.selectors.main).html(`
+                    <div class="wrapper">
+                        <div class="scanner-frame" id="scanner-frame-container"></div>
+                        <div class="instruction-text"></div>
+                        <div class="info-section"></div>
+                        <div class="btn-group"></div>
+                    </div>
+                `);
+                _self.setupDOM();
+                _self.bindEvents();
+            }
+
+            setupDOM() {
+                let _self = this;
+                _self.state.ticketDetail = null;
+                $(_self.selectors.container).html(`
+                    <div class="scanner-line"></div>
+                    <video id="${_self.videoId}" width="100%" height="100%"></video>
+                `);
+                $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
+                $(_self.selectors.info).html('');
+                $(_self.selectors.btnGroup).html(`
+                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
+                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
+                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture Picture</a>
+                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
+                    <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
+                `);
+                $(_self.selectors.btnReset).hide();
+                $(_self.selectors.btnConfirm).hide();
+                $(_self.selectors.btnNext).hide();
+                $(_self.selectors.btnCapture).hide();
+                $(_self.selectors.btnStart).show();
+            }
+
+            updateDOM(statusCode) {
+                let _self = this;
+                const {
+                    USER_READY_CHECKIN,
+                    USER_READY_CHECKOUT
+                } = Config.STATUS_CODES;
+                $(_self.selectors.instruction).html('');
+                $(_self.selectors.info).html('');
+                $(_self.selectors.btnReset).hide();
+                $(_self.selectors.btnStart).hide();
+                $(_self.selectors.btnNext).hide();
+                $(_self.selectors.btnCapture).hide();
+                $(_self.selectors.btnConfirm).hide();
+
+                switch (statusCode) {
+                    case USER_READY_CHECKIN:
+                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
+                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Chưa Check-in'));
+                        $(_self.selectors.btnNext).show();
+                        break;
+                    case USER_READY_CHECKOUT:
+                        $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
+                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Sẵn sàng Check-out'));
+                        $(_self.selectors.btnCapture).show();
+                        $(_self.selectors.btnReset).show();
+                        break;
+                    default:
+                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
+                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Không hợp lệ'));
+                        $(_self.selectors.btnReset).show();
+                        break;
+                }
+            }
+
+            generateInfoRows(statusClass, statusText) {
+                let _self = this;
+                try {
+                    return `                        
+                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>                        
+                        <hr>
+                        <div class="info-row"><span>BiB: <strong>123456</strong></span></div>
+                        <div class="info-row"><span>Họ tên: <strong>Đoàn Chí Quang</strong></span></div>
+                        <div class="info-row"><span>Số điện thoại: <strong>0909000999</strong></span></div>
+                        <div class="info-row"><span>Email: <strong>example@gmail.com</strong></span></div>
+                    `;
+                } catch (error) {
+                    Logger.log('CheckinModule', 'error', error.message);
+                    return 'Thông tin không hợp lệ';
+                }
+            }
+
+            bindEvents() {
+                let _self = this;
+                $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
+                $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
+                $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
+                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckout());
+                $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
+            }
+
+            async resetScanner() {
+                let _self = this;
+                if (!_self.state.hasResult && !_self.state.scanner?.isScanning()) {
+                    ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
+                    return;
+                }
+                _self.state.hasResult = false;
+
+                await _self.state.scanner?.stopScan();
+
+                _self.setupDOM();
+            }
+
+            nextScanner() {
+                let _self = this;
+                _self.setupDOM();
+                _self.startScanner();
+            }
+
+            async startScanner() {
+                let _self = this;
+
+                $(_self.selectors.btnStart).hide();
+                $(_self.selectors.btnReset).show();
+
+                await _self.state.scanner.startScan({
+                    onSuccess: async (qrData) => {
+                        _self.state.hasResult = true;
+                        await _self.handleScanResult(qrData);
+                    },
+                    onError: (error) => {
+                        _self.state.hasResult = true;
+                        Logger.log('CheckoutModule', 'error', error.message);
+                    },
+                    onTimeout: () => {
+                        _self.state.hasResult = true;
+                        _self.resetScanner();
+                    }
+                });
+            }
+
+            async capturePicture() {
+                let _self = this;
+                await _self.state.scanner.capturePicture({
+                    showPreview: true,
+                    previewContainer: _self.selectors.info,
+                    onSuccess: (result) => {
+                        _self.state.capturedBlob = result.blob;
+                        Logger.log('CheckoutModule', 'info', 'Picture captured:', result.filename);
+                    },
+                    onError: (error) => {
+                        Logger.log('CheckoutModule', 'error', 'Capture failed:', error.message);
+                    }
+                });
+            }
+
+            async handleScanResult(data) {
+                let _self = this;
+                Logger.log('CheckoutModule', 'info', 'Step 4: Handling Scan Result', data);
+                try {
+                    const content = _self.deobfuscateData(data);
+                    const parsed = _self.parseScannedData(content);
+
+                    Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
+                    Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
+
+                    if (parsed.version != 1 || parsed.fields.length == 0) {
+                        throw new Error('Invalid QR Code Data');
+                    }
+
+                    // _self.state.data = await _self.getData(content);
+                    // if (!_self.state.data) {
+                    //     throw new Error('Ticket Not Found or Invalid');
+                    // }
+
+                    _self.updateDOM(1); // For Debug
+                } catch (error) {
+                    ToastService.show(error.message, 'error', 5000);
+                }
+            }
+
+            async handleConfirmCheckout() {
+                let _self = this;
+                Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
+                try {
+                    const {
+                        ticketDetail
+                    } = _self.state;
+                    if (!ticketDetail?.ticket_code) {
+                        throw new Error('No Ticket to Confirm');
+                    }
+
+                    const params = {
+                        ticket_code: ticketDetail.ticket_code,
+                        order_gift_id: ticketDetail.gifts?.order_gift_id || null
+                    };
+
+                    const isConfirmed = await _self.confirmCheckout(params);
+                    if (isConfirmed) {
+                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
+                        ToastService.show('Check-in Successful', 'success', 5000);
+                    } else {
+                        throw new Error('Check-in Failed');
+                    }
+                } catch (error) {
+                    ToastService.show(error.message, 'error', 5000);
+                }
+            }
+
+            deobfuscateData(encoded, secret = 'sEcReT123') {
+                try {
+                    const b64 = encoded.split('').reverse().join('')
+                        .replace(/-/g, '+')
+                        .replace(/_/g, '/');
+                    return atob(b64).replaceAll(secret, '');
+                } catch {
+                    return '';
+                }
+            }
+
+            parseScannedData(data) {
+                if (!data || typeof data !== 'string') {
+                    return {
+                        version: '',
+                        fields: []
+                    };
+                }
+                const parts = data.split('|');
+                return {
+                    version: parts[0] || '',
+                    fields: parts.slice(1)
+                };
+            }
+
+            async getData(content) {
+                let _self = this;
+                $(_self.selectors.modal).addClass('active');
+                try {
+                    return await ApiService.fetch('', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            content
+                        })
+                    });
+                } finally {
+                    $(_self.selectors.modal).removeClass('active');
+                }
+            }
+
+            async confirmCheckout(params) {
                 let _self = this;
                 $(_self.selectors.modal).addClass('active');
                 try {
