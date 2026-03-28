@@ -933,7 +933,7 @@
 
                 await _self.state.scanner.startScan({
                     onSuccess: async (qrData) => {
-                        _self.state.hasResult = true;                        
+                        _self.state.hasResult = true;
                         await _self.handleScanResult(qrData);
                     },
                     onError: async (error) => {
@@ -951,14 +951,21 @@
 
             async capturePicture() {
                 let _self = this;
+
+                $(_self.selectors.btnCapture).hide();
+                $(_self.selectors.btnReset).show();
+                $(_self.selectors.btnConfirm).show();
+
                 await _self.state.scanner.capturePicture({
                     showPreview: true,
                     previewContainer: _self.selectors.info,
-                    onSuccess: (result) => {
+                    onSuccess: async (result) => {
                         _self.state.capturedBlob = result.blob;
+                        await _self.state.scanner?.stopScan();
                         Logger.log('CheckoutModule', 'info', 'Picture captured:', result.filename);
                     },
-                    onError: (error) => {
+                    onError: async (error) => {
+                        await _self.state.scanner?.stopScan();
                         Logger.log('CheckoutModule', 'error', 'Capture failed:', error.message);
                     }
                 });
