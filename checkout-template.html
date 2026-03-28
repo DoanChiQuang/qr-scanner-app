@@ -661,13 +661,15 @@
 
             async handleScanResult(data) {
                 let _self = this;
-                Logger.log('CheckinModule', 'info', 'Step 4: Handling Scan Result', data);
+                Logger.log('CheckinModule', 'info', 'Handling Scan Result', data);
                 try {
-                    const content = _self.deobfuscateData(data);
-                    const parsed = _self.parseScannedData(content);
 
-                    Logger.log('CheckinModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
-                    Logger.log('CheckinModule', 'info', 'Step 4.2: Parsed Result:', parsed);
+                    console.log('Raw QR Data:', data);
+                    // const content = _self.deobfuscateData(data);
+                    // const parsed = _self.parseScannedData(content);
+
+                    // Logger.log('CheckinModule', 'info', 'Step 2: Deobfuscated Content:', content);
+                    // Logger.log('CheckinModule', 'info', 'Step 3: Parsed Result:', parsed);
 
                     // if (parsed.version != 1 || parsed.fields.length == 0) {
                     //     throw new Error('Invalid QR Code Data');
@@ -677,7 +679,6 @@
                     // if (!_self.state.data) {
                     //     throw new Error('Data Not Found or Invalid');
                     // }
-
                     _self.updateDOM(1); // For Debug
                 } catch (error) {
                     ToastService.show(error.message, 'error', 5000);
@@ -686,27 +687,28 @@
 
             async handleConfirmCheckin() {
                 let _self = this;
-                Logger.log('CheckinModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
+                Logger.log('CheckinModule', 'info', 'Confirming Check-in', _self.state.data);
                 try {
-                    const {
-                        ticketDetail
-                    } = _self.state;
-                    if (!ticketDetail?.ticket_code) {
-                        throw new Error('No Ticket to Confirm');
-                    }
+                    // const {
+                    //     data
+                    // } = _self.state;
+                    // if (!data?.ticket_code) {
+                    //     throw new Error('No Ticket to Confirm');
+                    // }
 
-                    const params = {
-                        ticket_code: ticketDetail.ticket_code,
-                        order_gift_id: ticketDetail.gifts?.order_gift_id || null
-                    };
+                    // const params = {
+                    //     ticket_code: data.ticket_code,
+                    //     order_gift_id: data.gifts?.order_gift_id || null
+                    // };
 
-                    const isConfirmed = await _self.confirmCheckin(params);
-                    if (isConfirmed) {
-                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                        ToastService.show('Check-in Successful', 'success', 5000);
-                    } else {
-                        throw new Error('Check-in Failed');
-                    }
+                    // const isConfirmed = await _self.confirmCheckin(params);
+                    // if (isConfirmed) {
+                    //     _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
+                    //     ToastService.show('Check-in Successful', 'success', 5000);
+                    // } else {
+                    //     throw new Error('Check-in Failed');
+                    // }
+                    _self.updateDOM(2); // For Debug
                 } catch (error) {
                     ToastService.show(error.message, 'error', 5000);
                 }
@@ -833,7 +835,7 @@
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
                     <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture Picture</a>
+                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture</a>
                     <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
@@ -860,18 +862,18 @@
 
                 switch (statusCode) {
                     case USER_READY_CHECKIN:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
+                        // $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
                         $(_self.selectors.info).html(_self.generateInfoRows('error', 'Chưa Check-in'));
                         $(_self.selectors.btnNext).show();
                         break;
                     case USER_READY_CHECKOUT:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
+                        // $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
                         $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Sẵn sàng Check-out'));
                         $(_self.selectors.btnCapture).show();
                         $(_self.selectors.btnReset).show();
                         break;
                     default:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
+                        // $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
                         $(_self.selectors.info).html(_self.generateInfoRows('error', 'Không hợp lệ'));
                         $(_self.selectors.btnReset).show();
                         break;
@@ -931,15 +933,17 @@
 
                 await _self.state.scanner.startScan({
                     onSuccess: async (qrData) => {
-                        _self.state.hasResult = true;
+                        _self.state.hasResult = true;                        
                         await _self.handleScanResult(qrData);
                     },
-                    onError: (error) => {
+                    onError: async (error) => {
                         _self.state.hasResult = true;
+                        await _self.state.scanner?.stopScan();
                         Logger.log('CheckoutModule', 'error', error.message);
                     },
-                    onTimeout: () => {
+                    onTimeout: async () => {
                         _self.state.hasResult = true;
+                        await _self.state.scanner?.stopScan();
                         _self.resetScanner();
                     }
                 });
@@ -964,11 +968,12 @@
                 let _self = this;
                 Logger.log('CheckoutModule', 'info', 'Step 4: Handling Scan Result', data);
                 try {
-                    const content = _self.deobfuscateData(data);
-                    const parsed = _self.parseScannedData(content);
+                    console.log('Raw QR Data:', data);
+                    // const content = _self.deobfuscateData(data);
+                    // const parsed = _self.parseScannedData(content);
 
-                    Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
-                    Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
+                    // Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
+                    // Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
 
                     // if (parsed.version != 1 || parsed.fields.length == 0) {
                     //     throw new Error('Invalid QR Code Data');
