@@ -380,7 +380,11 @@ body {
 .info-section {
     width: 100%;
     max-width: 295px;
-    margin: 0 auto
+    margin: 0 auto;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding-bottom: 70px;
 }
 
 .info-section span:nth-child(2) {
