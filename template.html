@@ -360,55 +360,36 @@
                 $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
             }
 
-            async requestHighResStream() {
-                const constraints = [
-                    {
-                        video: {
-                            facingMode: 'environment',
-                            width: { ideal: 3840 },
-                            height: { ideal: 2160 }
-                        }
-                    },
-                    {
-                        video: {
-                            facingMode: 'environment',
-                            width: { ideal: 2560 },
-                            height: { ideal: 1440 }
-                        }
-                    },
-                    {
-                        video: {
-                            facingMode: 'environment',
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 }
-                        }
-                    }
-                ];
-
-                for (const constraint of constraints) {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia(constraint);
-                        const track = stream.getVideoTracks()[0];
-                        const settings = track.getSettings();
-                        Logger.log('CheckoutModule', 'info', `Camera resolution: ${settings.width}x${settings.height}`);
-                        return stream;
-                    } catch (e) {
-                        Logger.log('CheckoutModule', 'info', `Failed ${constraint.video.width.ideal}p, trying lower...`);
-                    }
-                }
-                throw new Error('Could not get camera stream');
-            }
-
             async grantCameraPermissions() {
                 let _self = this;
                 try {
-                    const stream = await _self.requestHighResStream();
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 3840, min: 1920 },
+                            height: { ideal: 2160, min: 1080 },
+                            aspectRatio: { ideal: 16 / 9 }
+                        }
+                    });
                     stream.getTracks().forEach(track => track.stop());
                     _self.state.isCameraGranted = true;
                     return true;
                 } catch {
-                    _self.state.isCameraGranted = false;
-                    return false;
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                facingMode: 'environment',
+                                width: { ideal: 1920, min: 1280 },
+                                height: { ideal: 1080, min: 720 }
+                            }
+                        });
+                        stream.getTracks().forEach(track => track.stop());
+                        _self.state.isCameraGranted = true;
+                        return true;
+                    } catch {
+                        _self.state.isCameraGranted = false;
+                        return false;
+                    }
                 }
             }
 
@@ -503,20 +484,8 @@
             async stopScanner() {
                 let _self = this;
                 const {
-                    codeReader,
-                    videoStream
+                    codeReader
                 } = _self.state;
-
-                if (videoStream) {
-                    videoStream.getTracks().forEach(track => track.stop());
-                    _self.state.videoStream = null;
-                }
-
-                const video = document.getElementById(_self.videoId);
-                if (video) {
-                    video.srcObject = null;
-                }
-
                 if (codeReader?.videoElement?.srcObject) {
                     codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
                     codeReader.videoElement.srcObject = null;
@@ -561,16 +530,7 @@
 
                 Logger.log('CheckoutModule', 'info', 'Step 3: Starting QR Code Decoding...');
                 try {
-                    _self.state.videoStream = await _self.requestHighResStream();
-                    const video = document.getElementById(_self.videoId);
-                    video.srcObject = _self.state.videoStream;
-                    await video.play();
-
-                    const track = _self.state.videoStream.getVideoTracks()[0];
-                    const settings = track.getSettings();
-                    Logger.log('CheckoutModule', 'info', `Using video resolution: ${settings.width}x${settings.height}`);
-
-                    const result = await _self.state.codeReader.decodeOnceFromVideoElement(video);
+                    const result = await _self.state.codeReader.decodeOnceFromVideoDevice(undefined, _self.videoId);
                     if (result) {
                         await _self.handleScanResult(result.text);
                     }
@@ -594,8 +554,10 @@
                 }
 
                 const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+                // canvas.width = video.videoWidth;
+                // canvas.height = video.videoHeight;
+                canvas.width = 1080;
+                canvas.height = 1920;
 
                 const ctx = canvas.getContext('2d', {
                     alpha: false,
