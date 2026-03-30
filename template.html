@@ -9,8 +9,10 @@
         content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
+
     <!-- ZXing Library -->
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+
     <!-- <? if ($this->debug): ?> -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
@@ -35,6 +37,7 @@
     <div class="modal" id="modal">
         <div class="spinner"></div>
     </div>
+
     <script>
         class Config {
             static API_BASE_URL = 'https://api.esportsfan.net/';
@@ -145,9 +148,7 @@
 
             bindEvents() {
                 let _self = this;
-                let {
-                    selectors
-                } = _self;
+                let { selectors } = _self;
                 $(document).on('submit', selectors.form, async (e) => {
                     e.preventDefault();
                     $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
@@ -225,7 +226,11 @@
                 ticketDetail: null,
                 codeReader: null,
                 timeoutId: null,
-                isCameraGranted: false
+                isCameraGranted: false,
+
+                // capture state (added)
+                capturedBlob: null,
+                capturedObjectUrl: null
             };
 
             constructor() {
@@ -266,7 +271,7 @@
                 _self.state.ticketDetail = null;
                 $(_self.selectors.container).html(`
                     <div class="scanner-line"></div>
-                    <video id="${_self.videoId}" width="100%" height="100%"></video>
+                    <video id="${_self.videoId}" width="100%" height="100%" autoplay playsinline></video>
                 `);
                 $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
                 $(_self.selectors.info).html('');
@@ -286,11 +291,7 @@
 
             updateDOM(statusCode) {
                 let _self = this;
-                const {
-                    USER_CHECKEDIN,
-                    USER_CONFIRMATION,
-                    USER_CONFIRMATION_SUCCESS
-                } = Config.STATUS_CODES;
+                const { USER_CHECKEDIN, USER_CONFIRMATION, USER_CONFIRMATION_SUCCESS } = Config.STATUS_CODES;
                 $(_self.selectors.instruction).html('');
                 $(_self.selectors.info).html('');
                 $(_self.selectors.btnReset).hide();
@@ -320,9 +321,7 @@
 
             generateInfoRows(statusClass, statusText) {
                 let _self = this;
-                const {
-                    ticketDetail
-                } = _self.state;
+                const { ticketDetail } = _self.state;
                 if (!ticketDetail) return 'Ticket Not Found or Invalid';
                 try {
                     return `
@@ -360,6 +359,14 @@
                 $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
             }
 
+            revokeCapturedUrl() {
+                let _self = this;
+                if (_self.state.capturedObjectUrl) {
+                    try { URL.revokeObjectURL(_self.state.capturedObjectUrl); } catch (e) { }
+                    _self.state.capturedObjectUrl = null;
+                }
+            }
+
             async grantCameraPermissions() {
                 let _self = this;
                 try {
@@ -374,7 +381,7 @@
                     stream.getTracks().forEach(track => track.stop());
                     _self.state.isCameraGranted = true;
                     return true;
-                } catch {                    
+                } catch {
                     _self.state.isCameraGranted = false;
                     return false;
                 }
@@ -392,9 +399,7 @@
                     height = Math.floor(height * ratio);
                 }
 
-                let scale = 1;
                 if (width !== canvas.width || height !== canvas.height) {
-                    scale = width / canvas.width;
                     const tempCanvas = document.createElement('canvas');
                     tempCanvas.width = width;
                     tempCanvas.height = height;
@@ -448,9 +453,8 @@
 
             async resetScanner() {
                 let _self = this;
-                const {
-                    codeReader
-                } = _self.state;
+                const { codeReader } = _self.state;
+
                 if (!_self.state.hasResult && !codeReader?.videoElement?.srcObject) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
@@ -459,20 +463,27 @@
 
                 await _self.stopScanner();
 
+                // cleanup capture preview/url
+                _self.revokeCapturedUrl();
+                _self.state.capturedBlob = null;
+
                 _self.setupDOM();
             }
 
             nextScanner() {
                 let _self = this;
+
+                // cleanup capture preview/url
+                _self.revokeCapturedUrl();
+                _self.state.capturedBlob = null;
+
                 _self.setupDOM();
                 _self.startScanner();
             }
 
             async stopScanner() {
                 let _self = this;
-                const {
-                    codeReader
-                } = _self.state;
+                const { codeReader } = _self.state;
                 if (codeReader?.videoElement?.srcObject) {
                     codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
                     codeReader.videoElement.srcObject = null;
@@ -498,7 +509,6 @@
                 }
                 _self.state.isScanning = true;
                 $(_self.selectors.btnStart).hide();
-                // $(_self.selectors.btnReset).show();
                 $(_self.selectors.btnCapture).show();
 
                 Logger.log('CheckoutModule', 'info', 'Step 2: Requesting Camera Permissions...');
@@ -531,6 +541,7 @@
                 }
             }
 
+            // ======= CAPTURE PICTURE (HQ) =======
             async capturePicture() {
                 let _self = this;
                 const video = document.getElementById(_self.videoId);
@@ -540,78 +551,105 @@
                     return;
                 }
 
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;                
+                // clear previous preview url (avoid memory leak)
+                _self.revokeCapturedUrl();
 
-                const ctx = canvas.getContext('2d', {
-                    alpha: false,                    
-                });
-                if (!ctx) {
-                    ToastService.show('Cannot capture image', 'error', 3000);
+                const stream = video.srcObject;
+                const track = stream.getVideoTracks?.()[0];
+                if (!track) {
+                    ToastService.show('Cannot access camera track', 'error', 3000);
                     return;
                 }
-
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
                 const filename = `VM_${now}.jpg`;
 
                 let blob = null;
-                try {
-                    blob = await new Promise((resolve, reject) => {
-                        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 1.0);
-                    });
-                    Logger.log('CheckoutModule', 'info', `Image captured: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
-                } catch (e) {
-                    Logger.log('CheckoutModule', 'error', 'Capture failed', e);
-                    ToastService.show('Capture failed', 'error', 3000);
-                    return;
+
+                // 1) Prefer ImageCapture for higher-quality stills (if supported)
+                if ('ImageCapture' in window) {
+                    try {
+                        const cap = new ImageCapture(track);
+                        blob = await cap.takePhoto();
+                        Logger.log('CheckoutModule', 'info', `ImageCapture.takePhoto: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+                    } catch (e) {
+                        Logger.log('CheckoutModule', 'error', 'ImageCapture.takePhoto failed, fallback to canvas', e);
+                        blob = null;
+                    }
                 }
 
-                // Store for later use (optional)
+                // 2) Fallback: draw frame from <video> to canvas at native resolution
+                if (!blob) {
+                    const w = video.videoWidth;
+                    const h = video.videoHeight;
+
+                    if (!w || !h) {
+                        ToastService.show('Video not ready yet', 'error', 2000);
+                        return;
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    if (!ctx) {
+                        ToastService.show('Cannot capture image', 'error', 3000);
+                        return;
+                    }
+
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    ctx.drawImage(video, 0, 0, w, h);
+
+                    // If you need size limit (e.g. <= 300KB), use:
+                    // const compressed = await _self.compressImageToSize(canvas, 300);
+                    // blob = compressed.blob;
+
+                    blob = await new Promise((resolve, reject) => {
+                        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.95);
+                    });
+
+                    Logger.log('CheckoutModule', 'info', `Canvas capture: ${(blob.size / 1024 / 1024).toFixed(2)}MB (${w}x${h})`);
+                }
+
                 _self.state.capturedBlob = blob;
+                _self.state.capturedObjectUrl = URL.createObjectURL(blob);
 
-                const objectUrl = URL.createObjectURL(blob);
-
-                // Preview (similar to old flow: append to info)
+                // Preview ảnh trong info-section
                 $(_self.selectors.info).append(`
-                    <div class="captured-image">
-                        <img src="${objectUrl}" style="max-width:100%; margin-top:10px; border:2px solid #56ab2f;">
+                    <div class="captured-image" style="margin-top:10px;">
+                        <div style="font-size:12px;color:#444;margin-bottom:6px;">
+                            Captured: ${(blob.size / 1024 / 1024).toFixed(2)}MB - ${blob.type}
+                        </div>
+                        <img src="${_self.state.capturedObjectUrl}" style="max-width:100%; border:2px solid #56ab2f; border-radius:8px;">
                     </div>
                 `);
 
-                // Try download; iOS Safari may ignore a.download => fallback open new tab
+                // Download
                 try {
                     const link = document.createElement('a');
                     link.download = filename;
-                    link.href = objectUrl;
+                    link.href = _self.state.capturedObjectUrl;
                     link.rel = 'noopener';
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
 
-                    ToastService.show(`Picture saved: ${filename} (${(blob.size / 1024 / 1024).toFixed(2)}MB)`, 'success', 2000);
+                    ToastService.show(`Saved: ${filename}`, 'success', 2000);
 
+                    // iOS fallback
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
                     if (isIOS) {
-                        // Fallback so user can long-press / Save Image if download is blocked
                         setTimeout(() => {
-                            try { window.open(objectUrl, '_blank', 'noopener'); } catch (e) { }
+                            try { window.open(_self.state.capturedObjectUrl, '_blank', 'noopener'); } catch (e) { }
                         }, 300);
                     }
                 } catch (e) {
                     ToastService.show('Cannot auto-save image', 'error', 2000);
-                    try { window.open(objectUrl, '_blank', 'noopener'); } catch (err) { }
+                    try { window.open(_self.state.capturedObjectUrl, '_blank', 'noopener'); } catch (err) { }
                 }
-
-                // NOTE: Do not revoke immediately because preview/download still needs it.
-                // You can revoke on reset/next scan, or after some time:
-                // setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
             }
 
             async handleScanResult(data) {
@@ -645,9 +683,7 @@
                 let _self = this;
                 Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
                 try {
-                    const {
-                        ticketDetail
-                    } = _self.state;
+                    const { ticketDetail } = _self.state;
                     if (!ticketDetail?.ticket_code) {
                         throw new Error('No Ticket to Confirm');
                     }
@@ -682,16 +718,10 @@
 
             parseScannedData(data) {
                 if (!data || typeof data !== 'string') {
-                    return {
-                        version: '',
-                        fields: []
-                    };
+                    return { version: '', fields: [] };
                 }
                 const parts = data.split('|');
-                return {
-                    version: parts[0] || '',
-                    fields: parts.slice(1)
-                };
+                return { version: parts[0] || '', fields: parts.slice(1) };
             }
 
             async getTicketDetail(content) {
@@ -700,9 +730,7 @@
                 try {
                     return await ApiService.fetch('ticket/detail', {
                         method: 'POST',
-                        body: JSON.stringify({
-                            content
-                        })
+                        body: JSON.stringify({ content })
                     });
                 } finally {
                     $(_self.selectors.modal).removeClass('active');
@@ -734,9 +762,7 @@
                 const checkinModule = await new CheckoutModule().init(codeReader);
 
                 // Expose to window for debugging
-                window.debug = {
-                    checkinModule
-                };
+                window.debug = { checkinModule };
             }
         }
 
