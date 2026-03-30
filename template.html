@@ -501,8 +501,8 @@
                 }
 
                 const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
                 const ctx = canvas.getContext('2d');
                 if (!ctx) {
@@ -510,6 +510,8 @@
                     return;
                 }
 
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';   // 'medium' hoặc 'high'
                 ctx.drawImage(video, 0, 0);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
