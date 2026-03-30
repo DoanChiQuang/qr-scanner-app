@@ -363,20 +363,76 @@
             async grantCameraPermissions() {
                 let _self = this;
                 try {
-                    await navigator.mediaDevices.getUserMedia({
+                    const stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: 'environment',
-                            width: { ideal: 1920, min: 1280 },
-                            height: { ideal: 1080, min: 720 },
+                            width: { ideal: 3840, min: 1920 },
+                            height: { ideal: 2160, min: 1080 },
                             aspectRatio: { ideal: 16 / 9 }
                         }
                     });
+                    stream.getTracks().forEach(track => track.stop());
                     _self.state.isCameraGranted = true;
                     return true;
                 } catch {
-                    _self.state.isCameraGranted = false;
-                    return false;
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                facingMode: 'environment',
+                                width: { ideal: 1920, min: 1280 },
+                                height: { ideal: 1080, min: 720 }
+                            }
+                        });
+                        stream.getTracks().forEach(track => track.stop());
+                        _self.state.isCameraGranted = true;
+                        return true;
+                    } catch {
+                        _self.state.isCameraGranted = false;
+                        return false;
+                    }
                 }
+            }
+
+            async compressImageToSize(canvas, maxSizeKB = 300, initialQuality = 0.95) {
+                let quality = initialQuality;
+                let blob = await new Promise((resolve) => {
+                    canvas.toBlob(resolve, 'image/jpeg', quality);
+                });
+
+                while (blob.size > maxSizeKB * 1024 && quality > 0.1) {
+                    quality -= 0.1;
+                    blob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, 'image/jpeg', quality);
+                    });
+                }
+
+                if (blob.size > maxSizeKB * 1024 && canvas.width > 800) {
+                    const scale = (maxSizeKB * 1024) / blob.size;
+                    const newWidth = Math.floor(canvas.width * Math.sqrt(scale));
+                    const newHeight = Math.floor(canvas.height * (newWidth / canvas.width));
+
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = newWidth;
+                    tempCanvas.height = newHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.imageSmoothingEnabled = true;
+                    tempCtx.imageSmoothingQuality = 'high';
+                    tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+
+                    quality = 0.9;
+                    blob = await new Promise((resolve) => {
+                        tempCanvas.toBlob(resolve, 'image/jpeg', quality);
+                    });
+
+                    while (blob.size > maxSizeKB * 1024 && quality > 0.1) {
+                        quality -= 0.1;
+                        blob = await new Promise((resolve) => {
+                            tempCanvas.toBlob(resolve, 'image/jpeg', quality);
+                        });
+                    }
+                }
+
+                return { blob, quality };
             }
 
             async resetScanner() {
@@ -486,36 +542,25 @@
                     return;
                 }
 
-                ctx.imageSmoothingEnabled = false;
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
                 const filename = `VM_${now}.jpg`;
 
                 let blob = null;
+                let qualityUsed = 0.95;
                 try {
-                    blob = await new Promise((resolve, reject) => {
-                        // Prefer toBlob (lighter than base64); fallback toDataURL if needed
-                        if (canvas.toBlob) {
-                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
-                        } else {
-                            try {
-                                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                                const parts = dataUrl.split(',');
-                                const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
-                                const bstr = atob(parts[1] || '');
-                                let n = bstr.length;
-                                const u8arr = new Uint8Array(n);
-                                while (n--) u8arr[n] = bstr.charCodeAt(n);
-                                resolve(new Blob([u8arr], { type: mime }));
-                            } catch (err) {
-                                reject(err);
-                            }
-                        }
-                    });
+                    const compressed = await _self.compressImageToSize(canvas, 300, 0.95);
+                    blob = compressed.blob;
+                    qualityUsed = compressed.quality;
+                    Logger.log('CheckoutModule', 'info', `Image compressed: ${(blob.size / 1024).toFixed(2)}KB, quality: ${qualityUsed.toFixed(2)}`);
                 } catch (e) {
-                    ToastService.show('Capture failed', 'error', 3000);
-                    return;
+                    Logger.log('CheckoutModule', 'error', 'Compression failed, using fallback', e);
+                    blob = await new Promise((resolve, reject) => {
+                        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.8);
+                    });
                 }
 
                 // Store for later use (optional)
@@ -540,7 +585,7 @@
                     link.click();
                     document.body.removeChild(link);
 
-                    ToastService.show('Picture saved: ' + filename, 'success', 1500);
+                    ToastService.show(`Picture saved: ${filename} (${(blob.size / 1024).toFixed(2)}KB)`, 'success', 2000);
 
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
