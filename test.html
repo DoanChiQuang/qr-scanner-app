@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>High quality camera capture</title>
+    <style>
+        body {
+            font-family: system-ui, Arial, sans-serif;
+            margin: 16px;
+        }
+
+        .row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+
+        video,
+        img {
+            width: min(480px, 100%);
+            height: auto;
+            background: #111;
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 10px 14px;
+            font-size: 16px;
+        }
+
+        .meta {
+            color: #444;
+            font-size: 14px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>High quality camera capture (browser)</h1>
+
+    <div class="row">
+        <div>
+            <h3>Live preview</h3>
+            <video id="v" autoplay playsinline></video>
+            <div class="meta" id="videoMeta"></div>
+        </div>
+
+        <div>
+            <h3>Captured image</h3>
+            <img id="out" alt="capture" />
+            <div class="meta" id="photoMeta"></div>
+        </div>
+    </div>
+
+    <p>
+        <button id="start">Start camera</button>
+        <button id="snap" disabled>Snap</button>
+        <button id="stop" disabled>Stop</button>
+        <a id="download" style="display:none; margin-left:12px;">Download</a>
+    </p>
+
+    <script>
+        const video = document.getElementById('v');
+        const out = document.getElementById('out');
+        const startBtn = document.getElementById('start');
+        const snapBtn = document.getElementById('snap');
+        const stopBtn = document.getElementById('stop');
+        const download = document.getElementById('download');
+        const videoMeta = document.getElementById('videoMeta');
+        const photoMeta = document.getElementById('photoMeta');
+
+        let stream = null;
+
+        async function startCamera() {
+            // Stop any existing stream first
+            stopCamera();
+
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: "environment" },
+                    width: { ideal: 3840 }, // request ~4K
+                    height: { ideal: 2160 }
+                },
+                audio: false
+            });
+
+            video.srcObject = stream;
+
+            // Wait for metadata so videoWidth/videoHeight are available
+            await new Promise((resolve) => {
+                if (video.readyState >= 1 && video.videoWidth) return resolve();
+                video.onloadedmetadata = () => resolve();
+            });
+
+            const track = stream.getVideoTracks()[0];
+            const settings = track.getSettings ? track.getSettings() : {};
+            videoMeta.textContent =
+                `Track settings:\n` +
+                `- video.videoWidth x video.videoHeight: ${video.videoWidth} x ${video.videoHeight}\n` +
+                `- track.getSettings(): ${JSON.stringify(settings, null, 2)}`;
+
+            snapBtn.disabled = false;
+            stopBtn.disabled = false;
+        }
+
+        function stopCamera() {
+            if (stream) {
+                for (const t of stream.getTracks()) t.stop();
+            }
+            stream = null;
+            video.srcObject = null;
+            snapBtn.disabled = true;
+            stopBtn.disabled = true;
+        }
+
+        async function snapPhoto() {
+            if (!stream) return;
+
+            const track = stream.getVideoTracks()[0];
+
+            // 1) Best attempt: ImageCapture.takePhoto() (often yields higher-res still)
+            if ('ImageCapture' in window) {
+                try {
+                    const cap = new ImageCapture(track);
+                    const blob = await cap.takePhoto(); // may return full-res still
+                    showBlob(blob, "image/jpeg (ImageCapture.takePhoto)");
+                    return;
+                } catch (e) {
+                    // fall through to canvas fallback
+                    console.warn("ImageCapture.takePhoto failed, falling back to canvas:", e);
+                }
+            }
+
+            // 2) Fallback: draw current frame from <video> at native resolution
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+
+            const ctx = canvas.getContext('2d', { alpha: false });
+            ctx.drawImage(video, 0, 0, w, h);
+
+            // For max quality use PNG (big):
+            // canvas.toBlob((blob) => showBlob(blob, "image/png (canvas)"), "image/png");
+
+            // Or JPEG with high quality:
+            canvas.toBlob(
+                (blob) => showBlob(blob, "image/jpeg (canvas, q=0.95)"),
+                "image/jpeg",
+                0.95
+            );
+        }
+
+        function showBlob(blob, label) {
+            if (!blob) return;
+
+            const url = URL.createObjectURL(blob);
+            out.src = url;
+
+            photoMeta.textContent =
+                `Captured:\n` +
+                `- type: ${blob.type}\n` +
+                `- size: ${(blob.size / 1024).toFixed(1)} KB\n` +
+                `- via: ${label}`;
+
+            // Setup download link
+            const ext = blob.type === "image/png" ? "png" : "jpg";
+            download.href = url;
+            download.download = `capture-${Date.now()}.${ext}`;
+            download.textContent = `Download ${download.download}`;
+            download.style.display = "inline";
+        }
+
+        startBtn.onclick = () => startCamera().catch(err => {
+            console.error(err);
+            alert("Camera error: " + err.message);
+        });
+        snapBtn.onclick = () => snapPhoto();
+        stopBtn.onclick = () => stopCamera();
+    </script>
+</body>
+
+</html>
