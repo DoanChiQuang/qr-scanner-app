@@ -2,7 +2,6 @@
 <html>
 
 <head>
-    <!-- <?php echo $this->headTitle($this->title); ?> -->
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
@@ -13,13 +12,6 @@
     <!-- ZXing Library -->
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
 
-    <!-- <? if ($this->debug): ?> -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>
-        eruda.init();
-    </script>
-    <!-- <? endif; ?> -->
-
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -29,6 +21,17 @@
 
     <!-- Captcha -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+    <style>
+        /* optional small styles for the hidden iOS capture input */
+        #ios-file-capture {
+            position: absolute;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -37,6 +40,9 @@
     <div class="modal" id="modal">
         <div class="spinner"></div>
     </div>
+
+    <!-- iOS “real camera” capture (high quality). Triggered programmatically -->
+    <input id="ios-file-capture" type="file" accept="image/*" capture="environment" />
 
     <script>
         class Config {
@@ -77,9 +83,7 @@
                     close: true,
                     gravity: "top",
                     position: "center",
-                    style: {
-                        background: backgrounds[type] || backgrounds.info
-                    }
+                    style: { background: backgrounds[type] || backgrounds.info }
                 }).showToast();
             }
         }
@@ -98,108 +102,6 @@
                 } catch (error) {
                     Logger.log('ApiService', 'error', `[API][${endpoint}]: ${error.message}`);
                     throw error;
-                }
-            }
-        }
-
-        class AuthModule {
-            selectors = {
-                main: '#main',
-                form: '#form',
-                btnLogin: '#btn-login'
-            };
-
-            state = {
-                accountInfo: null
-            };
-
-            async init() {
-                let _self = this;
-                await _self.getAccountInfo().then(info => {
-                    _self.state.accountInfo = info;
-                }).catch(() => {
-                    ToastService.show('Session expired. Please log in again.', 'error', 5000);
-                });
-                Logger.log('AuthModule', 'info', 'Initialized');
-                return _self;
-            }
-
-            render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
-                    <div class="header">
-                        <h1 class="title">Login</h1>
-                    </div>
-                    <form id="form" method="POST">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" required><br><br>
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required><br><br>
-                        <button type="submit" class="btn" id="btn-login">Submit</button>
-                    </form>
-                `);
-                _self.bindEvents();
-            }
-
-            isLoggedIn() {
-                let _self = this;
-                return !!_self.state.accountInfo;
-            }
-
-            bindEvents() {
-                let _self = this;
-                let { selectors } = _self;
-                $(document).on('submit', selectors.form, async (e) => {
-                    e.preventDefault();
-                    $(selectors.btnLogin).prop('disabled', true).text('Logging in...').addClass('grey');
-                    try {
-                        const token = await new Promise((resolve) => _self.renderTurnstile(resolve));
-                        await _self.handleLogin(token);
-                    } catch (error) {
-                        ToastService.show(error.message, 'error', 5000);
-                        Logger.log('AuthModule', 'error', error.message);
-                    } finally {
-                        $(selectors.btnLogin).prop('disabled', false).text('Submit').removeClass('grey');
-                    }
-                });
-            }
-
-            async handleLogin(token = null) {
-                let _self = this;
-                const email = $('#email').val();
-                const password = $('#password').val();
-                if (!email || !password) throw new Error('Please enter email and password');
-
-                const result = await ApiService.fetch('account/login', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        email,
-                        password,
-                        _token: token
-                    })
-                });
-
-                if (result?.session_id && result?.account) {
-                    _self.state.accountInfo = result.account;
-                    window.location.reload();
-                } else {
-                    throw new Error('Login failed. Please check your credentials');
-                }
-            }
-
-            async getAccountInfo() {
-                return await ApiService.fetch('account/info', {
-                    method: 'GET'
-                });
-            }
-
-            renderTurnstile(callback) {
-                if (window.turnstile) {
-                    turnstile.render('#turnstile-container', {
-                        sitekey: Config.TURNSTILE_SITE_KEY,
-                        callback,
-                        'error-callback': () => ToastService.show('Captcha verification failed. Please try again', 'error', 5000)
-                    });
                 }
             }
         }
@@ -228,33 +130,31 @@
                 timeoutId: null,
                 isCameraGranted: false,
 
-                // capture state (added)
+                // capture state
                 capturedBlob: null,
-                capturedObjectUrl: null
+                capturedObjectUrl: null,
             };
 
             constructor() {
-                let _self = this;
-                _self.videoId = 'qr-video';
+                this.videoId = 'qr-video';
+                this.iosInputId = 'ios-file-capture';
             }
 
             async init(codeReader) {
-                let _self = this;
-                if (_self.state.isInitialized) {
+                if (this.state.isInitialized) {
                     ToastService.show('Checkout Module Already Initialized', 'error', 5000);
-                    return _self;
+                    return this;
                 }
-
-                _self.state.isInitialized = true;
-                _self.state.codeReader = codeReader;
-                _self.render();
+                this.state.isInitialized = true;
+                this.state.codeReader = codeReader;
+                this.render();
+                this.bindIOSFileCapture();
                 Logger.log('CheckoutModule', 'info', 'Initialized');
-                return _self;
+                return this;
             }
 
             render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
+                $(this.selectors.main).html(`
                     <div class="wrapper">
                         <div class="scanner-frame" id="scanner-frame-container"></div>
                         <div class="instruction-text"></div>
@@ -262,228 +162,185 @@
                         <div class="btn-group"></div>
                     </div>
                 `);
-                _self.setupDOM();
-                _self.bindEvents();
+                this.setupDOM();
+                this.bindEvents();
             }
 
             setupDOM() {
-                let _self = this;
-                _self.state.ticketDetail = null;
-                $(_self.selectors.container).html(`
+                this.state.ticketDetail = null;
+
+                $(this.selectors.container).html(`
                     <div class="scanner-line"></div>
-                    <video id="${_self.videoId}" width="100%" height="100%" autoplay playsinline></video>
+                    <video id="${this.videoId}" width="100%" height="100%" autoplay playsinline></video>
                 `);
-                $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnGroup).html(`
+
+                $(this.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
+                $(this.selectors.info).html('');
+                $(this.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
                     <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
                     <a href="#" title="Capture" class="btn" id="btn-capture">Capture Picture</a>
                     <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnConfirm).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnCapture).hide();
-                $(_self.selectors.btnStart).show();
-            }
 
-            updateDOM(statusCode) {
-                let _self = this;
-                const { USER_CHECKEDIN, USER_CONFIRMATION, USER_CONFIRMATION_SUCCESS } = Config.STATUS_CODES;
-                $(_self.selectors.instruction).html('');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnConfirm).hide();
-
-                switch (statusCode) {
-                    case USER_CHECKEDIN:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Đã Check-in'));
-                        $(_self.selectors.btnNext).show();
-                        break;
-                    case USER_CONFIRMATION:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Chưa Check-in'));
-                        $(_self.selectors.btnReset).show();
-                        $(_self.selectors.btnConfirm).show();
-                        break;
-                    case USER_CONFIRMATION_SUCCESS:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('confirmed', 'Đã Check-in'));
-                        $(_self.selectors.btnNext).show();
-                        break;
-                }
-            }
-
-            generateInfoRows(statusClass, statusText) {
-                let _self = this;
-                const { ticketDetail } = _self.state;
-                if (!ticketDetail) return 'Ticket Not Found or Invalid';
-                try {
-                    return `
-                        <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
-                        <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
-                        ${ticketDetail?.gifts ? `
-                            <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
-                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
-                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
-                        ` : ''}
-                        <hr>
-                        ${Object.values(ticketDetail?.history || {}).map(item => `
-                            <div class="info-row">
-                                <span>Lịch sử ngày: </span>
-                                <span class="${item.is_checkin ? 'confirmed' : 'error'}">${item.event_time ? moment.unix(item.event_time).format('DD-MM-YYYY') : ''} <small>(${item.is_checkin ? 'Đã Check-in' : 'Chưa Check-in'})</small></span>
-                            </div>
-                        `).join('')}
-                        <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
-                        <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
-                        <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
-                    `;
-                } catch (error) {
-                    Logger.log('CheckoutModule', 'error', error.message);
-                    return 'Ticket Not Found or Invalid';
-                }
+                $(this.selectors.btnReset).hide();
+                $(this.selectors.btnConfirm).hide();
+                $(this.selectors.btnNext).hide();
+                $(this.selectors.btnCapture).hide();
+                $(this.selectors.btnStart).show();
             }
 
             bindEvents() {
-                let _self = this;
-                $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
-                $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
-                $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
-                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckout());
-                $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
+                $(document).on('click', this.selectors.btnStart, () => this.startScanner());
+                $(document).on('click', this.selectors.btnReset, () => this.resetScanner());
+                $(document).on('click', this.selectors.btnNext, () => this.nextScanner());
+                $(document).on('click', this.selectors.btnConfirm, () => this.handleConfirmCheckout());
+                $(document).on('click', this.selectors.btnCapture, () => this.capturePictureHQ());
+            }
+
+            // -------- Platform helpers --------
+            isIOS() {
+                return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            }
+
+            supportsImageCaptureTakePhoto() {
+                // Even if ImageCapture exists, takePhoto may not be usable everywhere.
+                return typeof window.ImageCapture !== 'undefined';
             }
 
             revokeCapturedUrl() {
-                let _self = this;
-                if (_self.state.capturedObjectUrl) {
-                    try { URL.revokeObjectURL(_self.state.capturedObjectUrl); } catch (e) { }
-                    _self.state.capturedObjectUrl = null;
+                if (this.state.capturedObjectUrl) {
+                    try { URL.revokeObjectURL(this.state.capturedObjectUrl); } catch (e) { }
+                    this.state.capturedObjectUrl = null;
                 }
             }
 
+            showCapturedPreview(blob, viaLabel) {
+                this.revokeCapturedUrl();
+                this.state.capturedBlob = blob;
+                this.state.capturedObjectUrl = URL.createObjectURL(blob);
+
+                $(this.selectors.info).append(`
+                    <div class="captured-image" style="margin-top:10px;">
+                        <div style="font-size:12px;color:#444;margin-bottom:6px;">
+                        Captured (${viaLabel}): ${(blob.size / 1024 / 1024).toFixed(2)}MB - ${blob.type}
+                        </div>
+                        <img src="${this.state.capturedObjectUrl}" style="max-width:100%; border:2px solid #56ab2f; border-radius:8px;">
+                    </div>
+                `);
+            }
+
+            downloadBlob(blob) {
+                const now = moment().format('YYYYMMDD_HHmmss');
+                const ext = (blob.type === 'image/png') ? 'png' : 'jpg';
+                const filename = `VM_${now}.${ext}`;
+
+                const objectUrl = this.state.capturedObjectUrl || URL.createObjectURL(blob);
+
+                try {
+                    const link = document.createElement('a');
+                    link.download = filename;
+                    link.href = objectUrl;
+                    link.rel = 'noopener';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    ToastService.show(`Saved: ${filename}`, 'success', 2000);
+                } catch (e) {
+                    ToastService.show('Cannot auto-save image', 'error', 2000);
+                    try { window.open(objectUrl, '_blank', 'noopener'); } catch (err) { }
+                }
+
+                // iOS Safari often ignores a.download; open tab fallback
+                if (this.isIOS()) {
+                    setTimeout(() => {
+                        try { window.open(objectUrl, '_blank', 'noopener'); } catch (e) { }
+                    }, 250);
+                }
+            }
+
+            // -------- iOS file capture (highest quality path on iOS Safari) --------
+            bindIOSFileCapture() {
+                const input = document.getElementById(this.iosInputId);
+                if (!input) return;
+
+                input.addEventListener('change', async () => {
+                    try {
+                        const file = input.files && input.files[0];
+                        if (!file) return;
+
+                        // Reset input so selecting the same photo again still triggers change
+                        input.value = '';
+
+                        // file is usually already a high-quality image from Camera UI
+                        this.showCapturedPreview(file, 'iOS camera input');
+                        this.downloadBlob(file);
+                    } catch (e) {
+                        Logger.log('CheckoutModule', 'error', 'iOS file capture error', e);
+                        ToastService.show('Capture failed', 'error', 2500);
+                    }
+                });
+            }
+
+            openIOSCameraUI() {
+                const input = document.getElementById(this.iosInputId);
+                if (!input) {
+                    ToastService.show('iOS capture input missing', 'error', 2500);
+                    return;
+                }
+                input.click();
+            }
+
+            // -------- Camera permission + scanning --------
             async grantCameraPermissions() {
-                let _self = this;
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: 'environment',
-                            width: { ideal: 3840 },   // request 4K-ish
+                            width: { ideal: 3840 },
                             height: { ideal: 2160 },
                             aspectRatio: { ideal: 16 / 9 }
                         }
                     });
                     stream.getTracks().forEach(track => track.stop());
-                    _self.state.isCameraGranted = true;
+                    this.state.isCameraGranted = true;
                     return true;
                 } catch {
-                    _self.state.isCameraGranted = false;
+                    this.state.isCameraGranted = false;
                     return false;
                 }
             }
 
-            async compressImageToSize(canvas, maxSizeKB = 300) {
-                const maxWidth = 3840;
-                const maxHeight = 2160;
-                let width = canvas.width;
-                let height = canvas.height;
-
-                if (width > maxWidth || height > maxHeight) {
-                    const ratio = Math.min(maxWidth / width, maxHeight / height);
-                    width = Math.floor(width * ratio);
-                    height = Math.floor(height * ratio);
-                }
-
-                if (width !== canvas.width || height !== canvas.height) {
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = width;
-                    tempCanvas.height = height;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    tempCtx.imageSmoothingEnabled = true;
-                    tempCtx.imageSmoothingQuality = 'high';
-                    tempCtx.drawImage(canvas, 0, 0, width, height);
-                    canvas = tempCanvas;
-                }
-
-                let quality = 1.0;
-                let blob = await new Promise((resolve) => {
-                    canvas.toBlob(resolve, 'image/jpeg', quality);
-                });
-
-                while (blob.size > maxSizeKB * 1024 && quality > 0.5) {
-                    quality -= 0.05;
-                    blob = await new Promise((resolve) => {
-                        canvas.toBlob(resolve, 'image/jpeg', quality);
-                    });
-                }
-
-                if (blob.size > maxSizeKB * 1024) {
-                    const targetScale = Math.sqrt((maxSizeKB * 1024) / blob.size) * 0.95;
-                    width = Math.floor(width * targetScale);
-                    height = Math.floor(height * targetScale);
-
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = width;
-                    tempCanvas.height = height;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    tempCtx.imageSmoothingEnabled = true;
-                    tempCtx.imageSmoothingQuality = 'high';
-                    tempCtx.drawImage(canvas, 0, 0, width, height);
-
-                    quality = 0.95;
-                    blob = await new Promise((resolve) => {
-                        tempCanvas.toBlob(resolve, 'image/jpeg', quality);
-                    });
-
-                    while (blob.size > maxSizeKB * 1024 && quality > 0.3) {
-                        quality -= 0.1;
-                        blob = await new Promise((resolve) => {
-                            tempCanvas.toBlob(resolve, 'image/jpeg', quality);
-                        });
-                    }
-                }
-
-                return { blob, quality };
-            }
-
             async resetScanner() {
-                let _self = this;
-                const { codeReader } = _self.state;
+                const { codeReader } = this.state;
 
-                if (!_self.state.hasResult && !codeReader?.videoElement?.srcObject) {
+                if (!this.state.hasResult && !codeReader?.videoElement?.srcObject) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
-                _self.state.hasResult = false;
+                this.state.hasResult = false;
 
-                await _self.stopScanner();
+                await this.stopScanner();
 
-                // cleanup capture preview/url
-                _self.revokeCapturedUrl();
-                _self.state.capturedBlob = null;
+                // cleanup captured preview/url
+                this.revokeCapturedUrl();
+                this.state.capturedBlob = null;
 
-                _self.setupDOM();
+                this.setupDOM();
             }
 
             nextScanner() {
-                let _self = this;
+                this.revokeCapturedUrl();
+                this.state.capturedBlob = null;
 
-                // cleanup capture preview/url
-                _self.revokeCapturedUrl();
-                _self.state.capturedBlob = null;
-
-                _self.setupDOM();
-                _self.startScanner();
+                this.setupDOM();
+                this.startScanner();
             }
 
             async stopScanner() {
-                let _self = this;
-                const { codeReader } = _self.state;
+                const { codeReader } = this.state;
                 if (codeReader?.videoElement?.srcObject) {
                     codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
                     codeReader.videoElement.srcObject = null;
@@ -492,67 +349,70 @@
                     await codeReader.reset();
                 }
 
-                _self.state.isScanning = false;
-                if (_self.state.timeoutId) {
-                    clearTimeout(_self.state.timeoutId);
-                    _self.state.timeoutId = null;
+                this.state.isScanning = false;
+                if (this.state.timeoutId) {
+                    clearTimeout(this.state.timeoutId);
+                    this.state.timeoutId = null;
                 }
             }
 
             async startScanner() {
-                let _self = this;
-
                 Logger.log('CheckoutModule', 'info', 'Step 1: Starting Scanner...');
-                if (_self.state.isScanning) {
+                if (this.state.isScanning) {
                     ToastService.show('Scanner Already Running', 'error', 5000);
                     return;
                 }
-                _self.state.isScanning = true;
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnCapture).show();
+
+                this.state.isScanning = true;
+                $(this.selectors.btnStart).hide();
+                $(this.selectors.btnCapture).show();
 
                 Logger.log('CheckoutModule', 'info', 'Step 2: Requesting Camera Permissions...');
-                if (!_self.state.isCameraGranted && !await _self.grantCameraPermissions()) {
-                    _self.state.hasResult = true;
+                if (!this.state.isCameraGranted && !await this.grantCameraPermissions()) {
+                    this.state.hasResult = true;
                     ToastService.show('Camera Access Denied', 'error', 5000);
-                    _self.resetScanner();
+                    this.resetScanner();
                     return;
                 }
 
-                _self.state.timeoutId = setTimeout(() => {
-                    _self.state.hasResult = true;
-                    _self.resetScanner();
+                this.state.timeoutId = setTimeout(() => {
+                    this.state.hasResult = true;
+                    this.resetScanner();
                     ToastService.show('Scan Timeout. Please try again', 'error', 5000);
                 }, Config.TIMEOUT_DURATION);
 
                 Logger.log('CheckoutModule', 'info', 'Step 3: Starting QR Code Decoding...');
                 try {
-                    const result = await _self.state.codeReader.decodeOnceFromVideoDevice(undefined, _self.videoId);
+                    const result = await this.state.codeReader.decodeOnceFromVideoDevice(undefined, this.videoId);
                     if (result) {
-                        await _self.handleScanResult(result.text);
+                        await this.handleScanResult(result.text);
                     }
                 } catch (error) {
-                    if (_self.state.isScanning) {
+                    if (this.state.isScanning) {
                         ToastService.show(`Scanning Error: ${error.message}`, 'error', 5000);
                     }
                 } finally {
-                    _self.state.hasResult = true;
-                    await _self.stopScanner();
+                    this.state.hasResult = true;
+                    await this.stopScanner();
                 }
             }
 
-            // ======= CAPTURE PICTURE (HQ) =======
-            async capturePicture() {
-                let _self = this;
-                const video = document.getElementById(_self.videoId);
+            // -------- High-quality capture for BOTH (iOS + others) --------
+            async capturePictureHQ() {
+                // iOS Safari: best path is file input camera UI (still photo)
+                if (this.isIOS()) {
+                    this.openIOSCameraUI();
+                    return;
+                }
 
+                // Non-iOS: try ImageCapture.takePhoto() first, fallback to canvas from video
+                const video = document.getElementById(this.videoId);
                 if (!video || !video.srcObject) {
                     ToastService.show('Camera not active', 'error', 3000);
                     return;
                 }
 
-                // clear previous preview url (avoid memory leak)
-                _self.revokeCapturedUrl();
+                this.revokeCapturedUrl();
 
                 const stream = video.srcObject;
                 const track = stream.getVideoTracks?.()[0];
@@ -561,103 +421,61 @@
                     return;
                 }
 
-                const now = moment().format('YYYYMMDD_HHmmss');
-                const filename = `VM_${now}.jpg`;
-
                 let blob = null;
 
-                // 1) Prefer ImageCapture for higher-quality stills (if supported)
-                if ('ImageCapture' in window) {
+                // 1) ImageCapture (best when available)
+                if (this.supportsImageCaptureTakePhoto()) {
                     try {
                         const cap = new ImageCapture(track);
                         blob = await cap.takePhoto();
                         Logger.log('CheckoutModule', 'info', `ImageCapture.takePhoto: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+                        this.showCapturedPreview(blob, 'ImageCapture.takePhoto');
+                        this.downloadBlob(blob);
+                        return;
                     } catch (e) {
                         Logger.log('CheckoutModule', 'error', 'ImageCapture.takePhoto failed, fallback to canvas', e);
                         blob = null;
                     }
                 }
 
-                // 2) Fallback: draw frame from <video> to canvas at native resolution
-                if (!blob) {
-                    const w = video.videoWidth;
-                    const h = video.videoHeight;
-
-                    if (!w || !h) {
-                        ToastService.show('Video not ready yet', 'error', 2000);
-                        return;
-                    }
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
-
-                    const ctx = canvas.getContext('2d', { alpha: false });
-                    if (!ctx) {
-                        ToastService.show('Cannot capture image', 'error', 3000);
-                        return;
-                    }
-
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    ctx.drawImage(video, 0, 0, w, h);
-
-                    // If you need size limit (e.g. <= 300KB), use:
-                    // const compressed = await _self.compressImageToSize(canvas, 300);
-                    // blob = compressed.blob;
-
-                    blob = await new Promise((resolve, reject) => {
-                        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.95);
-                    });
-
-                    Logger.log('CheckoutModule', 'info', `Canvas capture: ${(blob.size / 1024 / 1024).toFixed(2)}MB (${w}x${h})`);
+                // 2) Canvas fallback (still high quality: native video resolution + JPEG quality 0.95)
+                const w = video.videoWidth;
+                const h = video.videoHeight;
+                if (!w || !h) {
+                    ToastService.show('Video not ready yet', 'error', 2000);
+                    return;
                 }
 
-                _self.state.capturedBlob = blob;
-                _self.state.capturedObjectUrl = URL.createObjectURL(blob);
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
 
-                // Preview ảnh trong info-section
-                $(_self.selectors.info).append(`
-                    <div class="captured-image" style="margin-top:10px;">
-                        <div style="font-size:12px;color:#444;margin-bottom:6px;">
-                            Captured: ${(blob.size / 1024 / 1024).toFixed(2)}MB - ${blob.type}
-                        </div>
-                        <img src="${_self.state.capturedObjectUrl}" style="max-width:100%; border:2px solid #56ab2f; border-radius:8px;">
-                    </div>
-                `);
-
-                // Download
-                try {
-                    const link = document.createElement('a');
-                    link.download = filename;
-                    link.href = _self.state.capturedObjectUrl;
-                    link.rel = 'noopener';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-
-                    ToastService.show(`Saved: ${filename}`, 'success', 2000);
-
-                    // iOS fallback
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                    if (isIOS) {
-                        setTimeout(() => {
-                            try { window.open(_self.state.capturedObjectUrl, '_blank', 'noopener'); } catch (e) { }
-                        }, 300);
-                    }
-                } catch (e) {
-                    ToastService.show('Cannot auto-save image', 'error', 2000);
-                    try { window.open(_self.state.capturedObjectUrl, '_blank', 'noopener'); } catch (err) { }
+                const ctx = canvas.getContext('2d', { alpha: false });
+                if (!ctx) {
+                    ToastService.show('Cannot capture image', 'error', 3000);
+                    return;
                 }
+
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(video, 0, 0, w, h);
+
+                blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.95);
+                });
+
+                Logger.log('CheckoutModule', 'info', `Canvas capture: ${(blob.size / 1024 / 1024).toFixed(2)}MB (${w}x${h})`);
+
+                this.showCapturedPreview(blob, 'canvas fallback');
+                this.downloadBlob(blob);
             }
 
+            // -------- Existing business logic (kept) --------
             async handleScanResult(data) {
-                let _self = this;
                 Logger.log('CheckoutModule', 'info', 'Step 4: Handling Scan Result', data);
                 try {
-                    const content = _self.deobfuscateData(data);
-                    const parsed = _self.parseScannedData(content);
+                    const content = this.deobfuscateData(data);
+                    const parsed = this.parseScannedData(content);
 
                     Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
                     Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
@@ -666,12 +484,12 @@
                         throw new Error('Invalid QR Code Data');
                     }
 
-                    _self.state.ticketDetail = await _self.getTicketDetail(content);
-                    if (!_self.state.ticketDetail) {
+                    this.state.ticketDetail = await this.getTicketDetail(content);
+                    if (!this.state.ticketDetail) {
                         throw new Error('Ticket Not Found or Invalid');
                     }
 
-                    _self.updateDOM(_self.state.ticketDetail.is_checkin ?
+                    this.updateDOM(this.state.ticketDetail.is_checkin ?
                         Config.STATUS_CODES.USER_CHECKEDIN :
                         Config.STATUS_CODES.USER_CONFIRMATION);
                 } catch (error) {
@@ -679,23 +497,79 @@
                 }
             }
 
-            async handleConfirmCheckout() {
-                let _self = this;
-                Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
+            updateDOM(statusCode) {
+                const { USER_CHECKEDIN, USER_CONFIRMATION, USER_CONFIRMATION_SUCCESS } = Config.STATUS_CODES;
+                $(this.selectors.instruction).html('');
+                $(this.selectors.info).html('');
+                $(this.selectors.btnReset).hide();
+                $(this.selectors.btnStart).hide();
+                $(this.selectors.btnNext).hide();
+                $(this.selectors.btnConfirm).hide();
+
+                switch (statusCode) {
+                    case USER_CHECKEDIN:
+                        $(this.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
+                        $(this.selectors.info).html(this.generateInfoRows('error', 'Đã Check-in'));
+                        $(this.selectors.btnNext).show();
+                        break;
+                    case USER_CONFIRMATION:
+                        $(this.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
+                        $(this.selectors.info).html(this.generateInfoRows('checked', 'Chưa Check-in'));
+                        $(this.selectors.btnReset).show();
+                        $(this.selectors.btnConfirm).show();
+                        break;
+                    case USER_CONFIRMATION_SUCCESS:
+                        $(this.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
+                        $(this.selectors.info).html(this.generateInfoRows('confirmed', 'Đã Check-in'));
+                        $(this.selectors.btnNext).show();
+                        break;
+                }
+            }
+
+            generateInfoRows(statusClass, statusText) {
+                const { ticketDetail } = this.state;
+                if (!ticketDetail) return 'Ticket Not Found or Invalid';
                 try {
-                    const { ticketDetail } = _self.state;
-                    if (!ticketDetail?.ticket_code) {
-                        throw new Error('No Ticket to Confirm');
-                    }
+                    return `
+            <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
+            <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
+            <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
+            ${ticketDetail?.gifts ? `
+              <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
+              <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
+              <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
+            ` : ''}
+            <hr>
+            ${Object.values(ticketDetail?.history || {}).map(item => `
+              <div class="info-row">
+                <span>Lịch sử ngày: </span>
+                <span class="${item.is_checkin ? 'confirmed' : 'error'}">${item.event_time ? moment.unix(item.event_time).format('DD-MM-YYYY') : ''} <small>(${item.is_checkin ? 'Đã Check-in' : 'Chưa Check-in'})</small></span>
+              </div>
+            `).join('')}
+            <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
+            <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
+            <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
+          `;
+                } catch (error) {
+                    Logger.log('CheckoutModule', 'error', error.message);
+                    return 'Ticket Not Found or Invalid';
+                }
+            }
+
+            async handleConfirmCheckout() {
+                Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', this.state.ticketDetail);
+                try {
+                    const { ticketDetail } = this.state;
+                    if (!ticketDetail?.ticket_code) throw new Error('No Ticket to Confirm');
 
                     const params = {
                         ticket_code: ticketDetail.ticket_code,
                         order_gift_id: ticketDetail.gifts?.order_gift_id || null
                     };
 
-                    const isConfirmed = await _self.confirmCheckout(params);
+                    const isConfirmed = await this.confirmCheckout(params);
                     if (isConfirmed) {
-                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
+                        this.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
                         ToastService.show('Check-in Successful', 'success', 5000);
                     } else {
                         throw new Error('Check-in Failed');
@@ -717,51 +591,41 @@
             }
 
             parseScannedData(data) {
-                if (!data || typeof data !== 'string') {
-                    return { version: '', fields: [] };
-                }
+                if (!data || typeof data !== 'string') return { version: '', fields: [] };
                 const parts = data.split('|');
                 return { version: parts[0] || '', fields: parts.slice(1) };
             }
 
             async getTicketDetail(content) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
+                $(this.selectors.modal).addClass('active');
                 try {
                     return await ApiService.fetch('ticket/detail', {
                         method: 'POST',
                         body: JSON.stringify({ content })
                     });
                 } finally {
-                    $(_self.selectors.modal).removeClass('active');
+                    $(this.selectors.modal).removeClass('active');
                 }
             }
 
             async confirmCheckout(params) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
+                $(this.selectors.modal).addClass('active');
                 try {
                     return await ApiService.fetch('ticket/confirm-checkin', {
                         method: 'POST',
                         body: JSON.stringify(params)
                     });
                 } finally {
-                    $(_self.selectors.modal).removeClass('active');
+                    $(this.selectors.modal).removeClass('active');
                 }
             }
         }
 
         class App {
             static async start() {
-                // const auth = await new AuthModule().init();
-                // if (!auth.isLoggedIn()) {
-                //     auth.render();
-                //     return;
-                // }
                 const codeReader = new ZXing.BrowserQRCodeReader();
                 const checkinModule = await new CheckoutModule().init(codeReader);
 
-                // Expose to window for debugging
                 window.debug = { checkinModule };
             }
         }
