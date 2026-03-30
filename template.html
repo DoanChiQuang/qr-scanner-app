@@ -503,16 +503,9 @@
                     }
                 }
 
-                // Force update video dimensions before capture
-                await new Promise(resolve => setTimeout(resolve, 100));
-
                 const canvas = document.createElement('canvas');
-                // Use actual video dimensions, not canvas size
-                const width = video.videoWidth;
-                const height = video.videoHeight;
-
-                canvas.width = width;
-                canvas.height = height;
+                canvas.width = 1920;
+                canvas.height = 1080;
 
                 const ctx = canvas.getContext('2d', {
                     alpha: false,
@@ -524,7 +517,7 @@
                 }
 
                 ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(video, 0, 0, width, height);
+                ctx.drawImage(video, 0, 0, 1920, 1080);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
                 const filename = `VM_${now}.jpg`;
@@ -532,11 +525,12 @@
                 let blob = null;
                 try {
                     blob = await new Promise((resolve, reject) => {
+                        // Prefer toBlob (lighter than base64); fallback toDataURL if needed
                         if (canvas.toBlob) {
-                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.92);
+                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
                         } else {
                             try {
-                                const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
                                 const parts = dataUrl.split(',');
                                 const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
                                 const bstr = atob(parts[1] || '');
@@ -553,6 +547,48 @@
                     ToastService.show('Capture failed', 'error', 3000);
                     return;
                 }
+
+                // Store for later use (optional)
+                _self.state.capturedBlob = blob;
+
+                const objectUrl = URL.createObjectURL(blob);
+
+                // Preview (similar to old flow: append to info)
+                $(_self.selectors.info).append(`
+                    <div class="captured-image">
+                        <img src="${objectUrl}" style="max-width:100%; margin-top:10px; border:2px solid #56ab2f;">
+                    </div>
+                `);
+
+                // Try download; iOS Safari may ignore a.download => fallback open new tab
+                try {
+                    const link = document.createElement('a');
+                    link.download = filename;
+                    link.href = objectUrl;
+                    link.rel = 'noopener';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    ToastService.show('Picture saved: ' + filename, 'success', 1500);
+
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+                    if (isIOS) {
+                        // Fallback so user can long-press / Save Image if download is blocked
+                        setTimeout(() => {
+                            try { window.open(objectUrl, '_blank', 'noopener'); } catch (e) { }
+                        }, 300);
+                    }
+                } catch (e) {
+                    ToastService.show('Cannot auto-save image', 'error', 2000);
+                    try { window.open(objectUrl, '_blank', 'noopener'); } catch (err) { }
+                }
+
+                // NOTE: Do not revoke immediately because preview/download still needs it.
+                // You can revoke on reset/next scan, or after some time:
+                // setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
             }
 
             async handleScanResult(data) {
