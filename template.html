@@ -393,38 +393,62 @@
                 }
             }
 
-            async compressImageToSize(canvas, maxSizeKB = 300, initialQuality = 0.95) {
-                let quality = initialQuality;
+            async compressImageToSize(canvas, maxSizeKB = 300) {
+                const maxWidth = 3840;
+                const maxHeight = 2160;
+                let width = canvas.width;
+                let height = canvas.height;
+
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width = Math.floor(width * ratio);
+                    height = Math.floor(height * ratio);
+                }
+
+                let scale = 1;
+                if (width !== canvas.width || height !== canvas.height) {
+                    scale = width / canvas.width;
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = width;
+                    tempCanvas.height = height;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.imageSmoothingEnabled = true;
+                    tempCtx.imageSmoothingQuality = 'high';
+                    tempCtx.drawImage(canvas, 0, 0, width, height);
+                    canvas = tempCanvas;
+                }
+
+                let quality = 1.0;
                 let blob = await new Promise((resolve) => {
                     canvas.toBlob(resolve, 'image/jpeg', quality);
                 });
 
-                while (blob.size > maxSizeKB * 1024 && quality > 0.1) {
-                    quality -= 0.1;
+                while (blob.size > maxSizeKB * 1024 && quality > 0.5) {
+                    quality -= 0.05;
                     blob = await new Promise((resolve) => {
                         canvas.toBlob(resolve, 'image/jpeg', quality);
                     });
                 }
 
-                if (blob.size > maxSizeKB * 1024 && canvas.width > 800) {
-                    const scale = (maxSizeKB * 1024) / blob.size;
-                    const newWidth = Math.floor(canvas.width * Math.sqrt(scale));
-                    const newHeight = Math.floor(canvas.height * (newWidth / canvas.width));
+                if (blob.size > maxSizeKB * 1024) {
+                    const targetScale = Math.sqrt((maxSizeKB * 1024) / blob.size) * 0.95;
+                    width = Math.floor(width * targetScale);
+                    height = Math.floor(height * targetScale);
 
                     const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = newWidth;
-                    tempCanvas.height = newHeight;
+                    tempCanvas.width = width;
+                    tempCanvas.height = height;
                     const tempCtx = tempCanvas.getContext('2d');
                     tempCtx.imageSmoothingEnabled = true;
                     tempCtx.imageSmoothingQuality = 'high';
-                    tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+                    tempCtx.drawImage(canvas, 0, 0, width, height);
 
-                    quality = 0.9;
+                    quality = 0.95;
                     blob = await new Promise((resolve) => {
                         tempCanvas.toBlob(resolve, 'image/jpeg', quality);
                     });
 
-                    while (blob.size > maxSizeKB * 1024 && quality > 0.1) {
+                    while (blob.size > maxSizeKB * 1024 && quality > 0.3) {
                         quality -= 0.1;
                         blob = await new Promise((resolve) => {
                             tempCanvas.toBlob(resolve, 'image/jpeg', quality);
@@ -550,9 +574,9 @@
                 const filename = `VM_${now}.jpg`;
 
                 let blob = null;
-                let qualityUsed = 0.95;
+                let qualityUsed = 1.0;
                 try {
-                    const compressed = await _self.compressImageToSize(canvas, 300, 0.95);
+                    const compressed = await _self.compressImageToSize(canvas, 300);
                     blob = compressed.blob;
                     qualityUsed = compressed.quality;
                     Logger.log('CheckoutModule', 'info', `Image compressed: ${(blob.size / 1024).toFixed(2)}KB, quality: ${qualityUsed.toFixed(2)}`);
