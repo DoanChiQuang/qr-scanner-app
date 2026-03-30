@@ -504,8 +504,8 @@
                 }
 
                 const canvas = document.createElement('canvas');
-                canvas.width = 1920;
-                canvas.height = 1080;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
                 const ctx = canvas.getContext('2d', {
                     alpha: false,
@@ -517,7 +517,7 @@
                 }
 
                 ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(video, 0, 0, 1920, 1080);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
                 const filename = `VM_${now}.jpg`;
