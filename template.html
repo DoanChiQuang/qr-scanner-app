@@ -366,30 +366,17 @@
                     const stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: 'environment',
-                            width: { ideal: 3840, min: 1920 },
-                            height: { ideal: 2160, min: 1080 },
+                            width: { ideal: 3840 },   // request 4K-ish
+                            height: { ideal: 2160 },
                             aspectRatio: { ideal: 16 / 9 }
                         }
                     });
                     stream.getTracks().forEach(track => track.stop());
                     _self.state.isCameraGranted = true;
                     return true;
-                } catch {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({
-                            video: {
-                                facingMode: 'environment',
-                                width: { ideal: 1920, min: 1280 },
-                                height: { ideal: 1080, min: 720 }
-                            }
-                        });
-                        stream.getTracks().forEach(track => track.stop());
-                        _self.state.isCameraGranted = true;
-                        return true;
-                    } catch {
-                        _self.state.isCameraGranted = false;
-                        return false;
-                    }
+                } catch {                    
+                    _self.state.isCameraGranted = false;
+                    return false;
                 }
             }
 
