@@ -541,14 +541,11 @@
                 }
 
                 const canvas = document.createElement('canvas');
-                // canvas.width = video.videoWidth;
-                // canvas.height = video.videoHeight;
-                canvas.width = 1080;
-                canvas.height = 1920;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;                
 
                 const ctx = canvas.getContext('2d', {
-                    alpha: false,
-                    willReadFrequently: false
+                    alpha: false,                    
                 });
                 if (!ctx) {
                     ToastService.show('Cannot capture image', 'error', 3000);
