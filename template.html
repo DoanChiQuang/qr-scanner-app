@@ -554,8 +554,10 @@
                 }
 
                 const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+                // canvas.width = video.videoWidth;
+                // canvas.height = video.videoHeight;
+                canvas.width = 1080;
+                canvas.height = 1920;
 
                 const ctx = canvas.getContext('2d', {
                     alpha: false,
