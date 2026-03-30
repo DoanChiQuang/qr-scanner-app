@@ -365,7 +365,10 @@
                 try {
                     await navigator.mediaDevices.getUserMedia({
                         video: {
-                            facingMode: 'environment'
+                            facingMode: 'environment',
+                            width: { ideal: 1920, min: 1280 },
+                            height: { ideal: 1080, min: 720 },
+                            aspectRatio: { ideal: 16 / 9 }
                         }
                     });
                     _self.state.isCameraGranted = true;
@@ -501,28 +504,20 @@
                 }
 
                 const canvas = document.createElement('canvas');
-                // Use higher resolution for better quality
-                const scale = 2; // Increase to 2x or 3x for even better quality
-                canvas.width = video.videoWidth * scale;
-                canvas.height = video.videoHeight * scale;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
                 const ctx = canvas.getContext('2d', {
-                    alpha: false, // Better performance and quality for opaque images
+                    alpha: false,
                     willReadFrequently: false
                 });
-
                 if (!ctx) {
                     ToastService.show('Cannot capture image', 'error', 3000);
                     return;
                 }
 
-                // Apply high-quality rendering settings
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-
-                // Scale up for better quality
-                ctx.scale(scale, scale);
-                ctx.drawImage(video, 0, 0);
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
                 const filename = `VM_${now}.jpg`;
@@ -530,14 +525,12 @@
                 let blob = null;
                 try {
                     blob = await new Promise((resolve, reject) => {
-                        // Use higher quality setting (0.95 instead of 0.85)
-                        const quality = 0.95;
-
+                        // Prefer toBlob (lighter than base64); fallback toDataURL if needed
                         if (canvas.toBlob) {
-                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', quality);
+                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
                         } else {
                             try {
-                                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
                                 const parts = dataUrl.split(',');
                                 const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
                                 const bstr = atob(parts[1] || '');
@@ -562,10 +555,10 @@
 
                 // Preview (similar to old flow: append to info)
                 $(_self.selectors.info).append(`
-        <div class="captured-image">
-            <img src="${objectUrl}" style="max-width:100%; margin-top:10px; border:2px solid #56ab2f;">
-        </div>
-    `);
+                    <div class="captured-image">
+                        <img src="${objectUrl}" style="max-width:100%; margin-top:10px; border:2px solid #56ab2f;">
+                    </div>
+                `);
 
                 // Try download; iOS Safari may ignore a.download => fallback open new tab
                 try {
@@ -592,6 +585,10 @@
                     ToastService.show('Cannot auto-save image', 'error', 2000);
                     try { window.open(objectUrl, '_blank', 'noopener'); } catch (err) { }
                 }
+
+                // NOTE: Do not revoke immediately because preview/download still needs it.
+                // You can revoke on reset/next scan, or after some time:
+                // setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
             }
 
             async handleScanResult(data) {
