@@ -574,17 +574,15 @@
                 const filename = `VM_${now}.jpg`;
 
                 let blob = null;
-                let qualityUsed = 1.0;
                 try {
-                    const compressed = await _self.compressImageToSize(canvas, 300);
-                    blob = compressed.blob;
-                    qualityUsed = compressed.quality;
-                    Logger.log('CheckoutModule', 'info', `Image compressed: ${(blob.size / 1024).toFixed(2)}KB, quality: ${qualityUsed.toFixed(2)}`);
-                } catch (e) {
-                    Logger.log('CheckoutModule', 'error', 'Compression failed, using fallback', e);
                     blob = await new Promise((resolve, reject) => {
-                        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.8);
+                        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 1.0);
                     });
+                    Logger.log('CheckoutModule', 'info', `Image captured: ${(blob.size / 1024 / 1024).toFixed(2)}MB`);
+                } catch (e) {
+                    Logger.log('CheckoutModule', 'error', 'Capture failed', e);
+                    ToastService.show('Capture failed', 'error', 3000);
+                    return;
                 }
 
                 // Store for later use (optional)
@@ -609,7 +607,7 @@
                     link.click();
                     document.body.removeChild(link);
 
-                    ToastService.show(`Picture saved: ${filename} (${(blob.size / 1024).toFixed(2)}KB)`, 'success', 2000);
+                    ToastService.show(`Picture saved: ${filename} (${(blob.size / 1024 / 1024).toFixed(2)}MB)`, 'success', 2000);
 
                     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
