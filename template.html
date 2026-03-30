@@ -473,36 +473,6 @@
                     return;
                 }
 
-                // Wait for video to be ready (avoid black image on some devices/browsers)
-                if (!(video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0)) {
-                    try {
-                        await new Promise((resolve, reject) => {
-                            const timeoutId = setTimeout(() => {
-                                cleanup();
-                                reject(new Error('Video not ready'));
-                            }, 1500);
-
-                            const onReady = () => {
-                                cleanup();
-                                if (video.videoWidth > 0 && video.videoHeight > 0) resolve(true);
-                                else reject(new Error('Video not ready'));
-                            };
-
-                            const cleanup = () => {
-                                clearTimeout(timeoutId);
-                                video.removeEventListener('loadeddata', onReady);
-                                video.removeEventListener('canplay', onReady);
-                            };
-
-                            video.addEventListener('loadeddata', onReady, { once: true });
-                            video.addEventListener('canplay', onReady, { once: true });
-                        });
-                    } catch (e) {
-                        ToastService.show('Camera is warming up, please try again', 'error', 2500);
-                        return;
-                    }
-                }
-
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
