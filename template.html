@@ -1,82 +1,57 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
-  <meta charset="UTF-8">
-  <title>QR Code Scanner</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <style>video, canvas { max-width: 100%; }</style>
+	<meta charset="UTF-8">
+	<title>QR Code Scanner</title>
+	<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+	<style>
+		video,
+		canvas {
+			max-width: 100%;
+		}
+	</style>
 </head>
+
 <body>
-  <h2>QR Code Scanner</h2>
+	<h2>QR Code Scanner</h2>
 
-  <button id="btnCamera">Mở Camera</button>
-  <button id="btnCapture" style="display:none;">Chụp & Detect</button>
-  <button id="btnStop" style="display:none;">Dừng Camera</button>
+	<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
+	<button id="btnOpenCamera">Mở Camera & Chụp</button>
 
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas" style="display:none;"></canvas>
+	<video id="video" autoplay playsinline style="display:none;"></video>
+	<canvas id="canvas" style="display:none;"></canvas>
 
-  <pre id="result"></pre>
+	<pre id="result"></pre>
 
-  <script>
-    let video = document.getElementById('video');
-    let stream = null;
-    let rafId = null;
+	<script>
+		const cameraInput = document.getElementById('cameraInput');
+		const btnOpen = document.getElementById('btnOpenCamera');
 
-    async function startCamera() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        video.srcObject = stream;
-        document.getElementById('btnCapture').style.display = 'inline';
-        document.getElementById('btnStop').style.display = 'inline';
-        document.getElementById('btnCamera').style.display = 'none';
-      } catch(e) { alert('Không mở được camera'); }
-    }
+		btnOpen.onclick = () => cameraInput.click();
 
-    function stopCamera() {
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      if (rafId) cancelAnimationFrame(rafId);
-      video.srcObject = null;
-      document.getElementById('btnCapture').style.display = 'none';
-      document.getElementById('btnStop').style.display = 'none';
-      document.getElementById('btnCamera').style.display = 'inline';
-    }
+		cameraInput.addEventListener('change', function (e) {
+			const file = e.target.files[0];
+			if (!file) return;
 
-    function captureAndDetect() {
-      const canvas = document.getElementById('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
+			const img = new Image();
+			img.onload = function () {
+				const canvas = document.getElementById('canvas');
+				canvas.width = img.width;
+				canvas.height = img.height;
+				canvas.style.display = 'block';
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+				const ctx = canvas.getContext('2d');
+				ctx.drawImage(img, 0, 0);
 
-      document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR';
-    }
+				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+				const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-    // Real-time detect (optional)
-    function scanLoop() {
-      if (!video.videoWidth) { rafId = requestAnimationFrame(scanLoop); return; }
-      const canvas = document.getElementById('canvas');
-      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (code) {
-        document.getElementById('result').textContent = 'QR: ' + code.data;
-        stopCamera();
-      }
-      rafId = requestAnimationFrame(scanLoop);
-    }
-
-    document.getElementById('btnCamera').onclick = startCamera;
-    document.getElementById('btnCapture').onclick = captureAndDetect;
-    document.getElementById('btnStop').onclick = stopCamera;
-
-    // Bắt đầu real-time scan khi camera mở
-    video.onloadedmetadata = () => { rafId = requestAnimationFrame(scanLoop); };
-  </script>
+				document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
+			};
+			img.src = URL.createObjectURL(file);
+		});
+	</script>
 </body>
+
 </html>
