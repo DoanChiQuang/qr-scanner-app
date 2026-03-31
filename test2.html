@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=100" />
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+    <title>QR + HQ Canvas Capture (ZXing)</title>
+
+    <!-- ZXing -->
+    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+
+    <!-- Optional libs (only for filename timestamp + simple messages) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 14px;
+        }
+
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        button {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+            background: #f6f6f6;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        .camera {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .box {
+            border: 1px solid #eee;
+            border-radius: 12px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .muted {
+            color: #444;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 12px;
+        }
+
+        img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            margin-top: 10px;
+            display: none;
+        }
+
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h2>Test: ZXing scan + chụp ảnh canvas HQ (camera sau)</h2>
+
+        <div class="camera">
+            <video id="qr-video" autoplay playsinline muted></video>
+        </div>
+
+        <div class="row">
+            <button id="btnStart">Start Scan (HQ stream)</button>
+            <button id="btnCapture" disabled>Capture (Canvas) & Download</button>
+            <button id="btnStop" disabled>Stop</button>
+        </div>
+
+        <div class="box">
+            <div class="muted">
+                Yêu cầu: chạy trên <b>HTTPS</b> (hoặc <b>localhost</b>).<br>
+                Nếu lỗi, hãy gửi mình nội dung trong phần <code>Debug</code> bên dưới + console error.
+            </div>
+        </div>
+
+        <div class="box">
+            <b>Kết quả QR:</b>
+            <div id="qrText" class="muted">(chưa có)</div>
+        </div>
+
+        <div class="box">
+            <b>Debug</b>
+            <pre id="debug"></pre>
+        </div>
+
+        <img id="preview" alt="preview">
+
+    </div>
+
+    <script>
+        (() => {
+            // ---------- small utilities ----------
+            const $debug = document.getElementById('debug');
+            const $qrText = document.getElementById('qrText');
+            const video = document.getElementById('qr-video');
+            const preview = document.getElementById('preview');
+
+            const btnStart = document.getElementById('btnStart');
+            const btnCapture = document.getElementById('btnCapture');
+            const btnStop = document.getElementById('btnStop');
+
+            function logDebug(obj) {
+                const line = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+                $debug.textContent += line + "\n";
+            }
+
+            function toast(msg, type = 'info') {
+                if (window.Toastify) {
+                    const bg = type === 'error'
+                        ? 'linear-gradient(to right, #ff5f6d, #ffc371)'
+                        : type === 'success'
+                            ? 'linear-gradient(to right, #56ab2f, #a8e063)'
+                            : 'linear-gradient(to right, #00b09b, #96c93d)';
+                    Toastify({ text: msg, duration: 2500, close: true, gravity: "top", position: "center", style: { background: bg } }).showToast();
+                } else {
+                    alert(msg);
+                }
+            }
+
+            // ---------- config ----------
+            const CAPTURE_TARGET_MIN_KB = 300;
+            const CAPTURE_TARGET_MAX_KB = 500;
+
+            // ---------- ZXing ----------
+            const codeReader = new ZXing.BrowserQRCodeReader();
+
+            // ---------- state ----------
+            let stream = null;
+            let scanning = false;
+            let lastPreviewUrl = null;
+
+            function revokePreviewUrl() {
+                if (lastPreviewUrl) {
+                    try { URL.revokeObjectURL(lastPreviewUrl); } catch (e) { }
+                    lastPreviewUrl = null;
+                }
+            }
+
+            async function closeCameraStream() {
+                try {
+                    video.pause();
+                } catch (e) { }
+
+                if (video.srcObject) {
+                    try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (e) { }
+                    video.srcObject = null;
+                }
+
+                if (stream) {
+                    try { stream.getTracks().forEach(t => t.stop()); } catch (e) { }
+                    stream = null;
+                }
+            }
+
+            async function openCameraStreamHQ() {
+                await closeCameraStream();
+
+                const constraints = {
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+
+                video.setAttribute('playsinline', '');
+                video.muted = true;
+
+                await video.play();
+
+                const track = stream.getVideoTracks?.()[0];
+                const settings = track?.getSettings ? track.getSettings() : {};
+                logDebug({ cameraSettingsActual: settings });
+
+                btnCapture.disabled = false;
+                btnStop.disabled = false;
+
+                return stream;
+            }
+
+            async function stopAll() {
+                scanning = false;
+                try { await codeReader.reset(); } catch (e) { }
+                await closeCameraStream();
+
+                btnCapture.disabled = true;
+                btnStop.disabled = true;
+            }
+
+            async function startScan() {
+                if (scanning) return;
+                scanning = true;
+                $debug.textContent = '';
+                $qrText.textContent = '(đang quét...)';
+                logDebug({ zxingVersion: (ZXing && ZXing.VERSION) ? ZXing.VERSION : 'unknown' });
+
+                // show available methods for troubleshooting
+                try {
+                    const protoMethods = Object.getOwnPropertyNames(ZXing.BrowserQRCodeReader.prototype);
+                    logDebug({ BrowserQRCodeReaderPrototypeMethods: protoMethods });
+                } catch (e) {
+                    logDebug('Cannot inspect ZXing.BrowserQRCodeReader.prototype');
+                }
+
+                try {
+                    await openCameraStreamHQ();
+
+                    // IMPORTANT:
+                    // We want ZXing to decode from the existing VIDEO element (so we control constraints).
+                    // Depending on build, one of these methods should exist.
+                    const videoEl = video;
+
+                    let result = null;
+
+                    if (typeof codeReader.decodeOnceFromVideoElement === 'function') {
+                        logDebug('Using: decodeOnceFromVideoElement(videoEl)');
+                        result = await codeReader.decodeOnceFromVideoElement(videoEl);
+                    } else if (typeof codeReader.decodeFromVideoElement === 'function') {
+                        // Some builds expose decodeFromVideoElement(callback) not "once".
+                        logDebug('Using: decodeFromVideoElement(videoEl, callback) + stop after first result');
+                        result = await new Promise((resolve, reject) => {
+                            try {
+                                codeReader.decodeFromVideoElement(videoEl, (res, err) => {
+                                    if (res) resolve(res);
+                                    // ignore NotFoundException etc.
+                                });
+                            } catch (e) { reject(e); }
+                        });
+                    } else if (typeof codeReader.decodeOnceFromVideoDevice === 'function') {
+                        // Fallback (may reopen camera by itself, but at least you can test)
+                        logDebug('Fallback: decodeOnceFromVideoDevice(undefined, "qr-video")');
+                        result = await codeReader.decodeOnceFromVideoDevice(undefined, 'qr-video');
+                    } else {
+                        throw new Error('No suitable ZXing decode method found.');
+                    }
+
+                    if (result && result.text) {
+                        $qrText.textContent = result.text;
+                        toast('Scan OK', 'success');
+                    } else {
+                        $qrText.textContent = '(không có kết quả)';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    logDebug({ error: String(e && e.message ? e.message : e) });
+                    toast('Scan error: ' + (e && e.message ? e.message : e), 'error');
+                    $qrText.textContent = '(lỗi scan)';
+                } finally {
+                    scanning = false;
+                    // keep stream open so you can press Capture after scan if you want
+                    // If you want auto-stop after scan, uncomment:
+                    // await stopAll();
+                }
+            }
+
+            function downloadBlob(blob) {
+                const now = (window.moment ? moment().format('YYYYMMDD_HHmmss') : String(Date.now()));
+                const filename = `VM_${now}.jpg`;
+
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                toast('Saved: ' + filename, 'success');
+
+                setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { } }, 15000);
+            }
+
+            async function canvasToJpegTargetSize(canvas, {
+                targetMinKB = CAPTURE_TARGET_MIN_KB,
+                targetMaxKB = CAPTURE_TARGET_MAX_KB,
+                startQuality = 0.92,
+                minQuality = 0.65,
+                qualityStep = 0.07,
+                downscaleStep = 0.85,
+                maxIters = 12
+            } = {}) {
+                let quality = startQuality;
+
+                const toBlob = (q) => new Promise((resolve) => {
+                    canvas.toBlob((b) => resolve(b), 'image/jpeg', q);
+                });
+
+                const downscale = (scale) => {
+                    const newW = Math.max(1, Math.round(canvas.width * scale));
+                    const newH = Math.max(1, Math.round(canvas.height * scale));
+
+                    const tmp = document.createElement('canvas');
+                    tmp.width = newW;
+                    tmp.height = newH;
+                    tmp.getContext('2d', { alpha: false }).drawImage(canvas, 0, 0, newW, newH);
+
+                    canvas.width = newW;
+                    canvas.height = newH;
+                    canvas.getContext('2d', { alpha: false }).drawImage(tmp, 0, 0);
+                };
+
+                for (let i = 0; i < maxIters; i++) {
+                    const blob = await toBlob(quality);
+                    const sizeKB = blob.size / 1024;
+
+                    if (sizeKB >= targetMinKB && sizeKB <= targetMaxKB) return blob;
+
+                    if (sizeKB > targetMaxKB && quality > minQuality) {
+                        quality = Math.max(minQuality, quality - qualityStep);
+                        continue;
+                    }
+
+                    if (sizeKB > targetMaxKB) {
+                        downscale(downscaleStep);
+                        quality = Math.min(0.90, quality + 0.05);
+                        continue;
+                    }
+
+                    if (sizeKB < targetMinKB) {
+                        quality = Math.min(0.95, quality + 0.03);
+                        continue;
+                    }
+
+                    return blob;
+                }
+
+                return await toBlob(0.82);
+            }
+
+            async function captureCanvasAndDownload() {
+                if (!video || !video.srcObject) {
+                    toast('Camera not active', 'error');
+                    return;
+                }
+
+                if (!video.videoWidth || !video.videoHeight) {
+                    await new Promise(r => setTimeout(r, 150));
+                }
+
+                const w = video.videoWidth;
+                const h = video.videoHeight;
+
+                if (!w || !h) {
+                    toast('Video not ready yet', 'error');
+                    return;
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+
+                const ctx = canvas.getContext('2d', { alpha: false });
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(video, 0, 0, w, h);
+
+                const blob = await canvasToJpegTargetSize(canvas);
+
+                // preview (optional)
+                revokePreviewUrl();
+                lastPreviewUrl = URL.createObjectURL(blob);
+                preview.src = lastPreviewUrl;
+                preview.style.display = 'block';
+
+                logDebug({ captured: { w, h, sizeKB: Math.round(blob.size / 1024) } });
+
+                downloadBlob(blob);
+            }
+
+            // ---------- bind ----------
+            btnStart.addEventListener('click', () => startScan());
+            btnCapture.addEventListener('click', () => captureCanvasAndDownload());
+            btnStop.addEventListener('click', () => stopAll());
+
+            window.addEventListener('pagehide', () => stopAll());
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') stopAll();
+            });
+        })();
+    </script>
+</body>
+
+</html>
