@@ -5,6 +5,8 @@
 	<meta charset="UTF-8">
 	<title>QR Code Scanner</title>
 	<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
 	<style>
 		video,
 		canvas {
@@ -39,6 +41,7 @@
 				const canvas = document.getElementById('canvas');
 				canvas.width = img.width;
 				canvas.height = img.height;
+				console.log('Canvas size set to:', canvas.width, canvas.height);
 				canvas.style.display = 'block';
 
 				const ctx = canvas.getContext('2d');
