@@ -1,189 +1,268 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>High quality camera capture</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Camera Capture (Auto Download)</title>
     <style>
         body {
-            font-family: system-ui, Arial, sans-serif;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
             margin: 16px;
         }
 
-        .row {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            align-items: flex-start;
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
         }
 
-        video,
-        img {
-            width: min(480px, 100%);
-            height: auto;
-            background: #111;
-            border-radius: 8px;
+        .camera {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
         }
 
         button {
-            padding: 10px 14px;
-            font-size: 16px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+            background: #f6f6f6;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
         }
 
         .meta {
-            color: #444;
-            font-size: 14px;
-            margin-top: 8px;
-            white-space: pre-wrap;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .preview img {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .note {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border: 1px solid #f2d6a3;
+            background: #fff7e6;
+            border-radius: 12px;
+            font-size: 13px;
         }
     </style>
 </head>
 
 <body>
-    <h1>High quality camera capture (browser)</h1>
+    <div class="wrap">
+        <h2>Mở camera sau + chụp ảnh rõ + tự tải về</h2>
 
-    <div class="row">
-        <div>
-            <h3>Live preview</h3>
-            <video id="v" autoplay playsinline></video>
-            <div class="meta" id="videoMeta"></div>
+        <div class="camera">
+            <video id="video" autoplay playsinline muted></video>
         </div>
 
-        <div>
-            <h3>Captured image</h3>
-            <img id="out" alt="capture" />
-            <div class="meta" id="photoMeta"></div>
+        <div class="controls">
+            <button id="btnStart">Mở camera sau</button>
+            <button id="btnShot" disabled>Chụp & tải</button>
+            <button id="btnStop" disabled>Dừng</button>
         </div>
+
+        <div id="meta" class="meta"></div>
+        <div class="note">Camera web cần HTTPS (hoặc localhost). iOS Safari thường yêu cầu thao tác bấm nút.</div>
+
+        <img id="preview" alt="preview">
+
+        <canvas id="canvas" style="display:none;"></canvas>
     </div>
 
-    <p>
-        <button id="start">Start camera</button>
-        <button id="snap" disabled>Snap</button>
-        <button id="stop" disabled>Stop</button>
-        <a id="download" style="display:none; margin-left:12px;">Download</a>
-    </p>
-
     <script>
-        const video = document.getElementById('v');
-        const out = document.getElementById('out');
-        const startBtn = document.getElementById('start');
-        const snapBtn = document.getElementById('snap');
-        const stopBtn = document.getElementById('stop');
-        const download = document.getElementById('download');
-        const videoMeta = document.getElementById('videoMeta');
-        const photoMeta = document.getElementById('photoMeta');
+        (() => {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const preview = document.getElementById('preview');
 
-        let stream = null;
+            const btnStart = document.getElementById('btnStart');
+            const btnShot = document.getElementById('btnShot');
+            const btnStop = document.getElementById('btnStop');
+            const meta = document.getElementById('meta');
 
-        async function startCamera() {
-            // Stop any existing stream first
-            stopCamera();
+            let stream = null;
+            let lastObjectUrl = null;
 
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: "environment" },
-                    width: { ideal: 3840 }, // request ~4K
-                    height: { ideal: 2160 }
-                },
-                audio: false
-            });
-
-            video.srcObject = stream;
-
-            // Wait for metadata so videoWidth/videoHeight are available
-            await new Promise((resolve) => {
-                if (video.readyState >= 1 && video.videoWidth) return resolve();
-                video.onloadedmetadata = () => resolve();
-            });
-
-            const track = stream.getVideoTracks()[0];
-            const settings = track.getSettings ? track.getSettings() : {};
-            videoMeta.textContent =
-                `Track settings:\n` +
-                `- video.videoWidth x video.videoHeight: ${video.videoWidth} x ${video.videoHeight}\n` +
-                `- track.getSettings(): ${JSON.stringify(settings, null, 2)}`;
-
-            snapBtn.disabled = false;
-            stopBtn.disabled = false;
-        }
-
-        function stopCamera() {
-            if (stream) {
-                for (const t of stream.getTracks()) t.stop();
-            }
-            stream = null;
-            video.srcObject = null;
-            snapBtn.disabled = true;
-            stopBtn.disabled = true;
-        }
-
-        async function snapPhoto() {
-            if (!stream) return;
-
-            const track = stream.getVideoTracks()[0];
-
-            // 1) Best attempt: ImageCapture.takePhoto() (often yields higher-res still)
-            if ('ImageCapture' in window) {
-                try {
-                    const cap = new ImageCapture(track);
-                    const blob = await cap.takePhoto(); // may return full-res still
-                    showBlob(blob, "image/jpeg (ImageCapture.takePhoto)");
-                    return;
-                } catch (e) {
-                    // fall through to canvas fallback
-                    console.warn("ImageCapture.takePhoto failed, falling back to canvas:", e);
+            function stopCamera() {
+                if (stream) {
+                    stream.getTracks().forEach(t => t.stop());
+                    stream = null;
                 }
+                video.srcObject = null;
+                btnShot.disabled = true;
+                btnStop.disabled = true;
+                meta.textContent = '';
             }
 
-            // 2) Fallback: draw current frame from <video> at native resolution
-            const w = video.videoWidth;
-            const h = video.videoHeight;
+            async function startCamera() {
+                stopCamera();
 
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
+                const constraints = {
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
 
-            const ctx = canvas.getContext('2d', { alpha: false });
-            ctx.drawImage(video, 0, 0, w, h);
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play();
 
-            // For max quality use PNG (big):
-            // canvas.toBlob((blob) => showBlob(blob, "image/png (canvas)"), "image/png");
+                const track = stream.getVideoTracks()[0];
+                const settings = track.getSettings ? track.getSettings() : {};
+                meta.textContent = `Stream: ${settings.width || '?'}x${settings.height || '?'} | facingMode=${settings.facingMode || 'unknown'}`;
 
-            // Or JPEG with high quality:
-            canvas.toBlob(
-                (blob) => showBlob(blob, "image/jpeg (canvas, q=0.95)"),
-                "image/jpeg",
-                0.95
-            );
-        }
+                btnShot.disabled = false;
+                btnStop.disabled = false;
+            }
 
-        function showBlob(blob, label) {
-            if (!blob) return;
+            function drawCurrentFrame() {
+                const w = video.videoWidth;
+                const h = video.videoHeight;
+                if (!w || !h) throw new Error('Video chưa sẵn sàng để chụp.');
 
-            const url = URL.createObjectURL(blob);
-            out.src = url;
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d', { alpha: false }).drawImage(video, 0, 0, w, h);
+            }
 
-            photoMeta.textContent =
-                `Captured:\n` +
-                `- type: ${blob.type}\n` +
-                `- size: ${(blob.size / 1024).toFixed(1)} KB\n` +
-                `- via: ${label}`;
+            function setObjectUrl(blob) {
+                if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+                lastObjectUrl = URL.createObjectURL(blob);
+                return lastObjectUrl;
+            }
 
-            // Setup download link
-            const ext = blob.type === "image/png" ? "png" : "jpg";
-            download.href = url;
-            download.download = `capture-${Date.now()}.${ext}`;
-            download.textContent = `Download ${download.download}`;
-            download.style.display = "inline";
-        }
+            async function canvasToBlob(type, quality) {
+                return await new Promise(resolve => canvas.toBlob(resolve, type, quality));
+            }
 
-        startBtn.onclick = () => startCamera().catch(err => {
-            console.error(err);
-            alert("Camera error: " + err.message);
-        });
-        snapBtn.onclick = () => snapPhoto();
-        stopBtn.onclick = () => stopCamera();
+            function downscaleCanvas(scale) {
+                const newW = Math.max(1, Math.round(canvas.width * scale));
+                const newH = Math.max(1, Math.round(canvas.height * scale));
+                const tmp = document.createElement('canvas');
+                tmp.width = newW;
+                tmp.height = newH;
+                tmp.getContext('2d', { alpha: false }).drawImage(canvas, 0, 0, newW, newH);
+
+                canvas.width = newW;
+                canvas.height = newH;
+                canvas.getContext('2d', { alpha: false }).drawImage(tmp, 0, 0);
+            }
+
+            async function compressToTarget({
+                targetMinKB = 300,
+                targetMaxKB = 500,
+                startQuality = 0.92,
+                minQuality = 0.65,
+                qualityStep = 0.07,
+                downscaleStep = 0.85,
+                maxIters = 12
+            } = {}) {
+                let quality = startQuality;
+
+                for (let i = 0; i < maxIters; i++) {
+                    const blob = await canvasToBlob('image/jpeg', quality);
+                    const sizeKB = blob.size / 1024;
+
+                    if (sizeKB >= targetMinKB && sizeKB <= targetMaxKB) return blob;
+
+                    if (sizeKB > targetMaxKB && quality > minQuality) {
+                        quality = Math.max(minQuality, quality - qualityStep);
+                        continue;
+                    }
+
+                    if (sizeKB > targetMaxKB) {
+                        downscaleCanvas(downscaleStep);
+                        quality = Math.min(0.90, quality + 0.05);
+                        continue;
+                    }
+
+                    if (sizeKB < targetMinKB) {
+                        quality = Math.min(0.95, quality + 0.03);
+                        continue;
+                    }
+
+                    return blob;
+                }
+
+                return await canvasToBlob('image/jpeg', 0.82);
+            }
+
+            // TỰ TẢI VỀ MÁY (tạo <a download> và click)
+            function autoDownload(blob, filename) {
+                const url = setObjectUrl(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+
+                // Không revoke ngay lập tức để tránh Safari chưa kịp tải
+                setTimeout(() => {
+                    if (lastObjectUrl) {
+                        URL.revokeObjectURL(lastObjectUrl);
+                        lastObjectUrl = null;
+                    }
+                }, 15000);
+            }
+
+            async function takePhotoAndDownload() {
+                drawCurrentFrame();
+
+                const blob = await compressToTarget({ targetMinKB: 300, targetMaxKB: 500 });
+
+                // Preview (tuỳ chọn)
+                const previewUrl = setObjectUrl(blob);
+                preview.src = previewUrl;
+                preview.style.display = 'block';
+
+                // Auto download
+                autoDownload(blob, `photo_${Date.now()}.jpg`);
+            }
+
+            btnStart.addEventListener('click', () => startCamera().catch(e => alert('Không mở được camera: ' + e.message)));
+            btnShot.addEventListener('click', () => takePhotoAndDownload().catch(e => alert('Không chụp được: ' + e.message)));
+            btnStop.addEventListener('click', stopCamera);
+
+            window.addEventListener('pagehide', stopCamera);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') stopCamera();
+            });
+        })();
     </script>
 </body>
 
