@@ -107,11 +107,11 @@
                 let _self = this;
                 $(_self.selectors.main).html(`
                     <div class="screen-manager-container">
-                        <div class="sm-header">                            
+                        <div class="sm-header">
                             <h1 class="sm-title">QR Scanner</h1>
                             <p class="sm-subtitle">Choose your action</p>
                         </div>
-                        
+
                         <div class="sm-cards-container">
                             <div class="sm-card" id="card-checkin">
                                 <div class="sm-card-icon checkin-icon">
@@ -125,7 +125,7 @@
                                     <i class="icon-arrow"></i>
                                 </div>
                             </div>
-                            
+
                             <div class="sm-card" id="card-checkout">
                                 <div class="sm-card-icon checkout-icon">
                                     <i class="icon-checkout"></i>
@@ -139,7 +139,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="sm-footer">
                             <p class="sm-footer-text">Powered by vRace</p>
                         </div>
@@ -268,8 +268,9 @@
 
         class QRScannerLibrary {
             constructor(codeReader, videoId) {
-                this.codeReader = codeReader;
                 this.videoId = videoId;
+                this.codeReader = codeReader;
+                this.stream = null;
                 this.state = {
                     isScanning: false,
                     isCameraGranted: false,
@@ -279,9 +280,21 @@
 
             async grantCameraPermissions() {
                 try {
-                    await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'environment' }
+                    this.stream = await navigator.mediaDevices.getUserMedia({
+                        audio: false,
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        }
                     });
+
+                    const videoElement = document.getElementById(this.videoId);
+                    videoElement.srcObject = this.stream;
+                    videoElement.setAttribute('playsinline', '');
+                    videoElement.muted = true;
+                    await videoElement.play();
+
                     this.state.isCameraGranted = true;
                     return true;
                 } catch {
@@ -291,7 +304,7 @@
             }
 
             async startScan({ onSuccess, onError, onTimeout, timeout = Config.TIMEOUT_DURATION }) {
-                Logger.log('QRScannerLibrary', 'info', 'Starting Scanner...');
+                Logger.log('QRScannerLibrary', 'info', 'Step 1: Starting Scanner...');
 
                 if (this.state.isScanning) {
                     ToastService.show('Scanner Already Running', 'error', 5000);
@@ -300,7 +313,7 @@
 
                 this.state.isScanning = true;
 
-                // Request camera permissions
+                Logger.log('QRScannerLibrary', 'info', 'Step 2: Requesting Camera Permissions...');
                 if (!this.state.isCameraGranted && !await this.grantCameraPermissions()) {
                     ToastService.show('Camera Access Denied', 'error', 5000);
                     this.state.isScanning = false;
@@ -308,14 +321,14 @@
                     return false;
                 }
 
-                // Setup timeout
+                Logger.log('QRScannerLibrary', 'info', 'Step 3: Camera Permissions Granted, Starting Scan...');
                 this.state.timeoutId = setTimeout(() => {
                     this.stopScan();
                     ToastService.show('Scan Timeout. Please try again', 'error', 5000);
                     if (onTimeout) onTimeout();
                 }, timeout);
 
-                // Start QR code decoding
+                Logger.log('QRScannerLibrary', 'info', 'Step 4: Scanning for QR Code...');
                 try {
                     const result = await this.codeReader.decodeOnceFromVideoDevice(undefined, this.videoId);
                     if (result && result.text) {
@@ -397,8 +410,8 @@
 
                 // Create canvas and capture
                 const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
                 const ctx = canvas.getContext('2d');
                 if (!ctx) {
@@ -407,6 +420,8 @@
                     return null;
                 }
 
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(video, 0, 0);
 
                 const now = moment().format('YYYYMMDD_HHmmss');
@@ -548,7 +563,7 @@
                 $(_self.selectors.info).html('');
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>            
+                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
                     <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
@@ -593,8 +608,8 @@
             generateInfoRows(statusClass, statusText) {
                 let _self = this;
                 try {
-                    return `                        
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>                        
+                    return `
+                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
                         <hr>
                         <div class="info-row"><span>BiB: <strong>123456</strong></span></div>
                         <div class="info-row"><span>Họ tên: <strong>Đoàn Chí Quang</strong></span></div>
@@ -883,8 +898,8 @@
             generateInfoRows(statusClass, statusText) {
                 let _self = this;
                 try {
-                    return `                        
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>                        
+                    return `
+                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
                         <hr>
                         <div class="info-row"><span>BiB: <strong>123456</strong></span></div>
                         <div class="info-row"><span>Họ tên: <strong>Đoàn Chí Quang</strong></span></div>
