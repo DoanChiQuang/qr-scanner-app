@@ -1,478 +1,154 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="vi">
 
 <head>
-    <meta http-equiv="X-UA-Compatible" content="IE=100" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="FPT Online" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scan QR from Image (file input) - ZXing</title>
 
-    <!-- ZXing Library -->
-    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+    href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+    href="https://unpkg.com/normalize.css@8.0.0/normalize.css">
+  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+    href="https://unpkg.com/milligram@1.3.0/dist/milligram.min.css">
 
-    <link rel="stylesheet" href="styles.css" />
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-    <script src="moment.min.js"></script>
-
-    <!-- Captcha -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-
-    <style>
-        /* Hide file input; we trigger it by button click */
-        #qr-file-capture {
-            position: absolute;
-            left: -9999px;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-        }
-    </style>
+  <style>
+    .wrapper { padding-top: 2em; }
+    #fileCapture {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+    #img {
+      max-width: 100%;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      display: block;
+      margin-top: 12px;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
 </head>
 
 <body>
-    <div id="main"></div>
-    <div id="turnstile-container"></div>
-    <div class="modal" id="modal">
-        <div class="spinner"></div>
-    </div>
+  <main class="wrapper">
+    <section class="container">
+      <h1 class="title">Chụp/Chọn ảnh → Decode QR (ZXing)</h1>
 
-    <!-- Use ONE flow for ALL devices: open camera app (or file picker) -> return image -> decode QR from image -->
-    <input id="qr-file-capture" type="file" accept="image/*" capture="environment" />
+      <!-- Input giống iOS, dùng cho TẤT CẢ thiết bị -->
+      <input id="fileCapture" type="file" accept="image/*" capture="environment" />
 
-    <script>
-        class Config {
-            static API_BASE_URL = 'https://api.esportsfan.net/';
-            static TURNSTILE_SITE_KEY = '0x4AAAAAAAOOjy5Nup_zy_9p';
-            static TIMEOUT_DURATION = 10000;
-            static STATUS_CODES = {
-                USER_CHECKEDIN: 1,
-                USER_CONFIRMATION: 2,
-                USER_CONFIRMATION_SUCCESS: 3
-            };
-            static ICONS = {
-                CHECK: 'icon-check.png',
-                CLOCK: 'icon-clock.png',
-                REMOVE: 'icon-remove.png',
-            };
+      <div class="row">
+        <a class="button" id="pickButton">Chụp/Chọn ảnh</a>
+        <a class="button button-outline" id="decodeButton">Decode</a>
+        <a class="button button-outline" id="clearButton">Clear</a>
+      </div>
+
+      <div id="meta" style="margin-top:10px;color:#555;font-size:14px;"></div>
+
+      <img id="img" alt="Selected image for decoding" />
+
+      <label style="margin-top:16px;">Result:</label>
+      <pre><code id="result"></code></pre>
+    </section>
+  </main>
+
+  <!-- ZXing -->
+  <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+
+  <script>
+    window.addEventListener('load', function () {
+      const codeReader = new ZXing.BrowserQRCodeReader();
+      console.log('ZXing code reader initialized');
+
+      const fileCapture = document.getElementById('fileCapture');
+      const pickButton = document.getElementById('pickButton');
+      const decodeButton = document.getElementById('decodeButton');
+      const clearButton = document.getElementById('clearButton');
+      const img = document.getElementById('img');
+      const resultEl = document.getElementById('result');
+      const metaEl = document.getElementById('meta');
+
+      let currentObjectUrl = null;
+
+      function setResult(text) {
+        resultEl.textContent = text || '';
+      }
+
+      function setMeta(text) {
+        metaEl.textContent = text || '';
+      }
+
+      function cleanupObjectUrl() {
+        if (currentObjectUrl) {
+          try { URL.revokeObjectURL(currentObjectUrl); } catch (e) {}
+          currentObjectUrl = null;
+        }
+      }
+
+      async function decodeFromCurrentImg() {
+        if (!img.src) {
+          setResult('Chưa có ảnh để decode.');
+          return;
         }
 
-        class Logger {
-            static log(module, type, message, data = null) {
-                const logMessage = `[${module}] [${type}] ${message}`;
-                type === 'error' ? console.error(logMessage) : console.log(logMessage);
-                if (data) console.log(data);
-            }
+        setResult('Decoding...');
+        try {
+          // ĐÚNG THEO DEMO: decode từ <img>
+          const result = await codeReader.decodeFromImage(img);
+          console.log(result);
+          setResult(result.text);
+        } catch (err) {
+          console.error(err);
+          setResult(String(err));
         }
+      }
 
-        class ToastService {
-            static show(message, type = 'info', duration = 3000) {
-                const backgrounds = {
-                    info: 'linear-gradient(to right, #00b09b, #96c93d)',
-                    error: 'linear-gradient(to right, #ff5f6d, #ffc371)',
-                    success: 'linear-gradient(to right, #56ab2f, #a8e063)'
-                };
+      pickButton.addEventListener('click', () => {
+        // phải gọi trong user gesture
+        fileCapture.click();
+      });
 
-                Toastify({
-                    text: message,
-                    duration,
-                    close: true,
-                    gravity: "top",
-                    position: "center",
-                    style: { background: backgrounds[type] || backgrounds.info }
-                }).showToast();
-            }
-        }
+      fileCapture.addEventListener('change', async () => {
+        const file = fileCapture.files && fileCapture.files[0];
+        // reset input để chọn lại cùng 1 ảnh vẫn trigger change
+        fileCapture.value = '';
 
-        class ApiService {
-            static async fetch(endpoint, options = {}) {
-                try {
-                    const response = await fetch(`${Config.API_BASE_URL}${endpoint}`, {
-                        ...options,
-                        credentials: 'include',
-                    });
-                    const result = await response.json();
-                    Logger.log('ApiService', 'info', `[API][${endpoint}] Response:`, result);
-                    if (result.code != 200) throw new Error(result.message || 'API request failed');
-                    return result.data ? result.data : true;
-                } catch (error) {
-                    Logger.log('ApiService', 'error', `[API][${endpoint}]: ${error.message}`);
-                    throw error;
-                }
-            }
-        }
+        if (!file) return;
 
-        class CheckoutModule {
-            selectors = {
-                main: '#main',
-                container: '#scanner-frame-container',
-                instruction: '.instruction-text',
-                info: '.info-section',
-                btnGroup: '.btn-group',
-                btnReset: '#btn-reset-scan',
-                btnOpenCapture: '#btn-start-scan',
-                btnConfirm: '#btn-confirm',
-                btnNext: '#btn-next-scan',
-                modal: '#modal'
-            };
+        cleanupObjectUrl();
+        currentObjectUrl = URL.createObjectURL(file);
 
-            state = {
-                isInitialized: false,
-                hasResult: false,
-                ticketDetail: null,
-                codeReader: null,
+        img.onload = () => {
+          // Auto decode sau khi ảnh load xong (có thể bỏ nếu bạn muốn bấm Decode thủ công)
+          decodeFromCurrentImg();
+        };
+        img.onerror = () => {
+          setResult('Không load được ảnh.');
+        };
 
-                capturedBlob: null,
-                capturedObjectUrl: null,
+        img.src = currentObjectUrl;
 
-                // file capture input
-                captureInputId: 'qr-file-capture'
-            };
+        setMeta(`File: ${file.name || '(camera)'} | Type: ${file.type || 'image/*'} | Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+        setResult('');
+      });
 
-            constructor() {
-                this.videoId = 'qr-video'; // keep existing UI, but we won't use live video scanning
-            }
+      decodeButton.addEventListener('click', () => {
+        decodeFromCurrentImg();
+      });
 
-            async init(codeReader) {
-                if (this.state.isInitialized) {
-                    ToastService.show('Checkout Module Already Initialized', 'error', 5000);
-                    return this;
-                }
-                this.state.isInitialized = true;
-                this.state.codeReader = codeReader;
-                this.render();
-                this.bindFileCapture();
-                Logger.log('CheckoutModule', 'info', 'Initialized');
-                return this;
-            }
-
-            render() {
-                $(this.selectors.main).html(`
-                    <div class="wrapper">
-                        <div class="scanner-frame" id="scanner-frame-container"></div>
-                        <div class="instruction-text"></div>
-                        <div class="info-section"></div>
-                        <div class="btn-group"></div>
-                    </div>
-                `);
-                this.setupDOM();
-                this.bindEvents();
-            }
-
-            setupDOM() {
-                this.state.ticketDetail = null;
-
-                // Keep container (can show placeholder image/icon instead of video)
-                $(this.selectors.container).html(`
-                    <div style="padding:16px;text-align:center;">
-                        <div style="font-size:14px;color:#666;margin-bottom:8px;">Chụp ảnh có QR rồi hệ thống sẽ tự đọc</div>
-                        <div style="font-size:12px;color:#888;">(Trên Android/Chrome có thể mở Camera; trên Desktop sẽ chọn file)</div>
-                    </div>
-                `);
-
-                $(this.selectors.instruction).html('Nhấn "Chụp ảnh QR" → chụp hình → tự giải mã QR từ ảnh').removeClass('error');
-                $(this.selectors.info).html('');
-                $(this.selectors.btnGroup).html(`
-                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Capture" class="btn" id="btn-start-scan">Chụp ảnh QR</a>
-                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
-                    <a href="#" title="Next" class="btn" id="btn-next-scan">Next</a>
-                `);
-
-                $(this.selectors.btnReset).hide();
-                $(this.selectors.btnConfirm).hide();
-                $(this.selectors.btnNext).hide();
-                $(this.selectors.btnOpenCapture).show();
-            }
-
-            bindEvents() {
-                $(document).on('click', this.selectors.btnOpenCapture, (e) => {
-                    e.preventDefault();
-                    this.openCaptureUI();
-                });
-                $(document).on('click', this.selectors.btnReset, (e) => {
-                    e.preventDefault();
-                    this.resetFlow();
-                });
-                $(document).on('click', this.selectors.btnNext, (e) => {
-                    e.preventDefault();
-                    this.nextFlow();
-                });
-                $(document).on('click', this.selectors.btnConfirm, (e) => {
-                    e.preventDefault();
-                    this.handleConfirmCheckout();
-                });
-            }
-
-            // ===== Capture Input flow (ALL platforms) =====
-            bindFileCapture() {
-                const input = document.getElementById(this.state.captureInputId);
-                if (!input) return;
-
-                input.addEventListener('change', async () => {
-                    try {
-                        const file = input.files && input.files[0];
-                        if (!file) return;
-
-                        // allow selecting same image again
-                        input.value = '';
-
-                        this.revokeCapturedUrl();
-                        this.state.capturedBlob = file;
-                        this.state.capturedObjectUrl = URL.createObjectURL(file);
-
-                        // Preview
-                        $(this.selectors.info).html(`
-                            <div class="captured-image" style="margin-top:10px;">
-                                <div style="font-size:12px;color:#444;margin-bottom:6px;">
-                                    Selected: ${(file.size / 1024 / 1024).toFixed(2)}MB - ${file.type || 'image/*'}
-                                </div>
-                                <img src="${this.state.capturedObjectUrl}" style="max-width:100%; border:2px solid #56ab2f; border-radius:8px;">
-                            </div>
-                        `);
-
-                        // Decode QR from image file
-                        await this.decodeFromImageFile(file);
-                    } catch (e) {
-                        Logger.log('CheckoutModule', 'error', 'capture input change error', e);
-                        ToastService.show('Không đọc được QR từ ảnh', 'error', 4000);
-                    }
-                });
-            }
-
-            openCaptureUI() {
-                const input = document.getElementById(this.state.captureInputId);
-                if (!input) {
-                    ToastService.show('Capture input missing', 'error', 2500);
-                    return;
-                }
-                // Must be called from a user gesture (click/tap)
-                input.click();
-            }
-
-            async decodeFromImageFile(file) {
-                try {
-                    // Convert File/Blob to Image element
-                    const img = await this.blobToImage(file);
-
-                    // ZXing decode from image element
-                    await this.state.codeReader.decodeFromImage(img).then((result) => {
-                        console.log(result)
-                    }).catch((err) => {
-                        console.error(err)
-                    })
-
-                    ToastService.show('Đọc QR từ ảnh thành công', 'success', 1500);
-
-                    // Continue your existing business flow:
-                    await this.handleScanResult(result.text);
-                } catch (e) {
-                    Logger.log('CheckoutModule', 'error', 'decodeFromImageFile failed', e);
-                    ToastService.show('Không đọc được QR từ ảnh', 'error', 4000);
-                }
-            }
-
-            blobToImage(blob) {
-                return new Promise((resolve, reject) => {
-                    const url = URL.createObjectURL(blob);
-                    const img = new Image();
-                    img.onload = () => {
-                        try { URL.revokeObjectURL(url); } catch (e) { }
-                        resolve(img);
-                    };
-                    img.onerror = (e) => {
-                        try { URL.revokeObjectURL(url); } catch (e2) { }
-                        reject(e);
-                    };
-                    img.src = url;
-                });
-            }
-
-            revokeCapturedUrl() {
-                if (this.state.capturedObjectUrl) {
-                    try { URL.revokeObjectURL(this.state.capturedObjectUrl); } catch (e) { }
-                    this.state.capturedObjectUrl = null;
-                }
-            }
-
-            // ===== Flow controls =====
-            resetFlow() {
-                this.revokeCapturedUrl();
-                this.state.capturedBlob = null;
-                this.state.hasResult = false;
-                this.setupDOM();
-            }
-
-            nextFlow() {
-                this.resetFlow();
-            }
-
-            // ===== Existing business logic (unchanged) =====
-            async handleScanResult(data) {
-                Logger.log('CheckoutModule', 'info', 'Step 4: Handling Scan Result', data);
-                try {
-                    const content = this.deobfuscateData(data);
-                    const parsed = this.parseScannedData(content);
-
-                    Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
-                    Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
-
-                    if (parsed.version != 1 || parsed.fields.length == 0) {
-                        throw new Error('Invalid QR Code Data');
-                    }
-
-                    this.state.ticketDetail = await this.getTicketDetail(content);
-                    if (!this.state.ticketDetail) {
-                        throw new Error('Ticket Not Found or Invalid');
-                    }
-
-                    this.updateDOM(this.state.ticketDetail.is_checkin ?
-                        Config.STATUS_CODES.USER_CHECKEDIN :
-                        Config.STATUS_CODES.USER_CONFIRMATION);
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            updateDOM(statusCode) {
-                const { USER_CHECKEDIN, USER_CONFIRMATION, USER_CONFIRMATION_SUCCESS } = Config.STATUS_CODES;
-                $(this.selectors.instruction).html('');
-                // keep preview in info (do not clear)
-                $(this.selectors.btnReset).hide();
-                $(this.selectors.btnOpenCapture).hide();
-                $(this.selectors.btnNext).hide();
-                $(this.selectors.btnConfirm).hide();
-
-                switch (statusCode) {
-                    case USER_CHECKEDIN:
-                        $(this.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(this.selectors.info).append(this.generateInfoRows('error', 'Đã Check-in'));
-                        $(this.selectors.btnNext).show();
-                        break;
-                    case USER_CONFIRMATION:
-                        $(this.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                        $(this.selectors.info).append(this.generateInfoRows('checked', 'Chưa Check-in'));
-                        $(this.selectors.btnReset).show();
-                        $(this.selectors.btnConfirm).show();
-                        break;
-                    case USER_CONFIRMATION_SUCCESS:
-                        $(this.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
-                        $(this.selectors.info).append(this.generateInfoRows('confirmed', 'Đã Check-in'));
-                        $(this.selectors.btnNext).show();
-                        break;
-                }
-            }
-
-            generateInfoRows(statusClass, statusText) {
-                const { ticketDetail } = this.state;
-                if (!ticketDetail) return 'Ticket Not Found or Invalid';
-                try {
-                    return `
-                        <div style="margin-top:10px;"></div>
-                        <div class="info-row"><span>Hạng vé: </span><span>${ticketDetail.ticket_class_name}</span></div>
-                        <div class="info-row"><span>Ngày diễn ra: </span><span>${ticketDetail.event_time ? moment.unix(ticketDetail.event_time).format('DD-MM-YYYY') : ''}</span></div>
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText} ${ticketDetail.used_time ? `<small>(${moment.unix(ticketDetail.used_time).format('HH:mm DD-MM-YYYY')})</small>` : ''}</span></div>
-                        ${ticketDetail?.gifts ? `
-                            <div class="info-row"><span>Quà: </span>${ticketDetail.gifts?.name}</div>
-                            <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
-                            <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
-                        ` : ''}
-                        <hr>
-                        ${Object.values(ticketDetail?.history || {}).map(item => `
-                            <div class="info-row">
-                                <span>Lịch sử ngày: </span>
-                                <span class="${item.is_checkin ? 'confirmed' : 'error'}">${item.event_time ? moment.unix(item.event_time).format('DD-MM-YYYY') : ''} <small>(${item.is_checkin ? 'Đã Check-in' : 'Chưa Check-in'})</small></span>
-                            </div>
-                        `).join('')}
-                        <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
-                        <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
-                        <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
-                    `;
-                } catch (error) {
-                    Logger.log('CheckoutModule', 'error', error.message);
-                    return 'Ticket Not Found or Invalid';
-                }
-            }
-
-            async handleConfirmCheckout() {
-                Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', this.state.ticketDetail);
-                try {
-                    const { ticketDetail } = this.state;
-                    if (!ticketDetail?.ticket_code) throw new Error('No Ticket to Confirm');
-
-                    const params = {
-                        ticket_code: ticketDetail.ticket_code,
-                        order_gift_id: ticketDetail.gifts?.order_gift_id || null
-                    };
-
-                    const isConfirmed = await this.confirmCheckout(params);
-                    if (isConfirmed) {
-                        this.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                        ToastService.show('Check-in Successful', 'success', 5000);
-                    } else {
-                        throw new Error('Check-in Failed');
-                    }
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            deobfuscateData(encoded, secret = 'sEcReT123') {
-                try {
-                    const b64 = encoded.split('').reverse().join('')
-                        .replace(/-/g, '+')
-                        .replace(/_/g, '/');
-                    return atob(b64).replaceAll(secret, '');
-                } catch {
-                    return '';
-                }
-            }
-
-            parseScannedData(data) {
-                if (!data || typeof data !== 'string') return { version: '', fields: [] };
-                const parts = data.split('|');
-                return { version: parts[0] || '', fields: parts.slice(1) };
-            }
-
-            async getTicketDetail(content) {
-                $(this.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('ticket/detail', {
-                        method: 'POST',
-                        body: JSON.stringify({ content })
-                    });
-                } finally {
-                    $(this.selectors.modal).removeClass('active');
-                }
-            }
-
-            async confirmCheckout(params) {
-                $(this.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('ticket/confirm-checkin', {
-                        method: 'POST',
-                        body: JSON.stringify(params)
-                    });
-                } finally {
-                    $(this.selectors.modal).removeClass('active');
-                }
-            }
-        }
-
-        class App {
-            static async start() {
-                const codeReader = new ZXing.BrowserQRCodeReader();
-                const checkinModule = await new CheckoutModule().init(codeReader);
-                window.debug = { checkinModule };
-            }
-        }
-
-        $(document).ready(() => App.start());
-    </script>
+      clearButton.addEventListener('click', () => {
+        cleanupObjectUrl();
+        img.removeAttribute('src');
+        setMeta('');
+        setResult('');
+      });
+    });
+  </script>
 </body>
 
 </html>
