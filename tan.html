@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Race Bib QR Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --c-bg: #0a0c0f;
+    --c-surface: #12151a;
+    --c-border: rgba(255,255,255,0.08);
+    --c-accent: #f0c040;
+    --c-accent2: #e84040;
+    --c-text: #f0ede6;
+    --c-muted: rgba(240,237,230,0.45);
+    --c-success: #40d4a0;
+    --font-display: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-family: var(--font-body);
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100dvh;
+  }
+
+  /* Header */
+  header {
+    width: 100%;
+    padding: 14px 20px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--c-border);
+    background: var(--c-bg);
+    position: relative;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .logo-mark {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: -0.5px;
+    color: var(--c-accent);
+    line-height: 1;
+  }
+
+  .logo-sub {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--c-muted);
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--c-muted);
+    transition: background 0.3s;
+  }
+  .status-dot.ready { background: var(--c-success); box-shadow: 0 0 8px var(--c-success); }
+  .status-dot.loading { background: var(--c-accent); animation: pulse 1s ease-in-out infinite; }
+  .status-dot.error { background: var(--c-accent2); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Main area */
+  main {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding: 0 0 24px;
+  }
+
+  /* Camera viewfinder */
+  .viewfinder-wrap {
+    width: 100%;
+    position: relative;
+    background: #000;
+    overflow: hidden;
+  }
+
+  #video {
+    width: 100%;
+    display: block;
+    object-fit: cover;
+    max-height: 62dvh;
+    background: #000;
+  }
+
+  /* Hidden canvas for capture */
+  #canvas { display: none; }
+
+  /* Overlay on viewfinder */
+  .vf-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* Corner bracket reticle */
+  .reticle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(200px, 55vw);
+    height: min(200px, 55vw);
+  }
+
+  .reticle::before,
+  .reticle::after,
+  .reticle-inner::before,
+  .reticle-inner::after {
+    content: '';
+    position: absolute;
+    width: 28px; height: 28px;
+    border-color: var(--c-accent);
+    border-style: solid;
+  }
+
+  .reticle::before { top: 0; left: 0; border-width: 3px 0 0 3px; }
+  .reticle::after  { top: 0; right: 0; border-width: 3px 3px 0 0; }
+  .reticle-inner::before { bottom: 0; left: 0; border-width: 0 0 3px 3px; }
+  .reticle-inner::after  { bottom: 0; right: 0; border-width: 0 3px 3px 0; }
+
+  .reticle.scanning .reticle-inner::before,
+  .reticle.scanning .reticle-inner::after,
+  .reticle.scanning::before,
+  .reticle.scanning::after {
+    border-color: var(--c-success);
+    filter: drop-shadow(0 0 4px var(--c-success));
+  }
+
+  /* Scan line animation */
+  .scan-line {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--c-accent) 30%, var(--c-accent) 70%, transparent);
+    animation: scanline 2.4s ease-in-out infinite;
+    opacity: 0;
+    transition: opacity 0.3s;
+    box-shadow: 0 0 10px var(--c-accent);
+  }
+  .scan-line.active { opacity: 1; }
+
+  @keyframes scanline {
+    0%   { top: 0; }
+    50%  { top: calc(100% - 2px); }
+    100% { top: 0; }
+  }
+
+  /* QR hint label */
+  .vf-hint {
+    position: absolute;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    color: var(--c-muted);
+    font-size: 11px;
+    font-family: var(--font-display);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 100px;
+    white-space: nowrap;
+    border: 1px solid var(--c-border);
+    transition: opacity 0.3s;
+  }
+
+  /* Controls */
+  .controls {
+    width: 100%;
+    padding: 14px 16px 0;
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    height: 52px;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn:active { transform: scale(0.97); opacity: 0.85; }
+  .btn:disabled { opacity: 0.35; pointer-events: none; }
+
+  .btn-primary {
+    background: var(--c-accent);
+    color: #0a0c0f;
+    font-size: 18px;
+  }
+
+  .btn-secondary {
+    background: var(--c-surface);
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    flex: 0 0 52px;
+  }
+
+  /* Processing overlay on button */
+  .btn-primary.processing {
+    background: #2a2a1a;
+    color: var(--c-accent);
+    border: 1px solid var(--c-accent);
+    pointer-events: none;
+  }
+
+  /* Result card */
+  .result-section {
+    width: 100%;
+    padding: 14px 16px 0;
+  }
+
+  .result-card {
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--c-border);
+    background: var(--c-surface);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  .result-card.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .result-card.success { border-color: rgba(64, 212, 160, 0.4); }
+  .result-card.fail    { border-color: rgba(232, 64, 64, 0.35); }
+
+  .result-header {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .result-card.success .result-header { background: rgba(64, 212, 160, 0.1); color: var(--c-success); }
+  .result-card.fail    .result-header { background: rgba(232, 64, 64, 0.1); color: var(--c-accent2); }
+
+  .result-icon {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .result-card.success .result-icon { background: var(--c-success); color: #0a0c0f; }
+  .result-card.fail    .result-icon { background: var(--c-accent2); color: #fff; }
+
+  .result-body {
+    padding: 14px;
+  }
+
+  .result-value {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 32px;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    color: var(--c-text);
+    word-break: break-all;
+    margin-bottom: 6px;
+  }
+
+  .result-meta {
+    font-size: 11px;
+    color: var(--c-muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* History */
+  .history-section {
+    width: 100%;
+    padding: 14px 16px 0;
+  }
+
+  .history-label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--c-muted);
+    margin-bottom: 8px;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    font-size: 13px;
+    animation: fadeIn 0.25s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .history-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--c-success);
+    flex-shrink: 0;
+  }
+
+  .history-val {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .history-time {
+    font-size: 11px;
+    color: var(--c-muted);
+    flex-shrink: 0;
+  }
+
+  /* Loading state */
+  .spinner {
+    display: inline-block;
+    width: 18px; height: 18px;
+    border: 2px solid transparent;
+    border-top-color: var(--c-accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Flash animation on capture */
+  .flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.05s;
+  }
+  .flash.active { opacity: 0.7; transition: opacity 0s; }
+
+  /* Torch button */
+  .btn-torch { font-size: 20px; }
+
+  /* Camera switch */
+  .btn-switch { font-size: 18px; }
+
+  /* Empty history */
+  .history-empty {
+    font-size: 12px;
+    color: var(--c-muted);
+    text-align: center;
+    padding: 10px;
+    font-style: italic;
+  }
+
+  /* Init overlay */
+  #init-overlay {
+    position: fixed; inset: 0;
+    background: var(--c-bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    z-index: 100;
+    transition: opacity 0.4s;
+  }
+  #init-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .init-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--c-border);
+    border-top-color: var(--c-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .init-text {
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--c-muted);
+  }
+</style>
+</head>
+<body>
+
+<!-- Init overlay while loading WASM -->
+<div id="init-overlay">
+  <div class="init-spinner"></div>
+  <div class="init-text">Đang tải bộ nhận diện QR…</div>
+</div>
+
+<header>
+  <div class="logo">
+    <span class="logo-mark">RACE BIB</span>
+    <span class="logo-sub">QR Scanner</span>
+  </div>
+  <div id="status-dot" class="status-dot loading"></div>
+</header>
+
+<main>
+  <div class="viewfinder-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="vf-overlay">
+      <div class="reticle" id="reticle">
+        <div class="reticle-inner"></div>
+      </div>
+      <div class="scan-line" id="scan-line"></div>
+      <div class="vf-hint" id="vf-hint">Đưa BIB vào khung — nhấn CHỤP</div>
+    </div>
+    <div class="flash" id="flash"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-secondary btn-switch" id="btn-switch" title="Đổi camera" disabled>⟳</button>
+    <button class="btn btn-primary" id="btn-capture" disabled>
+      <span id="btn-label">Đang tải…</span>
+    </button>
+    <button class="btn btn-secondary btn-torch" id="btn-torch" title="Đèn flash" disabled>☀</button>
+  </div>
+
+  <div class="result-section">
+    <div class="result-card" id="result-card">
+      <div class="result-header">
+        <div class="result-icon" id="result-icon"></div>
+        <span id="result-status-text"></span>
+      </div>
+      <div class="result-body">
+        <div class="result-value" id="result-value"></div>
+        <div class="result-meta" id="result-meta"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-section" id="history-section" style="display:none">
+    <div class="history-label">Đã quét</div>
+    <div class="history-list" id="history-list"></div>
+  </div>
+</main>
+
+<!-- zxing-wasm from CDN -->
+<script type="module">
+import { readBarcodesFromImageFile, setZXingModuleOverrides } from 'https://cdn.jsdelivr.net/npm/zxing-wasm@1/dist/reader/zxing_wasm.js';
+
+// ── State ────────────────────────────────────────────────
+let stream = null;
+let facingMode = 'environment'; // rear camera default
+let torchOn = false;
+let history = [];
+
+const video      = document.getElementById('video');
+const canvas     = document.getElementById('canvas');
+const ctx        = canvas.getContext('2d', { willReadFrequently: true });
+const btnCapture = document.getElementById('btn-capture');
+const btnSwitch  = document.getElementById('btn-switch');
+const btnTorch   = document.getElementById('btn-torch');
+const btnLabel   = document.getElementById('btn-label');
+const resultCard = document.getElementById('result-card');
+const resultIcon = document.getElementById('result-icon');
+const resultStatusText = document.getElementById('result-status-text');
+const resultValue= document.getElementById('result-value');
+const resultMeta = document.getElementById('result-meta');
+const statusDot  = document.getElementById('status-dot');
+const scanLine   = document.getElementById('scan-line');
+const reticle    = document.getElementById('reticle');
+const flash      = document.getElementById('flash');
+const initOverlay= document.getElementById('init-overlay');
+const histSection= document.getElementById('history-section');
+const histList   = document.getElementById('history-list');
+
+// ── Camera ────────────────────────────────────────────────
+async function startCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+
+  const constraints = {
+    video: {
+      facingMode,
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      focusMode: 'continuous',
+    }
+  };
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play();
+    updateTorchBtn();
+  } catch (e) {
+    showError('Không thể truy cập camera: ' + e.message);
+  }
+}
+
+function updateTorchBtn() {
+  const track = stream?.getVideoTracks()[0];
+  const caps = track?.getCapabilities?.() || {};
+  btnTorch.disabled = !caps.torch;
+}
+
+async function toggleTorch() {
+  const track = stream?.getVideoTracks()[0];
+  if (!track) return;
+  torchOn = !torchOn;
+  await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+  btnTorch.style.color = torchOn ? 'var(--c-accent)' : '';
+}
+
+btnSwitch.addEventListener('click', async () => {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  await startCamera();
+});
+
+btnTorch.addEventListener('click', toggleTorch);
+
+// ── Capture & Decode ──────────────────────────────────────
+btnCapture.addEventListener('click', capture);
+
+async function capture() {
+  if (btnCapture.disabled) return;
+
+  // Flash effect
+  flash.classList.add('active');
+  requestAnimationFrame(() => {
+    setTimeout(() => flash.classList.remove('active'), 60);
+  });
+
+  // Capture frame
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+
+  // UI → processing
+  btnCapture.classList.add('processing');
+  btnLabel.innerHTML = '<span class="spinner"></span>';
+  scanLine.classList.add('active');
+  resultCard.classList.remove('visible', 'success', 'fail');
+
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+  const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
+
+  try {
+    const results = await readBarcodesFromImageFile(file, {
+      tryHarder: true,
+      formats: ['QRCode'],
+    });
+
+    if (results.length > 0) {
+      const text = results[0].text;
+      showSuccess(text);
+      addHistory(text);
+      reticle.classList.add('scanning');
+      setTimeout(() => reticle.classList.remove('scanning'), 1200);
+    } else {
+      showFail('Không tìm thấy mã QR trong ảnh');
+    }
+  } catch (err) {
+    showFail('Lỗi xử lý: ' + err.message);
+  }
+
+  // UI → ready
+  btnCapture.classList.remove('processing');
+  btnLabel.textContent = 'CHỤP QR';
+  scanLine.classList.remove('active');
+}
+
+// ── Result display ────────────────────────────────────────
+function showSuccess(text) {
+  resultCard.className = 'result-card visible success';
+  resultIcon.textContent = '✓';
+  resultStatusText.textContent = 'Nhận diện thành công';
+  resultValue.textContent = text;
+  resultMeta.textContent = 'Định dạng: QR Code · ' + new Date().toLocaleTimeString('vi-VN');
+  navigator.vibrate?.([60, 30, 60]);
+}
+
+function showFail(msg) {
+  resultCard.className = 'result-card visible fail';
+  resultIcon.textContent = '✕';
+  resultStatusText.textContent = 'Thất bại';
+  resultValue.textContent = 'Không đọc được';
+  resultMeta.textContent = msg;
+  navigator.vibrate?.(120);
+}
+
+function showError(msg) {
+  resultCard.className = 'result-card visible fail';
+  resultIcon.textContent = '!';
+  resultStatusText.textContent = 'Lỗi hệ thống';
+  resultValue.textContent = 'Lỗi';
+  resultMeta.textContent = msg;
+  resultCard.classList.add('visible');
+}
+
+// ── History ───────────────────────────────────────────────
+function addHistory(text) {
+  history.unshift({ text, time: new Date() });
+  if (history.length > 20) history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  if (history.length === 0) {
+    histSection.style.display = 'none';
+    return;
+  }
+  histSection.style.display = 'block';
+  histList.innerHTML = history.map(h => `
+    <div class="history-item">
+      <div class="history-dot"></div>
+      <div class="history-val">${escHtml(h.text)}</div>
+      <div class="history-time">${h.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────
+async function init() {
+  // 1. Start camera
+  await startCamera();
+
+  // 2. Warm-up: decode a blank 1×1 image so WASM is fully loaded
+  try {
+    const tiny = new File([new Uint8Array([
+      0xFF,0xD8,0xFF,0xE0,0x00,0x10,0x4A,0x46,0x49,0x46,0x00,0x01,
+      0x01,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0xFF,0xDB,0x00,0x43,
+      0x00,0x08,0x06,0x06,0x07,0x06,0x05,0x08,0x07,0x07,0x07,0x09,
+      0x09,0x08,0x0A,0x0C,0x14,0x0D,0x0C,0x0B,0x0B,0x0C,0x19,0x12,
+      0x13,0x0F,0x14,0x1D,0x1A,0x1F,0x1E,0x1D,0x1A,0x1C,0x1C,0x20,
+      0x24,0x2E,0x27,0x20,0x22,0x2C,0x23,0x1C,0x1C,0x28,0x37,0x29,
+      0x2C,0x30,0x31,0x34,0x34,0x34,0x1F,0x27,0x39,0x3D,0x38,0x32,
+      0x3C,0x2E,0x33,0x34,0x32,0xFF,0xC0,0x00,0x0B,0x08,0x00,0x01,
+      0x00,0x01,0x01,0x01,0x11,0x00,0xFF,0xC4,0x00,0x1F,0x00,0x00,
+      0x01,0x05,0x01,0x01,0x01,0x01,0x01,0x01,0x00,0x00,0x00,0x00,
+      0x00,0x00,0x00,0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
+      0x09,0x0A,0x0B,0xFF,0xC4,0x00,0xB5,0x10,0x00,0x02,0x01,0x03,
+      0x03,0x02,0x04,0x03,0x05,0x05,0x04,0x04,0x00,0x00,0x01,0x7D,
+      0xFF,0xDA,0x00,0x08,0x01,0x01,0x00,0x00,0x3F,0x00,0xFB,0xD3,
+      0xFF,0xD9
+    ])], 'warm.jpg', { type: 'image/jpeg' });
+    await readBarcodesFromImageFile(tiny, { formats: ['QRCode'] });
+  } catch (_) {}
+
+  // 3. UI ready
+  initOverlay.classList.add('hidden');
+  statusDot.className = 'status-dot ready';
+  btnCapture.disabled = false;
+  btnSwitch.disabled = false;
+  btnLabel.textContent = 'CHỤP QR';
+  updateTorchBtn();
+}
+
+init().catch(e => {
+  initOverlay.classList.add('hidden');
+  statusDot.className = 'status-dot error';
+  showError(e.message);
+});
+</script>
+</body>
+</html>
