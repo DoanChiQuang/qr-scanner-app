@@ -6,12 +6,10 @@
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta name="viewport"
         content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
-    <title>QR + HQ Canvas Capture (ZXing)</title>
+    <title>QR + HQ Canvas Capture (ZXing) - FIX</title>
 
-    <!-- ZXing -->
     <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
 
-    <!-- Optional libs (only for filename timestamp + simple messages) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
@@ -55,7 +53,6 @@
             background: #000;
             border-radius: 12px;
             overflow: hidden;
-            position: relative;
         }
 
         video {
@@ -103,7 +100,7 @@
 
 <body>
     <div class="wrap">
-        <h2>Test: ZXing scan + chụp ảnh canvas HQ (camera sau)</h2>
+        <h2>Test FIX: ZXing scan + chụp ảnh canvas HQ</h2>
 
         <div class="camera">
             <video id="qr-video" autoplay playsinline muted></video>
@@ -113,13 +110,6 @@
             <button id="btnStart">Start Scan (HQ stream)</button>
             <button id="btnCapture" disabled>Capture (Canvas) & Download</button>
             <button id="btnStop" disabled>Stop</button>
-        </div>
-
-        <div class="box">
-            <div class="muted">
-                Yêu cầu: chạy trên <b>HTTPS</b> (hoặc <b>localhost</b>).<br>
-                Nếu lỗi, hãy gửi mình nội dung trong phần <code>Debug</code> bên dưới + console error.
-            </div>
         </div>
 
         <div class="box">
@@ -133,12 +123,10 @@
         </div>
 
         <img id="preview" alt="preview">
-
     </div>
 
     <script>
         (() => {
-            // ---------- small utilities ----------
             const $debug = document.getElementById('debug');
             const $qrText = document.getElementById('qrText');
             const video = document.getElementById('qr-video');
@@ -154,26 +142,20 @@
             }
 
             function toast(msg, type = 'info') {
-                if (window.Toastify) {
-                    const bg = type === 'error'
-                        ? 'linear-gradient(to right, #ff5f6d, #ffc371)'
-                        : type === 'success'
-                            ? 'linear-gradient(to right, #56ab2f, #a8e063)'
-                            : 'linear-gradient(to right, #00b09b, #96c93d)';
-                    Toastify({ text: msg, duration: 2500, close: true, gravity: "top", position: "center", style: { background: bg } }).showToast();
-                } else {
-                    alert(msg);
-                }
+                if (!window.Toastify) return alert(msg);
+                const bg = type === 'error'
+                    ? 'linear-gradient(to right, #ff5f6d, #ffc371)'
+                    : type === 'success'
+                        ? 'linear-gradient(to right, #56ab2f, #a8e063)'
+                        : 'linear-gradient(to right, #00b09b, #96c93d)';
+                Toastify({ text: msg, duration: 2500, close: true, gravity: "top", position: "center", style: { background: bg } }).showToast();
             }
 
-            // ---------- config ----------
             const CAPTURE_TARGET_MIN_KB = 300;
             const CAPTURE_TARGET_MAX_KB = 500;
 
-            // ---------- ZXing ----------
             const codeReader = new ZXing.BrowserQRCodeReader();
 
-            // ---------- state ----------
             let stream = null;
             let scanning = false;
             let lastPreviewUrl = null;
@@ -186,9 +168,7 @@
             }
 
             async function closeCameraStream() {
-                try {
-                    video.pause();
-                } catch (e) { }
+                try { video.pause(); } catch (e) { }
 
                 if (video.srcObject) {
                     try { video.srcObject.getTracks().forEach(t => t.stop()); } catch (e) { }
@@ -215,10 +195,8 @@
 
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-
                 video.setAttribute('playsinline', '');
                 video.muted = true;
-
                 await video.play();
 
                 const track = stream.getVideoTracks?.()[0];
@@ -227,82 +205,119 @@
 
                 btnCapture.disabled = false;
                 btnStop.disabled = false;
-
-                return stream;
             }
 
             async function stopAll() {
                 scanning = false;
                 try { await codeReader.reset(); } catch (e) { }
                 await closeCameraStream();
-
                 btnCapture.disabled = true;
                 btnStop.disabled = true;
+            }
+
+            function isNotFoundException(err) {
+                const name = err?.name || '';
+                const msg = String(err?.message || '');
+                // ZXing hay dùng NotFoundException khi chưa thấy QR
+                return name.includes('NotFound') || msg.includes('No MultiFormat Readers') || msg.includes('NotFound');
             }
 
             async function startScan() {
                 if (scanning) return;
                 scanning = true;
+
                 $debug.textContent = '';
                 $qrText.textContent = '(đang quét...)';
+
                 logDebug({ zxingVersion: (ZXing && ZXing.VERSION) ? ZXing.VERSION : 'unknown' });
 
-                // show available methods for troubleshooting
-                try {
-                    const protoMethods = Object.getOwnPropertyNames(ZXing.BrowserQRCodeReader.prototype);
-                    logDebug({ BrowserQRCodeReaderPrototypeMethods: protoMethods });
-                } catch (e) {
-                    logDebug('Cannot inspect ZXing.BrowserQRCodeReader.prototype');
+                // IMPORTANT: show methods on instance (prototype của bạn chỉ có constructor)
+                const instanceKeys = [];
+                for (const k in codeReader) instanceKeys.push(k);
+                logDebug({ codeReaderKeysForIn: instanceKeys });
+
+                const ownKeys = Object.getOwnPropertyNames(codeReader);
+                logDebug({ codeReaderOwnKeys: ownKeys });
+
+                // Try to list all callable functions we can see
+                const callable = [];
+                const seen = new Set();
+                function pushCallableFrom(obj) {
+                    if (!obj) return;
+                    for (const k of Object.getOwnPropertyNames(obj)) {
+                        if (seen.has(k)) continue;
+                        seen.add(k);
+                        try {
+                            if (typeof obj[k] === 'function') callable.push(k);
+                        } catch { }
+                    }
                 }
+                pushCallableFrom(codeReader);
+                pushCallableFrom(Object.getPrototypeOf(codeReader));
+                logDebug({ callableMethodsDetected: callable.sort() });
 
                 try {
                     await openCameraStreamHQ();
 
-                    // IMPORTANT:
-                    // We want ZXing to decode from the existing VIDEO element (so we control constraints).
-                    // Depending on build, one of these methods should exist.
                     const videoEl = video;
 
-                    let result = null;
-
-                    if (typeof codeReader.decodeOnceFromVideoElement === 'function') {
-                        logDebug('Using: decodeOnceFromVideoElement(videoEl)');
-                        result = await codeReader.decodeOnceFromVideoElement(videoEl);
-                    } else if (typeof codeReader.decodeFromVideoElement === 'function') {
-                        // Some builds expose decodeFromVideoElement(callback) not "once".
-                        logDebug('Using: decodeFromVideoElement(videoEl, callback) + stop after first result');
-                        result = await new Promise((resolve, reject) => {
+                    // Preferred continuous API (most common in ZXing Browser* readers)
+                    if (typeof codeReader.decodeFromVideoElementContinuously === 'function') {
+                        logDebug('Using: decodeFromVideoElementContinuously(videoEl, callback)');
+                        await new Promise((resolve, reject) => {
                             try {
-                                codeReader.decodeFromVideoElement(videoEl, (res, err) => {
-                                    if (res) resolve(res);
-                                    // ignore NotFoundException etc.
+                                codeReader.decodeFromVideoElementContinuously(videoEl, (result, err) => {
+                                    if (result) {
+                                        $qrText.textContent = result.text;
+                                        toast('Scan OK', 'success');
+
+                                        // stop scanning
+                                        try { codeReader.reset(); } catch (e) { }
+                                        resolve(result);
+                                        return;
+                                    }
+                                    if (err && !isNotFoundException(err)) {
+                                        logDebug({ decodeError: { name: err.name, message: String(err.message || err) } });
+                                    }
                                 });
                             } catch (e) { reject(e); }
                         });
-                    } else if (typeof codeReader.decodeOnceFromVideoDevice === 'function') {
-                        // Fallback (may reopen camera by itself, but at least you can test)
-                        logDebug('Fallback: decodeOnceFromVideoDevice(undefined, "qr-video")');
-                        result = await codeReader.decodeOnceFromVideoDevice(undefined, 'qr-video');
-                    } else {
-                        throw new Error('No suitable ZXing decode method found.');
-                    }
+                    } else if (typeof codeReader.decodeFromVideoElement === 'function') {
+                        // Some builds use decodeFromVideoElement(videoEl, callback)
+                        logDebug('Using: decodeFromVideoElement(videoEl, callback)');
+                        await new Promise((resolve, reject) => {
+                            try {
+                                codeReader.decodeFromVideoElement(videoEl, (result, err) => {
+                                    if (result) {
+                                        $qrText.textContent = result.text;
+                                        toast('Scan OK', 'success');
 
-                    if (result && result.text) {
+                                        try { codeReader.reset(); } catch (e) { }
+                                        resolve(result);
+                                        return;
+                                    }
+                                    if (err && !isNotFoundException(err)) {
+                                        logDebug({ decodeError: { name: err.name, message: String(err.message || err) } });
+                                    }
+                                });
+                            } catch (e) { reject(e); }
+                        });
+                    } else if (typeof codeReader.decodeOnceFromVideoElement === 'function') {
+                        logDebug('Using: decodeOnceFromVideoElement(videoEl)');
+                        const result = await codeReader.decodeOnceFromVideoElement(videoEl);
                         $qrText.textContent = result.text;
                         toast('Scan OK', 'success');
                     } else {
-                        $qrText.textContent = '(không có kết quả)';
+                        throw new Error('No suitable decode method on this ZXing build.');
                     }
                 } catch (e) {
                     console.error(e);
-                    logDebug({ error: String(e && e.message ? e.message : e) });
-                    toast('Scan error: ' + (e && e.message ? e.message : e), 'error');
+                    logDebug({ error: { name: e?.name, message: String(e?.message || e) } });
+                    toast('Scan error: ' + (e?.message || e), 'error');
                     $qrText.textContent = '(lỗi scan)';
                 } finally {
                     scanning = false;
-                    // keep stream open so you can press Capture after scan if you want
-                    // If you want auto-stop after scan, uncomment:
-                    // await stopAll();
+                    // giữ camera để capture; nếu muốn tự tắt sau scan -> gọi stopAll()
                 }
             }
 
@@ -311,7 +326,6 @@
                 const filename = `VM_${now}.jpg`;
 
                 const url = URL.createObjectURL(blob);
-
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = filename;
@@ -321,7 +335,6 @@
                 a.remove();
 
                 toast('Saved: ' + filename, 'success');
-
                 setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) { } }, 15000);
             }
 
@@ -411,7 +424,6 @@
 
                 const blob = await canvasToJpegTargetSize(canvas);
 
-                // preview (optional)
                 revokePreviewUrl();
                 lastPreviewUrl = URL.createObjectURL(blob);
                 preview.src = lastPreviewUrl;
@@ -422,7 +434,6 @@
                 downloadBlob(blob);
             }
 
-            // ---------- bind ----------
             btnStart.addEventListener('click', () => startScan());
             btnCapture.addEventListener('click', () => captureCanvasAndDownload());
             btnStop.addEventListener('click', () => stopAll());
