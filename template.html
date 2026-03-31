@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -63,37 +63,14 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            createImageBitmap(file).then(bitmap => {
-                const canvas = document.getElementById('canvas');
-                canvas.width = bitmap.width;
-                canvas.height = bitmap.height;
-                canvas.style.display = 'block';
-
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(bitmap, 0, 0);
-
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-                document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
-            }).catch(() => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.getElementById('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    canvas.style.display = 'block';
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-                    document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
-                };
-                img.src = URL.createObjectURL(file);
-            });
+            const html5QrCode = new Html5Qrcode("canvas");
+            html5QrCode.scanFile(file, true)
+                .then(decodedText => {
+                    document.getElementById('result').textContent = 'QR: ' + decodedText;
+                })
+                .catch(err => {
+                    document.getElementById('result').textContent = 'Không tìm thấy QR code';
+                });
         });
     </script>
 </body>
