@@ -260,12 +260,11 @@
                     const img = await this.blobToImage(file);
 
                     // ZXing decode from image element
-                    const result = await this.state.codeReader.decodeFromImage(img);
-
-                    if (!result?.text) {
-                        ToastService.show('Không đọc được QR từ ảnh', 'error', 4000);
-                        return;
-                    }
+                    await this.state.codeReader.decodeFromImage(img).then((result) => {
+                        console.log(result)
+                    }).catch((err) => {
+                        console.error(err)
+                    })
 
                     ToastService.show('Đọc QR từ ảnh thành công', 'success', 1500);
 
