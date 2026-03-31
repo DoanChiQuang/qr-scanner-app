@@ -63,22 +63,37 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            const img = new Image();
-            img.onload = () => {
+            createImageBitmap(file).then(bitmap => {
                 const canvas = document.getElementById('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
+                canvas.width = bitmap.width;
+                canvas.height = bitmap.height;
                 canvas.style.display = 'block';
 
                 const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
+                ctx.drawImage(bitmap, 0, 0);
 
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                 document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
-            };
-            img.src = URL.createObjectURL(file);
+            }).catch(() => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.getElementById('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.style.display = 'block';
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
+                };
+                img.src = URL.createObjectURL(file);
+            });
         });
     </script>
 </body>
