@@ -6,54 +6,64 @@
 	<title>QR Code Scanner</title>
 	<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
+	<script>eruda.init();</script>
 	<style>
 		video,
 		canvas {
 			max-width: 100%;
+		}
+
+		button {
+			margin: 10px 0;
 		}
 	</style>
 </head>
 
 <body>
 	<h2>QR Code Scanner</h2>
-
-	<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
-	<button id="btnOpenCamera">Mở Camera & Chụp</button>
-
+	<button id="btnOpenCamera">Mở Camera</button>
+	<button id="btnCapture" style="display:none;">Chụp ảnh</button>
 	<video id="video" autoplay playsinline style="display:none;"></video>
 	<canvas id="canvas" style="display:none;"></canvas>
-
 	<pre id="result"></pre>
 
 	<script>
-		const cameraInput = document.getElementById('cameraInput');
 		const btnOpen = document.getElementById('btnOpenCamera');
+		const btnCapture = document.getElementById('btnCapture');
+		const video = document.getElementById('video');
+		const canvas = document.getElementById('canvas');
+		const result = document.getElementById('result');
+		let stream = null;
 
-		btnOpen.onclick = () => cameraInput.click();
+		btnOpen.onclick = async () => {
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: {
+						facingMode: "environment",
+						width: { ideal: 3840 },
+						height: { ideal: 2160 }
+					}
+				});
+				video.srcObject = stream;
+				video.style.display = 'block';
+				btnCapture.style.display = 'block';
+				btnOpen.style.display = 'none';
+			} catch (err) {
+				result.textContent = 'Lỗi mở camera: ' + err.message;
+			}
+		};
 
-		cameraInput.addEventListener('change', function (e) {
-			const file = e.target.files[0];
-			if (!file) return;
+		btnCapture.onclick = () => {
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(video, 0, 0);
 
-			const img = new Image();
-			img.onload = function () {
-				const canvas = document.getElementById('canvas');
-				canvas.width = img.width;
-				canvas.height = img.height;
-				console.log('Canvas size set to:', canvas.width, canvas.height);
-				canvas.style.display = 'block';
+			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-				const ctx = canvas.getContext('2d');
-				ctx.drawImage(img, 0, 0);
-
-				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-				const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-				document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
-			};
-			img.src = URL.createObjectURL(file);
-		});
+			result.textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR code';
+		};
 	</script>
 </body>
 
