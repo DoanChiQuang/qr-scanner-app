@@ -153,7 +153,6 @@
                 $(document).on('click', '#card-checkin', async () => {
                     const codeReader = new ZXing.BrowserQRCodeReader();
                     const checkinModule = await new CheckinModule().init(codeReader);
-                    window.checkinModule = checkinModule;
                 });
                 $(document).on('click', '#card-checkout', async () => {
                     const codeReader = new ZXing.BrowserQRCodeReader();
@@ -533,7 +532,7 @@
                 }
 
                 _self.state.isInitialized = true;
-                _self.state.scanner = new QRScannerLibrary(codeReader, _self.videoId);
+                _self.state.qrScanner = new QRScannerLibrary(codeReader, _self.videoId);
                 _self.render();
                 Logger.log('CheckinModule', 'info', 'Initialized');
                 return _self;
@@ -632,13 +631,13 @@
 
             async resetScanner() {
                 let _self = this;
-                if (!_self.state.hasResult && !_self.state.scanner?.isScanning()) {
+                if (!_self.state.hasResult && !_self.state.qrScanner?.isScanning()) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
                 _self.state.hasResult = false;
 
-                await _self.state.scanner?.stopScan();
+                await _self.state.qrScanner?.stopScan();
 
                 _self.setupDOM();
             }
@@ -655,20 +654,20 @@
                 $(_self.selectors.btnStart).hide();
                 $(_self.selectors.btnReset).show();
 
-                await _self.state.scanner.startScan({
+                await _self.state.qrScanner.startScan({
                     onSuccess: async (qrData) => {
                         _self.state.hasResult = true;
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         await _self.handleScanResult(qrData);
                     },
                     onError: async (error) => {
                         _self.state.hasResult = true;
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         Logger.log('CheckinModule', 'error', error.message);
                     },
                     onTimeout: async () => {
                         _self.state.hasResult = true;
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         _self.resetScanner();
                     }
                 });
@@ -802,7 +801,7 @@
                 data: null,
                 isInitialized: false,
                 hasResult: false,
-                scanner: null
+                qrScanner: null
             };
 
             constructor() {
@@ -818,7 +817,7 @@
                 }
 
                 _self.state.isInitialized = true;
-                _self.state.scanner = new QRScannerLibrary(codeReader, _self.videoId);
+                _self.state.qrScanner = new QRScannerLibrary(codeReader, _self.videoId);
                 _self.render();
                 Logger.log('CheckoutModule', 'info', 'Initialized');
                 return _self;
@@ -923,13 +922,13 @@
 
             async resetScanner() {
                 let _self = this;
-                if (!_self.state.hasResult && !_self.state.scanner?.isScanning()) {
+                if (!_self.state.hasResult && !_self.state.qrScanner?.isScanning()) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
                 _self.state.hasResult = false;
 
-                await _self.state.scanner?.stopScan();
+                await _self.state.qrScanner?.stopScan();
 
                 _self.setupDOM();
             }
@@ -946,19 +945,19 @@
                 $(_self.selectors.btnStart).hide();
                 $(_self.selectors.btnReset).show();
 
-                await _self.state.scanner.startScan({
+                await _self.state.qrScanner.startScan({
                     onSuccess: async (qrData) => {
                         _self.state.hasResult = true;
                         await _self.handleScanResult(qrData);
                     },
                     onError: async (error) => {
                         _self.state.hasResult = true;
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         Logger.log('CheckoutModule', 'error', error.message);
                     },
                     onTimeout: async () => {
                         _self.state.hasResult = true;
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         _self.resetScanner();
                     }
                 });
@@ -971,16 +970,16 @@
                 $(_self.selectors.btnReset).show();
                 $(_self.selectors.btnConfirm).show();
 
-                await _self.state.scanner.capturePicture({
+                await _self.state.qrScanner.capturePicture({
                     showPreview: true,
                     previewContainer: _self.selectors.info,
                     onSuccess: async (result) => {
                         _self.state.capturedBlob = result.blob;
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         Logger.log('CheckoutModule', 'info', 'Picture captured:', result.filename);
                     },
                     onError: async (error) => {
-                        await _self.state.scanner?.stopScan();
+                        await _self.state.qrScanner?.stopScan();
                         Logger.log('CheckoutModule', 'error', 'Capture failed:', error.message);
                     }
                 });
