@@ -1,159 +1,82 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
-
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scan QR from Image (file input) - ZXing</title>
-
-  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
-    href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
-  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
-    href="https://unpkg.com/normalize.css@8.0.0/normalize.css">
-  <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
-    href="https://unpkg.com/milligram@1.3.0/dist/milligram.min.css">
-
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>
-        eruda.init();
-    </script>
-
-  <style>
-    .wrapper { padding-top: 2em; }
-    #fileCapture {
-      position: absolute;
-      left: -9999px;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-    }
-    #img {
-      max-width: 100%;
-      border: 1px solid #bbb;
-      border-radius: 8px;
-      display: block;
-      margin-top: 12px;
-    }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    pre { white-space: pre-wrap; word-break: break-word; }
-  </style>
+  <meta charset="UTF-8">
+  <title>QR Code Scanner</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>video, canvas { max-width: 100%; }</style>
 </head>
-
 <body>
-  <main class="wrapper">
-    <section class="container">
-      <h1 class="title">Chụp/Chọn ảnh → Decode QR (ZXing)</h1>
+  <h2>QR Code Scanner</h2>
 
-      <!-- Input giống iOS, dùng cho TẤT CẢ thiết bị -->
-      <input id="fileCapture" type="file" accept="image/*" capture="environment" />
+  <button id="btnCamera">Mở Camera</button>
+  <button id="btnCapture" style="display:none;">Chụp & Detect</button>
+  <button id="btnStop" style="display:none;">Dừng Camera</button>
 
-      <div class="row">
-        <a class="button" id="pickButton">Chụp/Chọn ảnh</a>
-        <a class="button button-outline" id="decodeButton">Decode</a>
-        <a class="button button-outline" id="clearButton">Clear</a>
-      </div>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" style="display:none;"></canvas>
 
-      <div id="meta" style="margin-top:10px;color:#555;font-size:14px;"></div>
-
-      <img id="img" alt="Selected image for decoding" />
-
-      <label style="margin-top:16px;">Result:</label>
-      <pre><code id="result"></code></pre>
-    </section>
-  </main>
-
-  <!-- ZXing -->
-  <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+  <pre id="result"></pre>
 
   <script>
-    window.addEventListener('load', function () {
-      const codeReader = new ZXing.BrowserQRCodeReader();
-      console.log('ZXing code reader initialized');
+    let video = document.getElementById('video');
+    let stream = null;
+    let rafId = null;
 
-      const fileCapture = document.getElementById('fileCapture');
-      const pickButton = document.getElementById('pickButton');
-      const decodeButton = document.getElementById('decodeButton');
-      const clearButton = document.getElementById('clearButton');
-      const img = document.getElementById('img');
-      const resultEl = document.getElementById('result');
-      const metaEl = document.getElementById('meta');
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+        document.getElementById('btnCapture').style.display = 'inline';
+        document.getElementById('btnStop').style.display = 'inline';
+        document.getElementById('btnCamera').style.display = 'none';
+      } catch(e) { alert('Không mở được camera'); }
+    }
 
-      let currentObjectUrl = null;
+    function stopCamera() {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (rafId) cancelAnimationFrame(rafId);
+      video.srcObject = null;
+      document.getElementById('btnCapture').style.display = 'none';
+      document.getElementById('btnStop').style.display = 'none';
+      document.getElementById('btnCamera').style.display = 'inline';
+    }
 
-      function setResult(text) {
-        resultEl.textContent = text || '';
+    function captureAndDetect() {
+      const canvas = document.getElementById('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      document.getElementById('result').textContent = code ? 'QR: ' + code.data : 'Không tìm thấy QR';
+    }
+
+    // Real-time detect (optional)
+    function scanLoop() {
+      if (!video.videoWidth) { rafId = requestAnimationFrame(scanLoop); return; }
+      const canvas = document.getElementById('canvas');
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      if (code) {
+        document.getElementById('result').textContent = 'QR: ' + code.data;
+        stopCamera();
       }
+      rafId = requestAnimationFrame(scanLoop);
+    }
 
-      function setMeta(text) {
-        metaEl.textContent = text || '';
-      }
+    document.getElementById('btnCamera').onclick = startCamera;
+    document.getElementById('btnCapture').onclick = captureAndDetect;
+    document.getElementById('btnStop').onclick = stopCamera;
 
-      function cleanupObjectUrl() {
-        if (currentObjectUrl) {
-          try { URL.revokeObjectURL(currentObjectUrl); } catch (e) {}
-          currentObjectUrl = null;
-        }
-      }
-
-      async function decodeFromCurrentImg() {
-        if (!img.src) {
-          setResult('Chưa có ảnh để decode.');
-          return;
-        }
-
-        setResult('Decoding...');
-        try {
-          // ĐÚNG THEO DEMO: decode từ <img>
-          const result = await codeReader.decodeFromImage(img);
-          console.log(result);
-          setResult(result.text);
-        } catch (err) {
-          console.error(err);
-          setResult(String(err));
-        }
-      }
-
-      pickButton.addEventListener('click', () => {
-        // phải gọi trong user gesture
-        fileCapture.click();
-      });
-
-      fileCapture.addEventListener('change', async () => {
-        const file = fileCapture.files && fileCapture.files[0];
-        // reset input để chọn lại cùng 1 ảnh vẫn trigger change
-        fileCapture.value = '';
-
-        if (!file) return;
-
-        cleanupObjectUrl();
-        currentObjectUrl = URL.createObjectURL(file);
-
-        img.onload = () => {
-          // Auto decode sau khi ảnh load xong (có thể bỏ nếu bạn muốn bấm Decode thủ công)
-          decodeFromCurrentImg();
-        };
-        img.onerror = () => {
-          setResult('Không load được ảnh.');
-        };
-
-        img.src = currentObjectUrl;
-
-        setMeta(`File: ${file.name || '(camera)'} | Type: ${file.type || 'image/*'} | Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-        setResult('');
-      });
-
-      decodeButton.addEventListener('click', () => {
-        decodeFromCurrentImg();
-      });
-
-      clearButton.addEventListener('click', () => {
-        cleanupObjectUrl();
-        img.removeAttribute('src');
-        setMeta('');
-        setResult('');
-      });
-    });
+    // Bắt đầu real-time scan khi camera mở
+    video.onloadedmetadata = () => { rafId = requestAnimationFrame(scanLoop); };
   </script>
 </body>
-
 </html>
