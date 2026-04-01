@@ -61,8 +61,6 @@ body {
     width: 64px;
     height: 64px;
     margin: 0 auto 16px;
-    background: var(--primary);
-    border-radius: var(--radius);
     display: flex;
     align-items: center;
     justify-content: center;
