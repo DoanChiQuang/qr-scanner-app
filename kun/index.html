@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
 
     <!-- CSS -->
-    <link rel="stylesheet" href="/kun/styles.css" />
+    <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <!-- Libraries -->
@@ -472,7 +472,7 @@
 
                         <div class="scanner-screen__content">
                             <div class="scanner-screen__instruction" id="instruction">Đặt mã QR vào khung để quét</div>
-                            
+
                             <div class="scanner-screen__result" id="result-container">
                                 <div class="scanner-screen__result-label">Mã QR</div>
                                 <div class="scanner-screen__result-value" id="result-value"></div>
@@ -516,7 +516,7 @@
                     resultValue.text(result);
                     btnStart.hide();
                     btnReset.show();
-                    
+
                     $('#btn-group').html(`
                         <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -655,7 +655,7 @@
 
                         <div class="scanner-screen__content">
                             <div class="scanner-screen__instruction" id="instruction">Chụp ảnh bib có mã QR</div>
-                            
+
                             <div class="scanner-screen__result" id="result-container">
                                 <div class="scanner-screen__result-label">Mã QR</div>
                                 <div class="scanner-screen__result-value" id="result-value"></div>
