@@ -481,8 +481,7 @@
                     btnReset.hide();
 
                     $('#btn-group').html(`
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">Về trang chủ</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>                        
                     `);
                 } else {
                     instruction.addClass('scanner-screen__instruction--error').text('Không hợp lệ. Thử lại.');
@@ -492,8 +491,7 @@
             }
 
             bindEvents() {
-                const $box = $(this.selectors.box);
-                $box.on('click', '#btn-back, #btn-back-result', () => this.goBack());
+                const $box = $(this.selectors.box);                
                 $box.on('click', '#btn-start-scan', () => this.startScanner());
                 $box.on('click', '#btn-reset-scan', () => this.resetScanner());
                 $box.on('click', '#btn-next-scan', () => this.nextScanner());
@@ -660,14 +658,12 @@
                 $('#info-card').show();
 
                 $('#btn-group').html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Chụp lại</button>
-                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">Về trang chủ</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Chụp lại</button>                    
                 `);
             }
 
             bindEvents() {
-                const $box = $(this.selectors.box);
-                $box.on('click', '#btn-back, #btn-back-result', () => this.goBack());
+                const $box = $(this.selectors.box);                
                 $box.on('click', '#btn-start-scan', () => this.startCapture());
                 $box.on('click', '#btn-reset-scan', () => this.reset());
             }
