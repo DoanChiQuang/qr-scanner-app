@@ -39,7 +39,7 @@
     <div class="modal" id="modal">
         <div class="spinner"></div>
     </div>
-    <input type="file" id="file" accept="image/*" style="display:none" />
+    <input type="file" id="file" accept="image/*" capture="environment" style="display:none" />
 
     <script>
         class Config {
@@ -360,6 +360,7 @@
                     }
                     videoElement.pause();
                     videoElement.src = '';
+                    videoElement.style.display = 'none';
                 }
 
                 if (this.stream) {
@@ -469,14 +470,6 @@
                 $(_self.selectors.btnReset).hide();
                 $(_self.selectors.btnStart).hide();
                 $(_self.selectors.btnNext).hide();
-
-                const videoElement = document.getElementById(_self.videoId);
-                if (videoElement) {
-                    videoElement.pause();
-                    videoElement.srcObject = null;
-                    videoElement.src = '';
-                    videoElement.style.display = 'none';
-                }
 
                 if (result) {
                     $(_self.selectors.instruction).html(`<span class="ok">QR: ${result}</span>`);
