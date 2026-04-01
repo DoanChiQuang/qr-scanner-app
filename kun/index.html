@@ -470,7 +470,7 @@
                     const statusText = data.status || '—';
                     const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
                         : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
-                        : 'scanner-screen__info-status--success';
+                            : 'scanner-screen__info-status--success';
                     $('#info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                     $('#info-card').show();
 
@@ -491,7 +491,8 @@
             }
 
             bindEvents() {
-                const $box = $(this.selectors.box);                
+                const $box = $(this.selectors.box);
+                $box.on('click', '#btn-back', () => this.goBack());
                 $box.on('click', '#btn-start-scan', () => this.startScanner());
                 $box.on('click', '#btn-reset-scan', () => this.resetScanner());
                 $box.on('click', '#btn-next-scan', () => this.nextScanner());
@@ -653,7 +654,7 @@
                 const statusText = data.status || '—';
                 const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
                     : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
-                    : 'scanner-screen__info-status--success';
+                        : 'scanner-screen__info-status--success';
                 $('#info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                 $('#info-card').show();
 
@@ -663,7 +664,8 @@
             }
 
             bindEvents() {
-                const $box = $(this.selectors.box);                
+                const $box = $(this.selectors.box);
+                $box.on('click', '#btn-back', () => this.goBack());
                 $box.on('click', '#btn-start-scan', () => this.startCapture());
                 $box.on('click', '#btn-reset-scan', () => this.reset());
             }
