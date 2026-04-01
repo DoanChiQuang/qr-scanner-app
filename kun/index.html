@@ -42,6 +42,11 @@
     <input type="file" id="file" accept="image/*" capture="environment" style="display:none" />
 
     <script>
+        let authModule = null;
+        let screenManager = null;
+        let checkinModule = null;
+        let checkoutModule = null;
+
         class Config {
             static API_BASE_URL = 'https://api.esportsfan.net/';
             static TURNSTILE_SITE_KEY = '0x4AAAAAAAOOjy5Nup_zy_9p';
@@ -120,7 +125,7 @@
                                     <path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M12 17h.01M17 7h.01M17 12h.01M17 17h.01"/>
                                 </svg>
                             </div>
-                            <h1 class="screen-manager__title">QR Scanner</h1>
+                            <h1 class="screen-manager__title">Vnexpress Marathon</h1>
                             <p class="screen-manager__subtitle">Chọn thao tác để tiếp tục</p>
                         </div>
 
@@ -174,11 +179,21 @@
             bindEvents() {
                 let _self = this;
                 $(document).on('click', '#card-checkin', async () => {
-                    const codeReader = new ZXing.BrowserQRCodeReader();
-                    const checkinModule = await new CheckinModule().init(codeReader);
+                    if (checkinModule) {
+                        checkinModule.render();
+                    } else {
+                        const codeReader = new ZXing.BrowserQRCodeReader();
+                        checkinModule = new CheckinModule();
+                        await checkinModule.init(codeReader);
+                    }
                 });
                 $(document).on('click', '#card-checkout', async () => {
-                    const checkoutModule = await new CheckoutModule().init();
+                    if (checkoutModule) {
+                        checkoutModule.render();
+                    } else {
+                        checkoutModule = new CheckoutModule();
+                        await checkoutModule.init();
+                    }
                 });
             }
         }
@@ -469,7 +484,7 @@
 
             goBack() {
                 this.state.isInitialized = false;
-                new ScreenManager().render();
+                screenManager.render();
             }
 
             render() {
@@ -650,7 +665,7 @@
 
             goBack() {
                 this.state.isInitialized = false;
-                new ScreenManager().render();
+                screenManager.render();
             }
 
             render() {
@@ -894,7 +909,8 @@
                 //     return;
                 // }
 
-                new ScreenManager().render();
+                screenManager = new ScreenManager();
+                screenManager.render();
             }
         }
 
