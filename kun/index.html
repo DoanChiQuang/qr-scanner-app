@@ -371,133 +371,6 @@
                 }
             }
 
-            async capturePicture({ onSuccess, onError, showPreview = true, previewContainer = null }) {
-                Logger.log('QRScannerLibrary', 'info', 'Capturing Picture...');
-
-                const video = document.getElementById(this.videoId);
-                if (!video || !video.srcObject) {
-                    ToastService.show('Camera not active', 'error', 3000);
-                    if (onError) onError(new Error('Camera not active'));
-                    return null;
-                }
-
-                // Wait for video to be ready
-                if (!(video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0)) {
-                    try {
-                        await new Promise((resolve, reject) => {
-                            const timeoutId = setTimeout(() => {
-                                cleanup();
-                                reject(new Error('Video not ready'));
-                            }, 1500);
-
-                            const onReady = () => {
-                                cleanup();
-                                if (video.videoWidth > 0 && video.videoHeight > 0) resolve(true);
-                                else reject(new Error('Video not ready'));
-                            };
-
-                            const cleanup = () => {
-                                clearTimeout(timeoutId);
-                                video.removeEventListener('loadeddata', onReady);
-                                video.removeEventListener('canplay', onReady);
-                            };
-
-                            video.addEventListener('loadeddata', onReady, { once: true });
-                            video.addEventListener('canplay', onReady, { once: true });
-                        });
-                    } catch (e) {
-                        ToastService.show('Camera is warming up, please try again', 'error', 2500);
-                        if (onError) onError(e);
-                        return null;
-                    }
-                }
-
-                // Create canvas and capture
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    ToastService.show('Cannot capture image', 'error', 3000);
-                    if (onError) onError(new Error('Cannot capture image'));
-                    return null;
-                }
-
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(video, 0, 0);
-
-                const now = moment().format('YYYYMMDD_HHmmss');
-                const filename = `VM_${now}.jpg`;
-
-                // Create blob
-                let blob = null;
-                try {
-                    blob = await new Promise((resolve, reject) => {
-                        if (canvas.toBlob) {
-                            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.85);
-                        } else {
-                            try {
-                                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                                const parts = dataUrl.split(',');
-                                const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/jpeg';
-                                const bstr = atob(parts[1] || '');
-                                let n = bstr.length;
-                                const u8arr = new Uint8Array(n);
-                                while (n--) u8arr[n] = bstr.charCodeAt(n);
-                                resolve(new Blob([u8arr], { type: mime }));
-                            } catch (err) {
-                                reject(err);
-                            }
-                        }
-                    });
-                } catch (e) {
-                    ToastService.show('Capture failed', 'error', 3000);
-                    if (onError) onError(e);
-                    return null;
-                }
-
-                const objectUrl = URL.createObjectURL(blob);
-
-                // Show preview if requested
-                if (showPreview && previewContainer) {
-                    $(previewContainer).append(`
-                        <div class="captured-image">
-                            <img src="${objectUrl}" style="max-width:100%; margin-top:10px; border:2px solid #56ab2f;">
-                        </div>
-                    `);
-                }
-
-                // Download image
-                try {
-                    const link = document.createElement('a');
-                    link.download = filename;
-                    link.href = objectUrl;
-                    link.rel = 'noopener';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-
-                    ToastService.show('Picture saved: ' + filename, 'success', 1500);
-
-                    // iOS fallback
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-                    if (isIOS) {
-                        setTimeout(() => {
-                            try { window.open(objectUrl, '_blank', 'noopener'); } catch (e) { }
-                        }, 300);
-                    }
-                } catch (e) {
-                    ToastService.show('Cannot auto-save image', 'error', 2000);
-                    try { window.open(objectUrl, '_blank', 'noopener'); } catch (err) { }
-                }
-
-                if (onSuccess) onSuccess({ blob, objectUrl, filename });
-                return { blob, objectUrl, filename };
-            }
-
             isScanning() {
                 return this.state.isScanning;
             }
@@ -520,7 +393,7 @@
                 data: null,
                 isInitialized: false,
                 hasResult: false,
-                scanner: null
+                qrScanner: null
             };
 
             constructor() {
