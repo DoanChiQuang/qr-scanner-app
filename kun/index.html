@@ -15,6 +15,7 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <!-- Libraries -->
+    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
@@ -511,7 +512,6 @@
                 btnGroup: '.btn-group',
                 btnReset: '#btn-reset-scan',
                 btnStart: '#btn-start-scan',
-                btnConfirm: '#btn-confirm',
                 btnNext: '#btn-next-scan',
                 modal: '#modal'
             };
@@ -567,61 +567,25 @@
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
                     <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
                     <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
                 `);
                 $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnConfirm).hide();
                 $(_self.selectors.btnNext).hide();
                 $(_self.selectors.btnStart).show();
             }
 
-            updateDOM(statusCode) {
+            updateDOM(result) {
                 let _self = this;
-                const {
-                    USER_READY_CHECKIN,
-                    USER_READY_CHECKOUT
-                } = Config.STATUS_CODES;
                 $(_self.selectors.instruction).html('');
-                $(_self.selectors.info).html('');
                 $(_self.selectors.btnReset).hide();
                 $(_self.selectors.btnStart).hide();
                 $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnConfirm).hide();
 
-                switch (statusCode) {
-                    case USER_READY_CHECKIN:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Sẵn sàng Check-in'));
-                        $(_self.selectors.btnConfirm).show();
-                        break;
-                    case USER_READY_CHECKOUT:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.CHECK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('confirmed', 'Đã Check-in'));
-                        $(_self.selectors.btnNext).show();
-                        break;
-                    default:
-                        $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Không hợp lệ'));
-                        $(_self.selectors.btnReset).show();
-                        break;
-                }
-            }
-
-            generateInfoRows(statusClass, statusText) {
-                let _self = this;
-                try {
-                    return `
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
-                        <hr>
-                        <div class="info-row"><span>BiB: <strong>123456</strong></span></div>
-                        <div class="info-row"><span>Họ tên: <strong>Đoàn Chí Quang</strong></span></div>
-                        <div class="info-row"><span>Số điện thoại: <strong>0909000999</strong></span></div>
-                        <div class="info-row"><span>Email: <strong>example@gmail.com</strong></span></div>
-                    `;
-                } catch (error) {
-                    Logger.log('CheckinModule', 'error', error.message);
-                    return 'Thông tin không hợp lệ';
+                if (result) {
+                    $(_self.selectors.instruction).html(`<span class="ok">QR: ${result}</span>`);
+                } else {
+                    $(_self.selectors.instruction).html(`<span class="error">Không hợp lệ</span>`);
+                    $(_self.selectors.btnReset).show();
                 }
             }
 
@@ -630,7 +594,6 @@
                 $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
                 $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
                 $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
-                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());
             }
 
             async resetScanner() {
@@ -662,7 +625,7 @@
                     onSuccess: async (qrData) => {
                         _self.state.hasResult = true;
                         await _self.state.qrScanner?.stopScan();
-                        await _self.handleScanResult(qrData);
+                        _self.updateDOM(qrData);
                     },
                     onError: async (error) => {
                         _self.state.hasResult = true;
@@ -675,114 +638,6 @@
                         _self.resetScanner();
                     }
                 });
-            }
-
-            async handleScanResult(data) {
-                let _self = this;
-                Logger.log('CheckinModule', 'info', 'Handling Scan Result', data);
-                try {
-
-                    console.log('Raw QR Data:', data);
-                    // const content = _self.deobfuscateData(data);
-                    // const parsed = _self.parseScannedData(content);
-
-                    // Logger.log('CheckinModule', 'info', 'Step 2: Deobfuscated Content:', content);
-                    // Logger.log('CheckinModule', 'info', 'Step 3: Parsed Result:', parsed);
-
-                    // if (parsed.version != 1 || parsed.fields.length == 0) {
-                    //     throw new Error('Invalid QR Code Data');
-                    // }
-
-                    // _self.state.data = await _self.getData(content);
-                    // if (!_self.state.data) {
-                    //     throw new Error('Data Not Found or Invalid');
-                    // }
-                    _self.updateDOM(1); // For Debug
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            async handleConfirmCheckin() {
-                let _self = this;
-                Logger.log('CheckinModule', 'info', 'Confirming Check-in', _self.state.data);
-                try {
-                    // const {
-                    //     data
-                    // } = _self.state;
-                    // if (!data?.ticket_code) {
-                    //     throw new Error('No Ticket to Confirm');
-                    // }
-
-                    // const params = {
-                    //     ticket_code: data.ticket_code,
-                    //     order_gift_id: data.gifts?.order_gift_id || null
-                    // };
-
-                    // const isConfirmed = await _self.confirmCheckin(params);
-                    // if (isConfirmed) {
-                    //     _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                    //     ToastService.show('Check-in Successful', 'success', 5000);
-                    // } else {
-                    //     throw new Error('Check-in Failed');
-                    // }
-                    _self.updateDOM(2); // For Debug
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            deobfuscateData(encoded, secret = 'sEcReT123') {
-                try {
-                    const b64 = encoded.split('').reverse().join('')
-                        .replace(/-/g, '+')
-                        .replace(/_/g, '/');
-                    return atob(b64).replaceAll(secret, '');
-                } catch {
-                    return '';
-                }
-            }
-
-            parseScannedData(data) {
-                if (!data || typeof data !== 'string') {
-                    return {
-                        version: '',
-                        fields: []
-                    };
-                }
-                const parts = data.split('|');
-                return {
-                    version: parts[0] || '',
-                    fields: parts.slice(1)
-                };
-            }
-
-            async getData(content) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            content
-                        })
-                    });
-                } finally {
-                    $(_self.selectors.modal).removeClass('active');
-                }
-            }
-
-            async confirmCheckin(params) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('', {
-                        method: 'POST',
-                        body: JSON.stringify(params)
-                    });
-                } finally {
-                    $(_self.selectors.modal).removeClass('active');
-                }
             }
         }
 
