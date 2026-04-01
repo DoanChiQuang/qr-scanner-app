@@ -133,7 +133,7 @@
                     <div class="screen-manager">
                         <div class="screen-manager__header">
                             <div class="screen-manager__logo">
-                                <img class="hidden-xs" src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="Vnexpress Marathon">
+                                <img src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="VnExpress Marathon">
                             </div>
                             <h1 class="screen-manager__title">QR Scanner</h1>
                             <p class="screen-manager__subtitle">Chọn thao tác để tiếp tục</p>
@@ -152,9 +152,7 @@
                                     <p class="screen-manager__card-desc">Quét QR để đăng ký đến</p>
                                 </div>
                                 <div class="screen-manager__card-arrow">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M9 18l6-6-6-6"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                                 </div>
                             </div>
 
@@ -171,9 +169,7 @@
                                     <p class="screen-manager__card-desc">Chụp ảnh bib để đăng ký về</p>
                                 </div>
                                 <div class="screen-manager__card-arrow">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M9 18l6-6-6-6"/>
-                                    </svg>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                                 </div>
                             </div>
                         </div>
@@ -418,42 +414,38 @@
                     <div class="scanner-screen">
                         <div class="scanner-screen__header">
                             <button class="scanner-screen__back" id="btn-back">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 12H5M12 19l-7-7 7-7"/>
-                                </svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                             </button>
                             <h2 class="scanner-screen__title">Check In</h2>
                         </div>
 
                         <div class="scanner-screen__frame" id="scanner-frame-container">
                             <video id="${this.videoId}" width="100%" height="100%"></video>
+                            <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
+                            <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
+                            <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
+                            <div class="scanner-screen__corner scanner-screen__corner--br"></div>
                         </div>
 
                         <div class="scanner-screen__content">
-                            <div class="scanner-screen__instruction" id="instruction">Đặt mã QR vào khung để quét</div>
+                            <p class="scanner-screen__instruction" id="instruction">Đặt mã QR vào khung để quét</p>
 
-                            <div class="scanner-screen__result" id="result-container">
-                                <div class="scanner-screen__result-label">Mã QR</div>
-                                <div class="scanner-screen__result-value" id="result-value"></div>
+                            <div class="scanner-screen__info" id="info-card" style="display:none">
+                                <div class="scanner-screen__info-header">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    <span>Quét thành công</span>
+                                </div>
+                                <div class="scanner-screen__info-body">
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="info-bib">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="info-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="info-status">—</span></div>
+                                </div>
                             </div>
 
                             <div class="scanner-screen__actions" id="btn-group">
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                        <path d="M9 9h.01M9 15h.01M15 9h.01M15 15h.01"/>
-                                    </svg>
-                                    Quét QR
-                                </button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display: none;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
-                                        <path d="M21 3v5h-5"/>
-                                        <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
-                                        <path d="M8 16H3v5"/>
-                                    </svg>
-                                    Reset
-                                </button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">Quét QR</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
                     </div>
@@ -463,31 +455,34 @@
 
             updateDOM(result, isSuccess = false) {
                 const instruction = $('#instruction');
-                const resultContainer = $('#result-container');
-                const resultValue = $('#result-value');
                 const btnStart = $('#btn-start-scan');
                 const btnReset = $('#btn-reset-scan');
 
                 if (isSuccess) {
                     instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Quét thành công!');
-                    resultContainer.addClass('show');
-                    resultValue.text(result);
+
+                    // Show info card with result data
+                    const data = typeof result === 'object' ? result : { bib: result };
+                    $('#info-bib').text(data.bib || '—');
+                    $('#info-name').text(data.name || '—');
+                    $('#info-phone').text(data.phone || '—');
+
+                    const statusText = data.status || '—';
+                    const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
+                        : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
+                        : 'scanner-screen__info-status--success';
+                    $('#info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                    $('#info-card').show();
+
+                    // Hide frame when result shown
+                    $('#scanner-frame-container').hide();
+
                     btnStart.hide();
-                    btnReset.show();
+                    btnReset.hide();
 
                     $('#btn-group').html(`
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 12h14M12 5l7 7-7 7"/>
-                            </svg>
-                            Quét tiếp
-                        </button>
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M19 12H5M12 19l-7-7 7-7"/>
-                            </svg>
-                            Về trang chủ
-                        </button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">Về trang chủ</button>
                     `);
                 } else {
                     instruction.addClass('scanner-screen__instruction--error').text('Không hợp lệ. Thử lại.');
@@ -523,6 +518,7 @@
             async startScanner() {
                 $('#btn-start-scan').hide();
                 $('#btn-reset-scan').show();
+                $('#scanner-frame-container').addClass('scanner-screen__frame--active');
                 $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 const handleResult = (result, isSuccess) => {
@@ -603,35 +599,36 @@
                     <div class="scanner-screen">
                         <div class="scanner-screen__header">
                             <button class="scanner-screen__back" id="btn-back">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 12H5M12 19l-7-7 7-7"/>
-                                </svg>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                             </button>
                             <h2 class="scanner-screen__title">Check Out</h2>
                         </div>
 
                         <div class="scanner-screen__frame" id="scanner-frame-container">
-                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; font-size: 14px;">
-                                Chưa có ảnh
+                            <div class="scanner-screen__placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                <span>Chưa có ảnh</span>
                             </div>
                         </div>
 
                         <div class="scanner-screen__content">
-                            <div class="scanner-screen__instruction" id="instruction">Chụp ảnh bib có mã QR</div>
+                            <p class="scanner-screen__instruction" id="instruction">Chụp ảnh bib có mã QR</p>
 
-                            <div class="scanner-screen__result" id="result-container">
-                                <div class="scanner-screen__result-label">Mã QR</div>
-                                <div class="scanner-screen__result-value" id="result-value"></div>
+                            <div class="scanner-screen__info" id="info-card" style="display:none">
+                                <div class="scanner-screen__info-header">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    <span>Quét thành công</span>
+                                </div>
+                                <div class="scanner-screen__info-body">
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="info-bib">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="info-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="info-status">—</span></div>
+                                </div>
                             </div>
 
                             <div class="scanner-screen__actions" id="btn-group">
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-                                        <circle cx="12" cy="13" r="4"/>
-                                    </svg>
-                                    Chụp ảnh
-                                </button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">Chụp ảnh</button>
                             </div>
                         </div>
                     </div>
@@ -641,34 +638,30 @@
 
             showResult(resultText, imageSrc) {
                 const instruction = $('#instruction');
-                const resultContainer = $('#result-container');
-                const resultValue = $('#result-value');
                 const frameContainer = $('#scanner-frame-container');
 
                 instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Phát hiện mã QR!');
-                resultContainer.addClass('show');
-                resultValue.text(resultText);
 
-                frameContainer.html(`
-                    <img src="${imageSrc}" alt="Bib photo" style="width: 100%; height: 100%; object-fit: contain; background: #000;">
+                frameContainer.addClass('scanner-screen__frame--has-image').html(`
+                    <img src="${imageSrc}" alt="Bib photo">
                 `);
 
+                // Show info card with result data
+                const data = typeof resultText === 'object' ? resultText : { bib: resultText };
+                $('#info-bib').text(data.bib || '—');
+                $('#info-name').text(data.name || '—');
+                $('#info-phone').text(data.phone || '—');
+
+                const statusText = data.status || '—';
+                const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
+                    : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
+                    : 'scanner-screen__info-status--success';
+                $('#info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                $('#info-card').show();
+
                 $('#btn-group').html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
-                            <path d="M21 3v5h-5"/>
-                            <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
-                            <path d="M8 16H3v5"/>
-                        </svg>
-                        Chụp lại
-                    </button>
-                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M19 12H5M12 19l-7-7 7-7"/>
-                        </svg>
-                        Về trang chủ
-                    </button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Chụp lại</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">Về trang chủ</button>
                 `);
             }
 
