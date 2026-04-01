@@ -4,11 +4,11 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Checkout QR (OS Camera + ZXing-WASM)</title>
+    <title>Checkout Live Detect (getUserMedia + zxing-wasm)</title>
     <style>
         body {
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-            margin: 16px;
+            margin: 14px;
         }
 
         .btn {
@@ -24,18 +24,6 @@
             white-space: pre-wrap;
         }
 
-        #preview {
-            max-width: 100%;
-            display: none;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-        }
-
-        #downloadLink {
-            display: none;
-            margin-top: 8px;
-        }
-
         .ok {
             color: #0a7a2f;
         }
@@ -48,253 +36,313 @@
             color: #666;
             font-size: 13px;
         }
+
+        .cameraWrap {
+            position: relative;
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Overlay ROI */
+        .roi {
+            position: absolute;
+            left: 15%;
+            top: 20%;
+            width: 70%;
+            height: 60%;
+            border: 2px solid rgba(0, 255, 140, 0.95);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+            border-radius: 12px;
+            pointer-events: none;
+        }
+
+        .roiLabel {
+            position: absolute;
+            left: 15%;
+            top: calc(20% - 28px);
+            color: #fff;
+            background: rgba(0, 0, 0, 0.55);
+            padding: 6px 10px;
+            border-radius: 10px;
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        #downloadLink {
+            display: none;
+        }
     </style>
 </head>
 
 <body>
-    <h2>Checkout: Chụp bib + detect QR</h2>
+    <h2>Checkout (Live Detect QR) — không cần Confirm</h2>
 
     <div class="row">
-        <input id="checkoutCapture" class="btn" type="file" accept="image/*" capture="environment" />
-        <div class="muted">
-            Tip: đưa bib vào giữa khung, đủ sáng, tránh phản chiếu.
-        </div>
+        <button id="btnStart" class="btn">Mở camera & Quét</button>
+        <button id="btnStop" class="btn" disabled>Dừng</button>
+    </div>
+
+    <div class="row muted">
+        Tip: đưa bib/QR vào khung xanh, đủ sáng, giữ máy ổn định 0.5–1s.
+    </div>
+
+    <div class="cameraWrap" id="cameraWrap" style="display:none;">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="roiLabel">Vùng quét (ROI)</div>
+        <div class="roi"></div>
     </div>
 
     <div class="row">
-        <div id="status">Sẵn sàng.</div>
+        <div id="status" class="muted">Sẵn sàng.</div>
     </div>
 
     <div class="row">
-        <img id="preview" alt="Preview" />
+        <a id="downloadLink">Download ảnh (300–500KB)</a>
     </div>
 
-    <div class="row">
-        <a id="downloadLink">Download ảnh</a>
-    </div>
-
+    <!-- ZXing-WASM IIFE -->
     <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
 
     <script>
         const ZXing = ZXingWASM;
         const { readBarcodes } = ZXing;
 
-        const input = document.getElementById('checkoutCapture');
+        const btnStart = document.getElementById('btnStart');
+        const btnStop = document.getElementById('btnStop');
+        const wrap = document.getElementById('cameraWrap');
+        const video = document.getElementById('video');
         const statusEl = document.getElementById('status');
-        const previewEl = document.getElementById('preview');
         const downloadLink = document.getElementById('downloadLink');
 
-        // Bật/tắt log tổng
-        const DEBUG = true;
+        // ====== CONFIG (bạn có thể tune) ======
+        const CONFIG = {
+            // decode mỗi N ms (5–10 fps là đủ)
+            scanIntervalMs: 140,
 
-        input.addEventListener('change', async () => {
-            const file = input.files && input.files[0];
-            if (!file) return;
+            // ROI theo overlay CSS: left 15%, top 20%, width 70%, height 60%
+            roi: { x: 0.15, y: 0.20, w: 0.70, h: 0.60 },
 
-            setStatus('Đang xử lý ảnh...', 'muted');
+            // Resize ROI trước khi decode (tăng lên nếu QR nhỏ/mờ; giảm nếu muốn nhanh hơn)
+            roiDecodeWidth: 1100,
+
+            // Nếu ROI fail, thỉnh thoảng thử full (cứu case lệch khung)
+            fullFallbackEveryN: 8,
+            fullDecodeWidth: 1600,
+
+            // Khi đã đọc được QR: dừng quét và chốt
+            stopOnSuccess: true,
+
+            // Target ảnh download
+            downloadMinKB: 300,
+            downloadMaxKB: 500,
+
+            // Debug log
+            debug: false,
+        };
+
+        // State
+        let stream = null;
+        let timer = null;
+        let isBusy = false;
+        let tickCount = 0;
+        let lastText = '';
+
+        // Canvas làm việc (không gắn DOM)
+        const workCanvas = document.createElement('canvas');
+        const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+
+        btnStart.addEventListener('click', startCamera);
+        btnStop.addEventListener('click', stopCamera);
+
+        async function startCamera() {
             downloadLink.style.display = 'none';
+            lastText = '';
+            setStatus('Đang xin quyền camera...', 'muted');
 
             try {
-                const result = await processCheckoutImage({
-                    file,
-                    readBarcodes,
-                    statusEl,
-                    previewEl,
-                    downloadLink,
-                    showPreview: false,
-                    autoDownload: false,
-                    debug: DEBUG,
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        // ideal resolution giúp QR rõ hơn; browser sẽ tự điều chỉnh theo thiết bị
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
                 });
 
-                if (result.ok) setStatus(`OK\nQR: ${result.text}`, 'ok');
-                else setStatus('KHÔNG detect được QR.\nGợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'fail');
+                video.srcObject = stream;
+                await video.play();
+
+                wrap.style.display = 'block';
+                btnStart.disabled = true;
+                btnStop.disabled = false;
+
+                setStatus('Camera đã mở. Đang quét QR...', 'muted');
+                startLoop();
 
             } catch (e) {
                 console.error(e);
-                setStatus('Lỗi xử lý ảnh (xem console).', 'fail');
-            } finally {
-                input.value = '';
+                setStatus('Không mở được camera. Kiểm tra quyền truy cập camera (browser settings).', 'fail');
             }
-        });
+        }
+
+        function stopCamera() {
+            stopLoop();
+
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+
+            wrap.style.display = 'none';
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+
+            setStatus('Đã dừng camera.', 'muted');
+        }
+
+        function startLoop() {
+            stopLoop();
+            tickCount = 0;
+            timer = setInterval(scanTick, CONFIG.scanIntervalMs);
+        }
+
+        function stopLoop() {
+            if (timer) clearInterval(timer);
+            timer = null;
+            isBusy = false;
+        }
 
         function setStatus(text, cls) {
             statusEl.className = cls || '';
             statusEl.textContent = text;
         }
 
-        // ====== TRACKING HELPERS ======
-        function mkLogger(enabled, prefix = '[checkout]') {
-            const t0 = performance.now();
-            const log = (step, extra) => {
-                if (!enabled) return;
-                const dt = (performance.now() - t0).toFixed(1);
-                if (extra !== undefined) console.log(`${prefix} +${dt}ms ${step}`, extra);
-                else console.log(`${prefix} +${dt}ms ${step}`);
-            };
-            const group = (title) => enabled && console.groupCollapsed(`${prefix} ${title}`);
-            const groupEnd = () => enabled && console.groupEnd();
-            return { log, group, groupEnd };
-        }
+        async function scanTick() {
+            if (!stream) return;
+            if (isBusy) return; // tránh chồng tick
+            if (video.readyState < 2) return; // chưa có frame
 
-        async function timeStep(logger, name, fn) {
-            const t = performance.now();
-            logger.log(`▶ ${name} ...`);
+            isBusy = true;
+            tickCount++;
+
             try {
-                const out = await fn();
-                logger.log(`✅ ${name} (${(performance.now() - t).toFixed(1)}ms)`);
-                return out;
+                // 1) Vẽ frame video vào workCanvas ở kích thước "thật" của video
+                const vw = video.videoWidth;
+                const vh = video.videoHeight;
+
+                if (!vw || !vh) return;
+
+                workCanvas.width = vw;
+                workCanvas.height = vh;
+                workCtx.drawImage(video, 0, 0, vw, vh);
+
+                // 2) Crop ROI
+                const roiRect = {
+                    x: Math.round(vw * CONFIG.roi.x),
+                    y: Math.round(vh * CONFIG.roi.y),
+                    w: Math.round(vw * CONFIG.roi.w),
+                    h: Math.round(vh * CONFIG.roi.h),
+                };
+
+                // ROI canvas
+                const roiCanvas = cropRect(workCanvas, roiRect);
+                const roiScaled = resizeToWidth(roiCanvas, CONFIG.roiDecodeWidth);
+
+                // 3) Decode ROI (chính)
+                let barcodes = await decodeCanvas(roiScaled);
+
+                // 4) Fallback thỉnh thoảng thử full frame (cứu case bib lệch ROI)
+                if (!barcodes.length && (tickCount % CONFIG.fullFallbackEveryN === 0)) {
+                    const fullScaled = resizeToWidth(workCanvas, CONFIG.fullDecodeWidth);
+                    barcodes = await decodeCanvas(fullScaled);
+                    if (CONFIG.debug) console.log('[scan] fallback full', barcodes);
+                }
+
+                const text = pickBarcodeText(barcodes);
+
+                if (text && text !== lastText) {
+                    lastText = text;
+
+                    // phản hồi UX
+                    beep();
+                    setStatus(`OK ✅\nQR: ${text}`, 'ok');
+
+                    // 5) Chốt ảnh download 300–500KB (lấy frame full để lưu)
+                    const { blob, sizeKB } = await compressCanvasToTargetKB(workCanvas, CONFIG.downloadMinKB, CONFIG.downloadMaxKB);
+                    const url = URL.createObjectURL(blob);
+
+                    downloadLink.href = url;
+                    downloadLink.download = buildCheckoutFilename(text);
+                    downloadLink.textContent = `Download ảnh (${Math.round(sizeKB)}KB)`;
+                    downloadLink.style.display = 'inline-block';
+
+                    // 6) Dừng nếu cấu hình
+                    if (CONFIG.stopOnSuccess) {
+                        stopCamera();
+                    }
+                } else if (!lastText) {
+                    // chỉ update trạng thái khi chưa thành công
+                    setStatus('Đang quét QR... (giữ bib trong khung xanh)', 'muted');
+                }
+
             } catch (e) {
-                logger.log(`❌ ${name} (${(performance.now() - t).toFixed(1)}ms)`, e);
-                throw e;
+                if (CONFIG.debug) console.error(e);
+                // không spam UI lỗi; live scan cứ tiếp tục
+            } finally {
+                isBusy = false;
             }
         }
 
-        // ====== MAIN PROCESS ======
-        async function processCheckoutImage({
-            file, readBarcodes, statusEl, previewEl, downloadLink,
-            showPreview, autoDownload, debug
-        }) {
-            const logger = mkLogger(Boolean(debug));
+        async function decodeCanvas(canvas) {
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-            logger.group('processCheckoutImage');
-            logger.log('file', {
-                name: file.name,
-                type: file.type,
-                sizeKB: Math.round(file.size / 1024),
-            });
-
-            // 1) Decode file -> ImageBitmap
-            const bitmap = await timeStep(logger, 'createImageBitmap(file)', () => createImageBitmap(file));
-            logger.log('bitmap.size', { width: bitmap.width, height: bitmap.height });
-
-            // 2) Draw master canvas (resize)
-            const masterMaxLongEdge = 2200;
-            const fitted = fitContain(bitmap.width, bitmap.height, masterMaxLongEdge);
-
-            const master = document.createElement('canvas');
-            const mctx = master.getContext('2d', { willReadFrequently: true });
-
-            await timeStep(logger, `draw master canvas (longEdge<=${masterMaxLongEdge})`, async () => {
-                master.width = fitted.w;
-                master.height = fitted.h;
-                mctx.drawImage(bitmap, 0, 0, fitted.w, fitted.h);
-            });
-
-            logger.log('master.size', { width: master.width, height: master.height });
-
-            if (showPreview) {
-                await timeStep(logger, 'render preview', async () => {
-                    previewEl.src = master.toDataURL('image/jpeg', 0.85);
-                    previewEl.style.display = 'block';
-                });
-            } else {
-                previewEl.style.display = 'none';
-            }
-
-            // 3) Decode multi-pass
-            const decodeFromCanvas = async (canvas, tag) => {
-                return timeStep(logger, `decode ${tag} (w=${canvas.width}, h=${canvas.height})`, async () => {
-                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-                    // Nếu muốn biết time riêng của readBarcodes:
-                    const t = performance.now();
-                    const res = await readBarcodes(imgData);
-                    logger.log(`readBarcodes ${tag} took ${(performance.now() - t).toFixed(1)}ms`);
-
-                    return Array.isArray(res) ? res : [];
-                });
-            };
-
-            let barcodes = [];
-
-            // Pass A: ROI
-            statusEl.textContent = 'Đang detect QR (ROI)...';
-            const roiCanvas = await timeStep(logger, 'cropCenterROI', () => cropCenterROI(master, 0.70, 0.85));
-            const roiSmall = await timeStep(logger, 'resize ROI -> width 1200', () => resizeToWidth(roiCanvas, 1200));
-            barcodes = await decodeFromCanvas(roiSmall, 'ROI-1200');
-
-            // Pass B: FULL
-            if (!barcodes.length) {
-                statusEl.textContent = 'Đang detect QR (FULL)...';
-                const fullSmall = await timeStep(logger, 'resize FULL -> width 1600', () => resizeToWidth(master, 1600));
-                barcodes = await decodeFromCanvas(fullSmall, 'FULL-1600');
-            }
-
-            // Pass C: FULL bigger
-            if (!barcodes.length) {
-                statusEl.textContent = 'Đang detect QR (FULL x2)...';
-                const fullBigger = await timeStep(logger, 'resize FULL -> width 2400', () => resizeToWidth(master, 2400));
-                barcodes = await decodeFromCanvas(fullBigger, 'FULL-2400');
-            }
-
-            logger.log('barcodes', barcodes);
-
-            const text = pickBarcodeText(barcodes);
-            const ok = Boolean(text);
-            logger.log('result', { ok, text });
-
-            // 4) Compress to 300–500KB
-            statusEl.textContent = 'Đang chuẩn bị ảnh download (300–500KB)...';
-            const compressed = await timeStep(logger, 'compressCanvasToTargetKB(300..500)', () => compressCanvasToTargetKB(master, 300, 500));
-            logger.log('compressed', { sizeKB: Math.round(compressed.sizeKB) });
-
-            const url = URL.createObjectURL(compressed.blob);
-            downloadLink.href = url;
-            downloadLink.download = buildCheckoutFilename(text);
-            downloadLink.textContent = `Download ảnh (${Math.round(compressed.sizeKB)}KB)`;
-            downloadLink.style.display = 'inline-block';
-
-            if (autoDownload) {
-                await timeStep(logger, 'autoDownload click()', async () => downloadLink.click());
-            }
-
-            logger.groupEnd();
-            return { ok, text, barcodes };
+            const res = await readBarcodes(imgData);
+            return Array.isArray(res) ? res : [];
         }
 
-        // ====== HELPERS ======
         function pickBarcodeText(barcodes) {
             if (!barcodes || !barcodes.length) return '';
             return barcodes[0].text || barcodes[0].rawValue || '';
         }
 
-        function fitContain(w, h, maxLongEdge) {
-            const longEdge = Math.max(w, h);
-            if (longEdge <= maxLongEdge) return { w, h };
-            const scale = maxLongEdge / longEdge;
-            return { w: Math.round(w * scale), h: Math.round(h * scale) };
-        }
-
-        function cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
-            const sw = sourceCanvas.width, sh = sourceCanvas.height;
-            const rw = Math.max(1, Math.round(sw * roiWPercent));
-            const rh = Math.max(1, Math.round(sh * roiHPercent));
-            const rx = Math.round((sw - rw) / 2);
-            const ry = Math.round((sh - rh) / 2);
-
+        function cropRect(sourceCanvas, r) {
             const c = document.createElement('canvas');
-            c.width = rw; c.height = rh;
+            c.width = Math.max(1, r.w);
+            c.height = Math.max(1, r.h);
             const ctx = c.getContext('2d');
-            ctx.drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+            ctx.drawImage(sourceCanvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
             return c;
         }
 
         function resizeToWidth(sourceCanvas, targetW) {
             if (sourceCanvas.width <= targetW) return sourceCanvas;
-
             const scale = targetW / sourceCanvas.width;
             const tw = targetW;
             const th = Math.max(1, Math.round(sourceCanvas.height * scale));
 
             const c = document.createElement('canvas');
-            c.width = tw; c.height = th;
+            c.width = tw;
+            c.height = th;
             const ctx = c.getContext('2d');
             ctx.drawImage(sourceCanvas, 0, 0, tw, th);
             return c;
         }
 
         async function compressCanvasToTargetKB(canvas, minKB, maxKB) {
+            // Lưu ý: canvas ở đây là frame video (thường 1280x720), khá phù hợp để nén 300–500KB
             let low = 0.55, high = 0.92;
             let best = null;
 
@@ -309,6 +357,7 @@
                 else break;
             }
 
+            // Nếu vẫn quá to, giảm kích thước 1 lần
             if (best && best.sizeKB > maxKB) {
                 const smaller = resizeToWidth(canvas, Math.round(canvas.width * 0.85));
                 const blob = await canvasToJpegBlob(smaller, 0.78);
@@ -333,6 +382,26 @@
             const ts = new Date().toISOString().replace(/[:.]/g, '-');
             return `checkout_${safe}_${ts}.jpg`;
         }
+
+        function beep() {
+            // iOS có thể chặn audio nếu chưa có user gesture,
+            // nhưng startCamera là user click => thường OK.
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = 'sine';
+                o.frequency.value = 880;
+                g.gain.value = 0.05;
+                o.connect(g);
+                g.connect(ctx.destination);
+                o.start();
+                setTimeout(() => { o.stop(); ctx.close(); }, 120);
+            } catch (_) { }
+        }
+
+        // Tự dọn camera nếu user rời trang
+        window.addEventListener('pagehide', stopCamera);
     </script>
 </body>
 
