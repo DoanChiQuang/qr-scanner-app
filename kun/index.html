@@ -111,42 +111,59 @@
             render() {
                 let _self = this;
                 $(_self.selectors.main).html(`
-                    <div class="screen-manager-container">
-                        <div class="sm-header">
-                            <h1 class="sm-title">QR Scanner</h1>
-                            <p class="sm-subtitle">Choose your action</p>
+                    <div class="screen-manager">
+                        <div class="screen-manager__header">
+                            <div class="screen-manager__logo">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M12 17h.01M17 7h.01M17 12h.01M17 17h.01"/>
+                                </svg>
+                            </div>
+                            <h1 class="screen-manager__title">QR Scanner</h1>
+                            <p class="screen-manager__subtitle">Chọn thao tác để tiếp tục</p>
                         </div>
 
-                        <div class="sm-cards-container">
-                            <div class="sm-card" id="card-checkin">
-                                <div class="sm-card-icon checkin-icon">
-                                    <i class="icon-checkin"></i>
+                        <div class="screen-manager__cards">
+                            <div class="screen-manager__card" id="card-checkin">
+                                <div class="screen-manager__card-icon screen-manager__card-icon--checkin">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 11l3 3L22 4"/>
+                                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                                    </svg>
                                 </div>
-                                <div class="sm-card-content">
-                                    <h3 class="sm-card-title">Check In</h3>
-                                    <p class="sm-card-description">Scan QR code to register your arrival</p>
+                                <div class="screen-manager__card-content">
+                                    <h3 class="screen-manager__card-title">Check In</h3>
+                                    <p class="screen-manager__card-desc">Quét QR để đăng ký đến</p>
                                 </div>
-                                <div class="sm-card-arrow">
-                                    <i class="icon-arrow"></i>
+                                <div class="screen-manager__card-arrow">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 18l6-6-6-6"/>
+                                    </svg>
                                 </div>
                             </div>
 
-                            <div class="sm-card" id="card-checkout">
-                                <div class="sm-card-icon checkout-icon">
-                                    <i class="icon-checkout"></i>
+                            <div class="screen-manager__card" id="card-checkout">
+                                <div class="screen-manager__card-icon screen-manager__card-icon--checkout">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                                        <polyline points="16 17 21 12 16 7"/>
+                                        <line x1="21" y1="12" x2="9" y2="12"/>
+                                    </svg>
                                 </div>
-                                <div class="sm-card-content">
-                                    <h3 class="sm-card-title">Check Out</h3>
-                                    <p class="sm-card-description">Scan QR code to register your departure</p>
+                                <div class="screen-manager__card-content">
+                                    <h3 class="screen-manager__card-title">Check Out</h3>
+                                    <p class="screen-manager__card-desc">Chụp ảnh bib để đăng ký về</p>
                                 </div>
-                                <div class="sm-card-arrow">
-                                    <i class="icon-arrow"></i>
+                                <div class="screen-manager__card-arrow">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 18l6-6-6-6"/>
+                                    </svg>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="sm-footer">
-                            <p class="sm-footer-text">Powered by vRace</p>
+                        <div class="screen-manager__footer">
+                            <p class="screen-manager__footer-text">Powered by vRace</p>
                         </div>
                     </div>
                 `);
@@ -431,58 +448,108 @@
                 return _self;
             }
 
+            goBack() {
+                this.state.isInitialized = false;
+                new ScreenManager().render();
+            }
+
             render() {
                 let _self = this;
                 $(_self.selectors.main).html(`
-                    <div class="wrapper">
-                        <div class="scanner-frame" id="scanner-frame-container"></div>
-                        <div class="instruction-text"></div>
-                        <div class="info-section"></div>
-                        <div class="btn-group"></div>
+                    <div class="scanner-screen">
+                        <div class="scanner-screen__header">
+                            <button class="scanner-screen__back" id="btn-back">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                                </svg>
+                            </button>
+                            <h2 class="scanner-screen__title">Check In</h2>
+                        </div>
+
+                        <div class="scanner-screen__frame" id="scanner-frame-container">
+                            <video id="${_self.videoId}" width="100%" height="100%"></video>
+                        </div>
+
+                        <div class="scanner-screen__content">
+                            <div class="scanner-screen__instruction" id="instruction">Đặt mã QR vào khung để quét</div>
+                            
+                            <div class="scanner-screen__result" id="result-container">
+                                <div class="scanner-screen__result-label">Mã QR</div>
+                                <div class="scanner-screen__result-value" id="result-value"></div>
+                            </div>
+
+                            <div class="scanner-screen__actions" id="btn-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                        <path d="M9 9h.01M9 15h.01M15 9h.01M15 15h.01"/>
+                                    </svg>
+                                    Quét QR
+                                </button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display: none;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
+                                        <path d="M21 3v5h-5"/>
+                                        <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
+                                        <path d="M8 16H3v5"/>
+                                    </svg>
+                                    Reset
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 `);
-                _self.setupDOM();
                 _self.bindEvents();
             }
 
-            setupDOM() {
+            updateDOM(result, isSuccess = false) {
                 let _self = this;
-                $(_self.selectors.container).html(`
-                    <div class="scanner-line"></div>
-                    <video id="${_self.videoId}" width="100%" height="100%"></video>
-                `);
-                $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnGroup).html(`
-                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
-                `);
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnStart).show();
-            }
+                const instruction = $('#instruction');
+                const resultContainer = $('#result-container');
+                const resultValue = $('#result-value');
+                const btnStart = $('#btn-start-scan');
+                const btnReset = $('#btn-reset-scan');
 
-            updateDOM(result) {
-                let _self = this;
-                $(_self.selectors.instruction).html('');
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnNext).hide();
-
-                if (result) {
-                    $(_self.selectors.instruction).html(`<span class="ok">QR: ${result}</span>`);
+                if (isSuccess) {
+                    instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Quét thành công!');
+                    resultContainer.addClass('show');
+                    resultValue.text(result);
+                    btnStart.hide();
+                    btnReset.show();
+                    
+                    $('#btn-group').html(`
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                            Quét tiếp
+                        </button>
+                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Về trang chủ
+                        </button>
+                    `);
+                    _self.bindResultEvents();
                 } else {
-                    $(_self.selectors.instruction).html(`<span class="error">Không hợp lệ</span>`);
+                    instruction.addClass('scanner-screen__instruction--error').text('Không hợp lệ. Thử lại.');
+                    btnStart.show();
+                    btnReset.hide();
                 }
-                $(_self.selectors.btnReset).show();
             }
 
             bindEvents() {
                 let _self = this;
-                $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
-                $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
-                $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
+                $(document).on('click', '#btn-back', () => _self.goBack());
+                $(document).on('click', '#btn-start-scan', () => _self.startScanner());
+                $(document).on('click', '#btn-reset-scan', () => _self.resetScanner());
+            }
+
+            bindResultEvents() {
+                let _self = this;
+                $(document).on('click', '#btn-next-scan', () => _self.nextScanner());
+                $(document).on('click', '#btn-back-result', () => _self.goBack());
             }
 
             async resetScanner() {
@@ -495,36 +562,39 @@
 
                 await _self.state.qrScanner?.stopScan();
 
-                _self.setupDOM();
+                _self.render();
             }
 
             nextScanner() {
                 let _self = this;
-                _self.setupDOM();
-                _self.startScanner();
+                _self.state.hasResult = false;
+                _self.render();
+                setTimeout(() => _self.startScanner(), 300);
             }
 
             async startScanner() {
                 let _self = this;
 
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnReset).show();
+                $('#btn-start-scan').hide();
+                $('#btn-reset-scan').show();
+                $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 await _self.state.qrScanner.startScan({
                     onSuccess: async (qrData) => {
                         _self.state.hasResult = true;
                         await _self.state.qrScanner?.stopScan();
-                        _self.updateDOM(qrData);
+                        _self.updateDOM(qrData, true);
                     },
                     onError: async (error) => {
                         _self.state.hasResult = true;
                         await _self.state.qrScanner?.stopScan();
+                        _self.updateDOM(null, false);
                         Logger.log('CheckinModule', 'error', error.message);
                     },
                     onTimeout: async () => {
                         _self.state.hasResult = true;
                         await _self.state.qrScanner?.stopScan();
-                        _self.resetScanner();
+                        _self.updateDOM(null, false);
                     }
                 });
             }
@@ -559,59 +629,127 @@
                 return _self;
             }
 
+            goBack() {
+                this.state.isInitialized = false;
+                new ScreenManager().render();
+            }
+
             render() {
                 let _self = this;
                 $(_self.selectors.main).html(`
-                    <div class="wrapper">
-                        <div class="scanner-frame" id="scanner-frame-container"></div>
-                        <div class="instruction-text"></div>
-                        <div class="info-section"></div>
-                        <div class="btn-group"></div>
+                    <div class="scanner-screen">
+                        <div class="scanner-screen__header">
+                            <button class="scanner-screen__back" id="btn-back">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                                </svg>
+                            </button>
+                            <h2 class="scanner-screen__title">Check Out</h2>
+                        </div>
+
+                        <div class="scanner-screen__frame" id="scanner-frame-container">
+                            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; font-size: 14px;">
+                                Chưa có ảnh
+                            </div>
+                        </div>
+
+                        <div class="scanner-screen__content">
+                            <div class="scanner-screen__instruction" id="instruction">Chụp ảnh bib có mã QR</div>
+                            
+                            <div class="scanner-screen__result" id="result-container">
+                                <div class="scanner-screen__result-label">Mã QR</div>
+                                <div class="scanner-screen__result-value" id="result-value"></div>
+                            </div>
+
+                            <div class="scanner-screen__actions" id="btn-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                                        <circle cx="12" cy="13" r="4"/>
+                                    </svg>
+                                    Chụp ảnh
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 `);
-                _self.setupDOM();
                 _self.bindEvents();
             }
 
-            setupDOM() {
+            showResult(resultText, imageSrc) {
                 let _self = this;
-                $(_self.selectors.container).html('');
-                $(_self.selectors.instruction).html('Chụp ảnh bib có mã QR').removeClass('error');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnGroup).html(`
-                    <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Mở Camera</a>
+                const instruction = $('#instruction');
+                const resultContainer = $('#result-container');
+                const resultValue = $('#result-value');
+                const frameContainer = $('#scanner-frame-container');
+
+                instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Phát hiện mã QR!');
+                resultContainer.addClass('show');
+                resultValue.text(resultText);
+
+                frameContainer.html(`
+                    <img src="${imageSrc}" alt="Bib photo" style="width: 100%; height: 100%; object-fit: contain; background: #000;">
                 `);
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnStart).show();
+
+                $('#btn-group').html(`
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                            <path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/>
+                            <path d="M8 16H3v5"/>
+                        </svg>
+                        Chụp lại
+                    </button>
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-back-result">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                        Về trang chủ
+                    </button>
+                `);
+                _self.bindResultEvents();
             }
 
             bindEvents() {
                 let _self = this;
-                $(document).on('click', _self.selectors.btnStart, () => _self.startCapture());
-                $(document).on('click', _self.selectors.btnReset, () => _self.reset());
+                $(document).on('click', '#btn-back', () => _self.goBack());
+                $(document).on('click', '#btn-start-scan', () => _self.startCapture());
+                $(document).on('click', '#btn-reset-scan', () => _self.reset());
+            }
+
+            bindResultEvents() {
+                let _self = this;
+                $(document).on('click', '#btn-reset-scan', () => _self.reset());
+                $(document).on('click', '#btn-back-result', () => _self.goBack());
             }
 
             reset() {
                 let _self = this;
-                _self.setupDOM();
+                _self.render();
             }
 
             async startCapture() {
                 const ZXing = ZXingWASM;
                 let _self = this;
 
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnReset).show();
+                $('#btn-start-scan').hide();
+                $('#instruction').text('Chọn ảnh từ thư viện...');
+
                 $('#file').click();
 
                 $('#file').off('change').on('change', async (event) => {
                     const file = event.target.files[0];
-                    if (!file) return;
+                    if (!file) {
+                        _self.render();
+                        return;
+                    }
 
                     try {
                         const { readBarcodes } = ZXing;
                         console.log('Selected file:', file.name, file.size, file.type);
+
+                        $('#instruction').text('Đang xử lý ảnh...');
 
                         const result = await _self.processCheckoutImage({
                             file,
@@ -621,20 +759,16 @@
 
                         if (result.ok) {
                             console.log('Decoded QR Code:', result.text);
-                            $(_self.selectors.instruction).html(`<span class="ok">QR: ${result.text}</span>`);
-                            const img = document.createElement('img');
-                            img.src = URL.createObjectURL(file);
-                            img.style.maxWidth = '100%';
-                            img.style.maxHeight = '300px';
-                            img.style.display = 'block';
-                            img.style.margin = '10px auto';
-                            $(_self.selectors.container).html('').append(img);
+                            const imageUrl = URL.createObjectURL(file);
+                            _self.showResult(result.text, imageUrl);
                         } else {
                             ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
+                            _self.render();
                         }
                     } catch (error) {
                         ToastService.show(`Lỗi xử lý ảnh: ${error.message}`, 'error', 5000);
                         console.error(error);
+                        _self.render();
                     } finally {
                         event.target.value = '';
                     }
