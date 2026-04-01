@@ -324,42 +324,13 @@
             constructor(codeReader, videoId) {
                 this.videoId = videoId;
                 this.codeReader = codeReader;
-                this.stream = null;
                 this.state = {
                     isScanning: false,
-                    isCameraGranted: false,
                     timeoutId: null
                 };
             }
 
-            async grantCameraPermissions() {
-                try {
-                    this.stream = await navigator.mediaDevices.getUserMedia({
-                        audio: false,
-                        video: {
-                            facingMode: { ideal: 'environment' },
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 }
-                        }
-                    });
-
-                    const videoElement = document.getElementById(this.videoId);
-                    videoElement.srcObject = this.stream;
-                    videoElement.setAttribute('playsinline', '');
-                    videoElement.muted = true;
-                    await videoElement.play();
-
-                    this.state.isCameraGranted = true;
-                    return true;
-                } catch {
-                    this.state.isCameraGranted = false;
-                    return false;
-                }
-            }
-
             async startScan({ onSuccess, onError, onTimeout, timeout = Config.TIMEOUT_DURATION }) {
-                Logger.log('QRScannerLibrary', 'info', 'Step 1: Starting Scanner...');
-
                 if (this.state.isScanning) {
                     ToastService.show('Scanner Already Running', 'error', 5000);
                     return false;
@@ -367,25 +338,21 @@
 
                 this.state.isScanning = true;
 
-                Logger.log('QRScannerLibrary', 'info', 'Step 2: Requesting Camera Permissions...');
-                if (!this.state.isCameraGranted && !await this.grantCameraPermissions()) {
-                    ToastService.show('Camera Access Denied', 'error', 5000);
-                    this.state.isScanning = false;
-                    if (onError) onError(new Error('Camera Access Denied'));
-                    return false;
+                const videoElement = document.getElementById(this.videoId);
+                if (videoElement) {
+                    videoElement.setAttribute('playsinline', '');
+                    videoElement.muted = true;
                 }
 
-                Logger.log('QRScannerLibrary', 'info', 'Step 3: Camera Permissions Granted, Starting Scan...');
                 this.state.timeoutId = setTimeout(() => {
                     this.stopScan();
                     ToastService.show('Scan Timeout. Please try again', 'error', 5000);
                     if (onTimeout) onTimeout();
                 }, timeout);
 
-                Logger.log('QRScannerLibrary', 'info', 'Step 4: Scanning for QR Code...');
                 try {
                     const result = await this.codeReader.decodeOnceFromVideoDevice(undefined, this.videoId);
-                    if (result && result.text) {
+                    if (result?.text) {
                         this.clearTimeout();
                         if (onSuccess) await onSuccess(result.text);
                     }
@@ -399,36 +366,10 @@
                 }
             }
 
-            async stopScan() {
-                Logger.log('QRScannerLibrary', 'info', 'Stopping Scanner...');
-
-                const videoElement = document.getElementById(this.videoId);
-                if (videoElement) {
-                    if (videoElement.srcObject) {
-                        videoElement.srcObject.getTracks().forEach(track => track.stop());
-                        videoElement.srcObject = null;
-                    }
-                    videoElement.pause();
-                    videoElement.src = '';
-                    videoElement.style.display = 'none';
-                }
-
-                if (this.stream) {
-                    this.stream.getTracks().forEach(track => track.stop());
-                    this.stream = null;
-                }
-
-                if (this.codeReader?.videoElement?.srcObject) {
-                    this.codeReader.videoElement.srcObject.getTracks().forEach(track => track.stop());
-                    this.codeReader.videoElement.srcObject = null;
-                    this.codeReader.stream?.getTracks().forEach(track => track.stop());
-                    this.codeReader.stream = null;
-                    await this.codeReader.reset();
-                }
-
+            stopScan() {
                 this.state.isScanning = false;
-                this.state.isCameraGranted = false;
                 this.clearTimeout();
+                this.codeReader.reset();
             }
 
             clearTimeout() {
@@ -563,13 +504,13 @@
                 $box.on('click', '#btn-next-scan', () => this.nextScanner());
             }
 
-            async resetScanner() {
+            resetScanner() {
                 if (!this.state.hasResult && !this.state.qrScanner?.isScanning()) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
                 this.state.hasResult = false;
-                await this.state.qrScanner?.stopScan();
+                this.state.qrScanner?.stopScan();
                 this.render();
             }
 
@@ -584,9 +525,9 @@
                 $('#btn-reset-scan').show();
                 $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                const handleResult = async (result, isSuccess) => {
+                const handleResult = (result, isSuccess) => {
                     this.state.hasResult = true;
-                    await this.state.qrScanner?.stopScan();
+                    this.state.qrScanner?.stopScan();
                     this.updateDOM(result, isSuccess);
                 };
 
