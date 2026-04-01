@@ -175,7 +175,7 @@
 
             bindEvents() {
                 let _self = this;
-                $(document).on('click', '#card-checkin', async () => {
+                $(document).off('click', '#card-checkin').on('click', '#card-checkin', async () => {
                     if (checkinModule) {
                         checkinModule.render();
                     } else {
@@ -184,7 +184,7 @@
                         await checkinModule.init(codeReader);
                     }
                 });
-                $(document).on('click', '#card-checkout', async () => {
+                $(document).off('click', '#card-checkout').on('click', '#card-checkout', async () => {
                     if (checkoutModule) {
                         checkoutModule.render();
                     } else {
@@ -572,9 +572,9 @@
 
             bindEvents() {
                 let _self = this;
-                $(document).on('click', '#btn-back', () => _self.goBack());
-                $(document).on('click', '#btn-start-scan', () => _self.startScanner());
-                $(document).on('click', '#btn-reset-scan', () => _self.resetScanner());
+                $(document).off('click', '#btn-back').on('click', '#btn-back', () => _self.goBack());
+                $(document).off('click', '#btn-start-scan').on('click', '#btn-start-scan', () => _self.startScanner());
+                $(document).off('click', '#btn-reset-scan').on('click', '#btn-reset-scan', () => _self.resetScanner());
             }
 
             bindResultEvents() {
@@ -744,9 +744,9 @@
 
             bindEvents() {
                 let _self = this;
-                $(document).on('click', '#btn-back', () => _self.goBack());
-                $(document).on('click', '#btn-start-scan', () => _self.startCapture());
-                $(document).on('click', '#btn-reset-scan', () => _self.reset());
+                $(document).off('click', '#btn-back').on('click', '#btn-back', () => _self.goBack());
+                $(document).off('click', '#btn-start-scan').on('click', '#btn-start-scan', () => _self.startCapture());
+                $(document).off('click', '#btn-reset-scan').on('click', '#btn-reset-scan', () => _self.reset());
             }
 
             bindResultEvents() {
