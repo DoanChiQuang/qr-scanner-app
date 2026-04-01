@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Checkout QR (OS Camera + ZXing-WASM)</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+            margin: 16px;
+        }
+
+        .btn {
+            padding: 12px 14px;
+            font-size: 16px;
+        }
+
+        .row {
+            margin: 12px 0;
+        }
+
+        #status {
+            white-space: pre-wrap;
+        }
+
+        #preview {
+            max-width: 100%;
+            display: none;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        #downloadLink {
+            display: none;
+            margin-top: 8px;
+        }
+
+        .ok {
+            color: #0a7a2f;
+        }
+
+        .fail {
+            color: #b00020;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Checkout: Chụp bib + detect QR</h2>
+
+    <div class="row">
+        <input id="checkoutCapture" class="btn" type="file" accept="image/*" capture="environment" />
+        <div class="muted">
+            Tip: đưa bib vào giữa khung, đủ sáng, tránh phản chiếu.
+        </div>
+    </div>
+
+    <div class="row">
+        <div id="status">Sẵn sàng.</div>
+    </div>
+
+    <div class="row">
+        <img id="preview" alt="Preview" />
+    </div>
+
+    <div class="row">
+        <a id="downloadLink">Download ảnh</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
+
+    <script>
+        const ZXing = ZXingWASM;
+        const { readBarcodes } = ZXing;
+
+        const input = document.getElementById('checkoutCapture');
+        const statusEl = document.getElementById('status');
+        const previewEl = document.getElementById('preview');
+        const downloadLink = document.getElementById('downloadLink');
+
+        // Bật/tắt log tổng
+        const DEBUG = true;
+
+        input.addEventListener('change', async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+
+            setStatus('Đang xử lý ảnh...', 'muted');
+            downloadLink.style.display = 'none';
+
+            try {
+                const result = await processCheckoutImage({
+                    file,
+                    readBarcodes,
+                    statusEl,
+                    previewEl,
+                    downloadLink,
+                    showPreview: false,
+                    autoDownload: false,
+                    debug: DEBUG,
+                });
+
+                if (result.ok) setStatus(`OK\nQR: ${result.text}`, 'ok');
+                else setStatus('KHÔNG detect được QR.\nGợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'fail');
+
+            } catch (e) {
+                console.error(e);
+                setStatus('Lỗi xử lý ảnh (xem console).', 'fail');
+            } finally {
+                input.value = '';
+            }
+        });
+
+        function setStatus(text, cls) {
+            statusEl.className = cls || '';
+            statusEl.textContent = text;
+        }
+
+        // ====== TRACKING HELPERS ======
+        function mkLogger(enabled, prefix = '[checkout]') {
+            const t0 = performance.now();
+            const log = (step, extra) => {
+                if (!enabled) return;
+                const dt = (performance.now() - t0).toFixed(1);
+                if (extra !== undefined) console.log(`${prefix} +${dt}ms ${step}`, extra);
+                else console.log(`${prefix} +${dt}ms ${step}`);
+            };
+            const group = (title) => enabled && console.groupCollapsed(`${prefix} ${title}`);
+            const groupEnd = () => enabled && console.groupEnd();
+            return { log, group, groupEnd };
+        }
+
+        async function timeStep(logger, name, fn) {
+            const t = performance.now();
+            logger.log(`▶ ${name} ...`);
+            try {
+                const out = await fn();
+                logger.log(`✅ ${name} (${(performance.now() - t).toFixed(1)}ms)`);
+                return out;
+            } catch (e) {
+                logger.log(`❌ ${name} (${(performance.now() - t).toFixed(1)}ms)`, e);
+                throw e;
+            }
+        }
+
+        // ====== MAIN PROCESS ======
+        async function processCheckoutImage({
+            file, readBarcodes, statusEl, previewEl, downloadLink,
+            showPreview, autoDownload, debug
+        }) {
+            const logger = mkLogger(Boolean(debug));
+
+            logger.group('processCheckoutImage');
+            logger.log('file', {
+                name: file.name,
+                type: file.type,
+                sizeKB: Math.round(file.size / 1024),
+            });
+
+            // 1) Decode file -> ImageBitmap
+            const bitmap = await timeStep(logger, 'createImageBitmap(file)', () => createImageBitmap(file));
+            logger.log('bitmap.size', { width: bitmap.width, height: bitmap.height });
+
+            // 2) Draw master canvas (resize)
+            const masterMaxLongEdge = 2200;
+            const fitted = fitContain(bitmap.width, bitmap.height, masterMaxLongEdge);
+
+            const master = document.createElement('canvas');
+            const mctx = master.getContext('2d', { willReadFrequently: true });
+
+            await timeStep(logger, `draw master canvas (longEdge<=${masterMaxLongEdge})`, async () => {
+                master.width = fitted.w;
+                master.height = fitted.h;
+                mctx.drawImage(bitmap, 0, 0, fitted.w, fitted.h);
+            });
+
+            logger.log('master.size', { width: master.width, height: master.height });
+
+            if (showPreview) {
+                await timeStep(logger, 'render preview', async () => {
+                    previewEl.src = master.toDataURL('image/jpeg', 0.85);
+                    previewEl.style.display = 'block';
+                });
+            } else {
+                previewEl.style.display = 'none';
+            }
+
+            // 3) Decode multi-pass
+            const decodeFromCanvas = async (canvas, tag) => {
+                return timeStep(logger, `decode ${tag} (w=${canvas.width}, h=${canvas.height})`, async () => {
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    // Nếu muốn biết time riêng của readBarcodes:
+                    const t = performance.now();
+                    const res = await readBarcodes(imgData);
+                    logger.log(`readBarcodes ${tag} took ${(performance.now() - t).toFixed(1)}ms`);
+
+                    return Array.isArray(res) ? res : [];
+                });
+            };
+
+            let barcodes = [];
+
+            // Pass A: ROI
+            statusEl.textContent = 'Đang detect QR (ROI)...';
+            const roiCanvas = await timeStep(logger, 'cropCenterROI', () => cropCenterROI(master, 0.70, 0.85));
+            const roiSmall = await timeStep(logger, 'resize ROI -> width 1200', () => resizeToWidth(roiCanvas, 1200));
+            barcodes = await decodeFromCanvas(roiSmall, 'ROI-1200');
+
+            // Pass B: FULL
+            if (!barcodes.length) {
+                statusEl.textContent = 'Đang detect QR (FULL)...';
+                const fullSmall = await timeStep(logger, 'resize FULL -> width 1600', () => resizeToWidth(master, 1600));
+                barcodes = await decodeFromCanvas(fullSmall, 'FULL-1600');
+            }
+
+            // Pass C: FULL bigger
+            if (!barcodes.length) {
+                statusEl.textContent = 'Đang detect QR (FULL x2)...';
+                const fullBigger = await timeStep(logger, 'resize FULL -> width 2400', () => resizeToWidth(master, 2400));
+                barcodes = await decodeFromCanvas(fullBigger, 'FULL-2400');
+            }
+
+            logger.log('barcodes', barcodes);
+
+            const text = pickBarcodeText(barcodes);
+            const ok = Boolean(text);
+            logger.log('result', { ok, text });
+
+            // 4) Compress to 300–500KB
+            statusEl.textContent = 'Đang chuẩn bị ảnh download (300–500KB)...';
+            const compressed = await timeStep(logger, 'compressCanvasToTargetKB(300..500)', () => compressCanvasToTargetKB(master, 300, 500));
+            logger.log('compressed', { sizeKB: Math.round(compressed.sizeKB) });
+
+            const url = URL.createObjectURL(compressed.blob);
+            downloadLink.href = url;
+            downloadLink.download = buildCheckoutFilename(text);
+            downloadLink.textContent = `Download ảnh (${Math.round(compressed.sizeKB)}KB)`;
+            downloadLink.style.display = 'inline-block';
+
+            if (autoDownload) {
+                await timeStep(logger, 'autoDownload click()', async () => downloadLink.click());
+            }
+
+            logger.groupEnd();
+            return { ok, text, barcodes };
+        }
+
+        // ====== HELPERS ======
+        function pickBarcodeText(barcodes) {
+            if (!barcodes || !barcodes.length) return '';
+            return barcodes[0].text || barcodes[0].rawValue || '';
+        }
+
+        function fitContain(w, h, maxLongEdge) {
+            const longEdge = Math.max(w, h);
+            if (longEdge <= maxLongEdge) return { w, h };
+            const scale = maxLongEdge / longEdge;
+            return { w: Math.round(w * scale), h: Math.round(h * scale) };
+        }
+
+        function cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
+            const sw = sourceCanvas.width, sh = sourceCanvas.height;
+            const rw = Math.max(1, Math.round(sw * roiWPercent));
+            const rh = Math.max(1, Math.round(sh * roiHPercent));
+            const rx = Math.round((sw - rw) / 2);
+            const ry = Math.round((sh - rh) / 2);
+
+            const c = document.createElement('canvas');
+            c.width = rw; c.height = rh;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+            return c;
+        }
+
+        function resizeToWidth(sourceCanvas, targetW) {
+            if (sourceCanvas.width <= targetW) return sourceCanvas;
+
+            const scale = targetW / sourceCanvas.width;
+            const tw = targetW;
+            const th = Math.max(1, Math.round(sourceCanvas.height * scale));
+
+            const c = document.createElement('canvas');
+            c.width = tw; c.height = th;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(sourceCanvas, 0, 0, tw, th);
+            return c;
+        }
+
+        async function compressCanvasToTargetKB(canvas, minKB, maxKB) {
+            let low = 0.55, high = 0.92;
+            let best = null;
+
+            for (let i = 0; i < 9; i++) {
+                const q = (low + high) / 2;
+                const blob = await canvasToJpegBlob(canvas, q);
+                const sizeKB = blob.size / 1024;
+                best = { blob, sizeKB, q };
+
+                if (sizeKB > maxKB) high = q;
+                else if (sizeKB < minKB) low = q;
+                else break;
+            }
+
+            if (best && best.sizeKB > maxKB) {
+                const smaller = resizeToWidth(canvas, Math.round(canvas.width * 0.85));
+                const blob = await canvasToJpegBlob(smaller, 0.78);
+                return { blob, sizeKB: blob.size / 1024 };
+            }
+
+            return { blob: best.blob, sizeKB: best.sizeKB };
+        }
+
+        function canvasToJpegBlob(canvas, quality) {
+            return new Promise((resolve) => {
+                canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
+            });
+        }
+
+        function buildCheckoutFilename(qrText) {
+            const safe = (qrText || 'unknown')
+                .toString()
+                .slice(0, 48)
+                .replace(/[^\w\-]+/g, '_');
+
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            return `checkout_${safe}_${ts}.jpg`;
+        }
+    </script>
+</body>
+
+</html>

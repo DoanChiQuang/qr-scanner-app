@@ -1,77 +1,118 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>QR Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: system-ui, sans-serif;
-            background: #000;
-            color: #fff;
-            text-align: center;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        h2 { margin: 10px 0; font-size: 1.2rem; }
-        button {
-            background: #007aff;
-            color: white;
-            border: none;
-            padding: 16px 24px;
-            margin: 10px;
-            font-size: 1.1rem;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 320px;
-        }
-        video, canvas {
-            max-width: 100%;
-            display: block;
-            margin: 0 auto;
-        }
-        #result {
-            margin: 10px;
-            padding: 12px;
-            background: #1c1c1e;
-            border-radius: 8px;
-            min-height: 1.5em;
-            word-break: break-all;
-        }
-        input[type="file"] { display: none; }
-    </style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>QR Scanner</title>
+	<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			font-family: system-ui, sans-serif;
+			background: #000;
+			color: #fff;
+			text-align: center;
+			height: 100vh;
+			display: flex;
+			flex-direction: column;
+		}
+
+		h2 {
+			margin: 10px 0;
+			font-size: 1.2rem;
+		}
+
+		button {
+			background: #007aff;
+			color: white;
+			border: none;
+			padding: 16px 24px;
+			margin: 10px;
+			font-size: 1.1rem;
+			border-radius: 12px;
+			width: 90%;
+			max-width: 320px;
+		}
+
+	#reader {
+			width: 100%;
+			max-width: 500px;
+			margin: 10px auto;
+		}
+
+		#result {
+			margin: 10px;
+			padding: 12px;
+			background: #1c1c1e;
+			border-radius: 8px;
+			min-height: 1.5em;
+			word-break: break-all;
+		}
+
+		input[type="file"] {
+			display: none;
+		}
+	</style>
 </head>
+
 <body>
-    <h2>QR Code Scanner</h2>
-    <input type="file" id="cameraInput" accept="image/*" capture="environment">
-    <button id="btnOpenCamera">Mở Camera & Chụp</button>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-    <pre id="result"></pre>
+	<h2>QR Code Scanner</h2>
+	<div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+	<button id="btnStart">Bắt đầu Camera</button>
+	<button id="btnStop" style="display:none;">Dừng Camera</button>
+	<pre id="result"></pre>
 
-    <script>
-        const cameraInput = document.getElementById('cameraInput');
-        const btnOpen = document.getElementById('btnOpenCamera');
+	<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+	<script>
+		let html5QrCode = null;
+		const btnStart = document.getElementById('btnStart');
+		const btnStop = document.getElementById('btnStop');
 
-        btnOpen.onclick = () => cameraInput.click();
+		btnStart.onclick = () => {
+			btnStart.style.display = 'none';
+			btnStop.style.display = 'inline-block';
+			startScanner();
+		};
 
-        cameraInput.addEventListener('change', e => {
-            const file = e.target.files[0];
-            if (!file) return;
+		btnStop.onclick = () => {
+			stopScanner();
+			btnStart.style.display = 'inline-block';
+			btnStop.style.display = 'none';
+		};
 
-            const html5QrCode = new Html5Qrcode("canvas");
-            html5QrCode.scanFile(file, true)
-                .then(decodedText => {
-                    document.getElementById('result').textContent = 'QR: ' + decodedText;
-                })
-                .catch(err => {
-                    document.getElementById('result').textContent = 'Không tìm thấy QR code';
-                });
-        });
-    </script>
+		function startScanner() {
+			html5QrCode = new Html5Qrcode("reader");
+			html5QrCode.start(
+				{ facingMode: "environment" },
+				{
+					fps: 10,
+					qrbox: { width: 250, height: 250 },
+					aspectRatio: 1.0
+				},
+				(decodedText) => {
+					document.getElementById('result').textContent = 'QR: ' + decodedText;
+					stopScanner();
+					btnStart.style.display = 'inline-block';
+					btnStop.style.display = 'none';
+				},
+				(errorMessage) => {}
+			).catch(err => {
+				document.getElementById('result').textContent = 'Lỗi: ' + err;
+				btnStart.style.display = 'inline-block';
+				btnStop.style.display = 'none';
+			});
+		}
+
+		function stopScanner() {
+			if (html5QrCode) {
+				html5QrCode.stop().then(() => {
+					html5QrCode.clear();
+				}).catch(() => {});
+			}
+		}
+	</script>
 </body>
+
 </html>
