@@ -34,7 +34,12 @@
 </head>
 
 <body>
-    <div id="main"></div>
+    <div id="main">
+        <div id="box-auth" class="box" style="display:none"></div>
+        <div id="box-screen-manager" class="box" style="display:none"></div>
+        <div id="box-checkin" class="box" style="display:none"></div>
+        <div id="box-checkout" class="box" style="display:none"></div>
+    </div>
     <div id="turnstile-container"></div>
     <div class="modal" id="modal">
         <div class="spinner"></div>
@@ -46,6 +51,11 @@
         let screenManager = null;
         let checkinModule = null;
         let checkoutModule = null;
+
+        function showBox(boxId) {
+            $('.box').not(boxId).hide().empty();
+            $(boxId).show();
+        }
 
         class Config {
             static API_BASE_URL = 'https://api.esportsfan.net/';
@@ -111,12 +121,15 @@
 
         class ScreenManager {
             selectors = {
-                main: '#main',
+                box: '#box-screen-manager',
             };
 
+            constructor() {
+                this.bindEvents();
+            }
+
             render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
+                $(this.selectors.box).html(`
                     <div class="screen-manager">
                         <div class="screen-manager__header">
                             <div class="screen-manager__logo">
@@ -170,12 +183,12 @@
                         </div>
                     </div>
                 `);
-                _self.bindEvents();
+                showBox(this.selectors.box);
             }
 
             bindEvents() {
-                let _self = this;
-                $(document).off('click', '#card-checkin').on('click', '#card-checkin', async () => {
+                const $box = $(this.selectors.box);
+                $box.on('click', '#card-checkin', async () => {
                     if (checkinModule) {
                         checkinModule.render();
                     } else {
@@ -184,7 +197,7 @@
                         await checkinModule.init(codeReader);
                     }
                 });
-                $(document).off('click', '#card-checkout').on('click', '#card-checkout', async () => {
+                $box.on('click', '#card-checkout', async () => {
                     if (checkoutModule) {
                         checkoutModule.render();
                     } else {
@@ -197,7 +210,7 @@
 
         class AuthModule {
             selectors = {
-                main: '#main',
+                box: '#box-auth',
                 form: '#form',
                 btnLogin: '#btn-login'
             };
@@ -207,19 +220,18 @@
             };
 
             async init() {
-                let _self = this;
-                await _self.getAccountInfo().then(info => {
-                    _self.state.accountInfo = info;
-                }).catch(() => {
+                this.bindEvents();
+                try {
+                    this.state.accountInfo = await this.getAccountInfo();
+                } catch {
                     ToastService.show('Session expired. Please log in again.', 'error', 5000);
-                });
+                }
                 Logger.log('AuthModule', 'info', 'Initialized');
-                return _self;
+                return this;
             }
 
             render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
+                $(this.selectors.box).html(`
                     <div class="auth-screen">
                         <div class="auth-screen__header">
                             <div class="auth-screen__logo">
@@ -249,25 +261,21 @@
                         </div>
                     </div>
                 `);
-                _self.bindEvents();
+                showBox(this.selectors.box);
             }
 
             isLoggedIn() {
-                let _self = this;
-                return !!_self.state.accountInfo;
+                return !!this.state.accountInfo;
             }
 
             bindEvents() {
-                let _self = this;
-                let {
-                    selectors
-                } = _self;
-                $(document).on('submit', selectors.form, async (e) => {
+                const { selectors } = this;
+                $(selectors.box).on('submit', selectors.form, async (e) => {
                     e.preventDefault();
                     $(selectors.btnLogin).prop('disabled', true).text('Đang đăng nhập...');
                     try {
-                        const token = await new Promise((resolve) => _self.renderTurnstile(resolve));
-                        await _self.handleLogin(token);
+                        const token = await new Promise((resolve) => this.renderTurnstile(resolve));
+                        await this.handleLogin(token);
                     } catch (error) {
                         ToastService.show(error.message, 'error', 5000);
                         Logger.log('AuthModule', 'error', error.message);
@@ -278,22 +286,17 @@
             }
 
             async handleLogin(token = null) {
-                let _self = this;
                 const email = $('#email').val();
                 const password = $('#password').val();
                 if (!email || !password) throw new Error('Please enter email and password');
 
                 const result = await ApiService.fetch('account/login', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        email,
-                        password,
-                        _token: token
-                    })
+                    body: JSON.stringify({ email, password, _token: token })
                 });
 
                 if (result?.session_id && result?.account) {
-                    _self.state.accountInfo = result.account;
+                    this.state.accountInfo = result.account;
                     window.location.reload();
                 } else {
                     throw new Error('Login failed. Please check your credentials');
@@ -442,51 +445,35 @@
 
         class CheckinModule {
             selectors = {
-                main: '#main',
-                container: '#scanner-frame-container',
-                instruction: '.instruction-text',
-                info: '.info-section',
-                btnGroup: '.btn-group',
-                btnReset: '#btn-reset-scan',
-                btnStart: '#btn-start-scan',
-                btnNext: '#btn-next-scan',
-                modal: '#modal'
+                box: '#box-checkin',
             };
 
+            videoId = 'qr-video';
+
             state = {
-                data: null,
                 isInitialized: false,
                 hasResult: false,
                 qrScanner: null
             };
 
-            constructor() {
-                let _self = this;
-                _self.videoId = 'qr-video';
-            }
-
             async init(codeReader) {
-                let _self = this;
-                if (_self.state.isInitialized) {
-                    ToastService.show('Checkin Module Already Initialized', 'error', 5000);
-                    return _self;
-                }
+                if (this.state.isInitialized) return this;
 
-                _self.state.isInitialized = true;
-                _self.state.qrScanner = new QRScannerLibrary(codeReader, _self.videoId);
-                _self.render();
+                this.state.isInitialized = true;
+                this.state.qrScanner = new QRScannerLibrary(codeReader, this.videoId);
+                this.bindEvents();
+                this.render();
                 Logger.log('CheckinModule', 'info', 'Initialized');
-                return _self;
+                return this;
             }
 
             goBack() {
-                this.state.isInitialized = false;
+                this.state.qrScanner?.stopScan();
                 screenManager.render();
             }
 
             render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
+                $(this.selectors.box).html(`
                     <div class="scanner-screen">
                         <div class="scanner-screen__header">
                             <button class="scanner-screen__back" id="btn-back">
@@ -498,7 +485,7 @@
                         </div>
 
                         <div class="scanner-screen__frame" id="scanner-frame-container">
-                            <video id="${_self.videoId}" width="100%" height="100%"></video>
+                            <video id="${this.videoId}" width="100%" height="100%"></video>
                         </div>
 
                         <div class="scanner-screen__content">
@@ -530,11 +517,10 @@
                         </div>
                     </div>
                 `);
-                _self.bindEvents();
+                showBox(this.selectors.box);
             }
 
             updateDOM(result, isSuccess = false) {
-                let _self = this;
                 const instruction = $('#instruction');
                 const resultContainer = $('#result-container');
                 const resultValue = $('#result-value');
@@ -562,7 +548,6 @@
                             Về trang chủ
                         </button>
                     `);
-                    _self.bindResultEvents();
                 } else {
                     instruction.addClass('scanner-screen__instruction--error').text('Không hợp lệ. Thử lại.');
                     btnStart.show();
@@ -571,76 +556,87 @@
             }
 
             bindEvents() {
-                let _self = this;
-                $(document).off('click', '#btn-back').on('click', '#btn-back', () => _self.goBack());
-                $(document).off('click', '#btn-start-scan').on('click', '#btn-start-scan', () => _self.startScanner());
-                $(document).off('click', '#btn-reset-scan').on('click', '#btn-reset-scan', () => _self.resetScanner());
-            }
-
-            bindResultEvents() {
-                let _self = this;
-                $(document).on('click', '#btn-next-scan', () => _self.nextScanner());
-                $(document).on('click', '#btn-back-result', () => _self.goBack());
+                const $box = $(this.selectors.box);
+                $box.on('click', '#btn-back, #btn-back-result', () => this.goBack());
+                $box.on('click', '#btn-start-scan', () => this.startScanner());
+                $box.on('click', '#btn-reset-scan', () => this.resetScanner());
+                $box.on('click', '#btn-next-scan', () => this.nextScanner());
             }
 
             async resetScanner() {
-                let _self = this;
-                if (!_self.state.hasResult && !_self.state.qrScanner?.isScanning()) {
+                if (!this.state.hasResult && !this.state.qrScanner?.isScanning()) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
-                _self.state.hasResult = false;
-
-                await _self.state.qrScanner?.stopScan();
-
-                _self.render();
+                this.state.hasResult = false;
+                await this.state.qrScanner?.stopScan();
+                this.render();
             }
 
             nextScanner() {
-                let _self = this;
-                _self.state.hasResult = false;
-                _self.render();
-                setTimeout(() => _self.startScanner(), 300);
+                this.state.hasResult = false;
+                this.render();
+                setTimeout(() => this.startScanner(), 300);
             }
 
             async startScanner() {
-                let _self = this;
-
                 $('#btn-start-scan').hide();
                 $('#btn-reset-scan').show();
                 $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                await _self.state.qrScanner.startScan({
-                    onSuccess: async (qrData) => {
-                        _self.state.hasResult = true;
-                        await _self.state.qrScanner?.stopScan();
-                        _self.updateDOM(qrData, true);
-                    },
-                    onError: async (error) => {
-                        _self.state.hasResult = true;
-                        await _self.state.qrScanner?.stopScan();
-                        _self.updateDOM(null, false);
+                const handleResult = async (result, isSuccess) => {
+                    this.state.hasResult = true;
+                    await this.state.qrScanner?.stopScan();
+                    this.updateDOM(result, isSuccess);
+                };
+
+                await this.state.qrScanner.startScan({
+                    onSuccess: (qrData) => handleResult(qrData, true),
+                    onError: (error) => {
                         Logger.log('CheckinModule', 'error', error.message);
+                        return handleResult(null, false);
                     },
-                    onTimeout: async () => {
-                        _self.state.hasResult = true;
-                        await _self.state.qrScanner?.stopScan();
-                        _self.updateDOM(null, false);
-                    }
+                    onTimeout: () => handleResult(null, false)
                 });
+            }
+        }
+
+        class ImageUtils {
+            static fitContain(w, h, maxLongEdge) {
+                const longEdge = Math.max(w, h);
+                if (longEdge <= maxLongEdge) return { w, h };
+                const scale = maxLongEdge / longEdge;
+                return { w: Math.round(w * scale), h: Math.round(h * scale) };
+            }
+
+            static cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
+                const sw = sourceCanvas.width, sh = sourceCanvas.height;
+                const rw = Math.max(1, Math.round(sw * roiWPercent));
+                const rh = Math.max(1, Math.round(sh * roiHPercent));
+                const rx = Math.round((sw - rw) / 2);
+                const ry = Math.round((sh - rh) / 2);
+
+                const c = document.createElement('canvas');
+                c.width = rw; c.height = rh;
+                c.getContext('2d').drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+                return c;
+            }
+
+            static resizeToWidth(sourceCanvas, targetW) {
+                if (sourceCanvas.width <= targetW) return sourceCanvas;
+                const scale = targetW / sourceCanvas.width;
+                const th = Math.max(1, Math.round(sourceCanvas.height * scale));
+
+                const c = document.createElement('canvas');
+                c.width = targetW; c.height = th;
+                c.getContext('2d').drawImage(sourceCanvas, 0, 0, targetW, th);
+                return c;
             }
         }
 
         class CheckoutModule {
             selectors = {
-                main: '#main',
-                container: '#scanner-frame-container',
-                instruction: '.instruction-text',
-                info: '.info-section',
-                btnGroup: '.btn-group',
-                btnReset: '#btn-reset-scan',
-                btnStart: '#btn-start-scan',
-                modal: '#modal'
+                box: '#box-checkout',
             };
 
             state = {
@@ -648,26 +644,21 @@
             };
 
             async init() {
-                let _self = this;
-                if (_self.state.isInitialized) {
-                    ToastService.show('Checkout Module Already Initialized', 'error', 5000);
-                    return _self;
-                }
+                if (this.state.isInitialized) return this;
 
-                _self.state.isInitialized = true;
-                _self.render();
+                this.state.isInitialized = true;
+                this.bindEvents();
+                this.render();
                 Logger.log('CheckoutModule', 'info', 'Initialized');
-                return _self;
+                return this;
             }
 
             goBack() {
-                this.state.isInitialized = false;
                 screenManager.render();
             }
 
             render() {
-                let _self = this;
-                $(_self.selectors.main).html(`
+                $(this.selectors.box).html(`
                     <div class="scanner-screen">
                         <div class="scanner-screen__header">
                             <button class="scanner-screen__back" id="btn-back">
@@ -704,11 +695,10 @@
                         </div>
                     </div>
                 `);
-                _self.bindEvents();
+                showBox(this.selectors.box);
             }
 
             showResult(resultText, imageSrc) {
-                let _self = this;
                 const instruction = $('#instruction');
                 const resultContainer = $('#result-container');
                 const resultValue = $('#result-value');
@@ -739,31 +729,20 @@
                         Về trang chủ
                     </button>
                 `);
-                _self.bindResultEvents();
             }
 
             bindEvents() {
-                let _self = this;
-                $(document).off('click', '#btn-back').on('click', '#btn-back', () => _self.goBack());
-                $(document).off('click', '#btn-start-scan').on('click', '#btn-start-scan', () => _self.startCapture());
-                $(document).off('click', '#btn-reset-scan').on('click', '#btn-reset-scan', () => _self.reset());
-            }
-
-            bindResultEvents() {
-                let _self = this;
-                $(document).on('click', '#btn-reset-scan', () => _self.reset());
-                $(document).on('click', '#btn-back-result', () => _self.goBack());
+                const $box = $(this.selectors.box);
+                $box.on('click', '#btn-back, #btn-back-result', () => this.goBack());
+                $box.on('click', '#btn-start-scan', () => this.startCapture());
+                $box.on('click', '#btn-reset-scan', () => this.reset());
             }
 
             reset() {
-                let _self = this;
-                _self.render();
+                this.render();
             }
 
             async startCapture() {
-                const ZXing = ZXingWASM;
-                let _self = this;
-
                 $('#btn-start-scan').hide();
                 $('#instruction').text('Chọn ảnh từ thư viện...');
 
@@ -772,129 +751,66 @@
                 $('#file').off('change').on('change', async (event) => {
                     const file = event.target.files[0];
                     if (!file) {
-                        _self.render();
+                        this.render();
                         return;
                     }
 
                     try {
-                        const { readBarcodes } = ZXing;
-                        console.log('Selected file:', file.name, file.size, file.type);
+                        const { readBarcodes } = ZXingWASM;
+                        Logger.log('CheckoutModule', 'info', `Selected file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
 
                         $('#instruction').text('Đang xử lý ảnh...');
 
-                        const result = await _self.processCheckoutImage({
-                            file,
-                            readBarcodes,
-                            debug: true
-                        });
+                        const result = await this.processCheckoutImage({ file, readBarcodes });
 
                         if (result.ok) {
-                            console.log('Decoded QR Code:', result.text);
                             const imageUrl = URL.createObjectURL(file);
-                            _self.showResult(result.text, imageUrl);
+                            this.showResult(result.text, imageUrl);
                         } else {
                             ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
-                            _self.render();
+                            this.render();
                         }
                     } catch (error) {
                         ToastService.show(`Lỗi xử lý ảnh: ${error.message}`, 'error', 5000);
-                        console.error(error);
-                        _self.render();
+                        Logger.log('CheckoutModule', 'error', error.message);
+                        this.render();
                     } finally {
                         event.target.value = '';
                     }
                 });
             }
 
-            async processCheckoutImage({ file, readBarcodes, debug }) {
-                const logger = (msg, data) => {
-                    if (debug) console.log(`[checkout] ${msg}`, data || '');
-                };
-
-                logger('processCheckoutImage', { name: file.name, type: file.type, sizeKB: Math.round(file.size / 1024) });
-
+            async processCheckoutImage({ file, readBarcodes }) {
                 const bitmap = await createImageBitmap(file);
-                logger('bitmap.size', { width: bitmap.width, height: bitmap.height });
-
-                const masterMaxLongEdge = 2200;
-                const fitted = this.fitContain(bitmap.width, bitmap.height, masterMaxLongEdge);
+                const fitted = ImageUtils.fitContain(bitmap.width, bitmap.height, 2200);
 
                 const master = document.createElement('canvas');
-                const mctx = master.getContext('2d', { willReadFrequently: true });
                 master.width = fitted.w;
                 master.height = fitted.h;
-                mctx.drawImage(bitmap, 0, 0, fitted.w, fitted.h);
-                logger('master.size', { width: master.width, height: master.height });
+                master.getContext('2d', { willReadFrequently: true }).drawImage(bitmap, 0, 0, fitted.w, fitted.h);
 
-                const decodeFromCanvas = async (canvas, tag) => {
+                const decodeFromCanvas = async (canvas) => {
                     const ctx = canvas.getContext('2d', { willReadFrequently: true });
                     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const t = performance.now();
                     const res = await readBarcodes(imgData);
-                    logger(`decode ${tag} took ${(performance.now() - t).toFixed(1)}ms`);
                     return Array.isArray(res) ? res : [];
                 };
 
-                let barcodes = [];
+                const strategies = [
+                    () => decodeFromCanvas(ImageUtils.resizeToWidth(ImageUtils.cropCenterROI(master, 0.70, 0.85), 1200)),
+                    () => decodeFromCanvas(ImageUtils.resizeToWidth(master, 1600)),
+                    () => decodeFromCanvas(ImageUtils.resizeToWidth(master, 2400)),
+                ];
 
-                logger('decode ROI...');
-                const roiCanvas = this.cropCenterROI(master, 0.70, 0.85);
-                const roiSmall = this.resizeToWidth(roiCanvas, 1200);
-                barcodes = await decodeFromCanvas(roiSmall, 'ROI-1200');
-
-                if (!barcodes.length) {
-                    logger('decode FULL 1600...');
-                    const fullSmall = this.resizeToWidth(master, 1600);
-                    barcodes = await decodeFromCanvas(fullSmall, 'FULL-1600');
+                for (const strategy of strategies) {
+                    const barcodes = await strategy();
+                    if (barcodes.length) {
+                        const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                        if (text) return { ok: true, text, barcodes };
+                    }
                 }
 
-                if (!barcodes.length) {
-                    logger('decode FULL 2400...');
-                    const fullBigger = this.resizeToWidth(master, 2400);
-                    barcodes = await decodeFromCanvas(fullBigger, 'FULL-2400');
-                }
-
-                logger('barcodes', barcodes);
-                const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
-                const ok = Boolean(text);
-                logger('result', { ok, text });
-
-                return { ok, text, barcodes };
-            }
-
-            fitContain(w, h, maxLongEdge) {
-                const longEdge = Math.max(w, h);
-                if (longEdge <= maxLongEdge) return { w, h };
-                const scale = maxLongEdge / longEdge;
-                return { w: Math.round(w * scale), h: Math.round(h * scale) };
-            }
-
-            cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
-                const sw = sourceCanvas.width, sh = sourceCanvas.height;
-                const rw = Math.max(1, Math.round(sw * roiWPercent));
-                const rh = Math.max(1, Math.round(sh * roiHPercent));
-                const rx = Math.round((sw - rw) / 2);
-                const ry = Math.round((sh - rh) / 2);
-
-                const c = document.createElement('canvas');
-                c.width = rw; c.height = rh;
-                const ctx = c.getContext('2d');
-                ctx.drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
-                return c;
-            }
-
-            resizeToWidth(sourceCanvas, targetW) {
-                if (sourceCanvas.width <= targetW) return sourceCanvas;
-
-                const scale = targetW / sourceCanvas.width;
-                const tw = targetW;
-                const th = Math.max(1, Math.round(sourceCanvas.height * scale));
-
-                const c = document.createElement('canvas');
-                c.width = tw; c.height = th;
-                const ctx = c.getContext('2d');
-                ctx.drawImage(sourceCanvas, 0, 0, tw, th);
-                return c;
+                return { ok: false, text: '', barcodes: [] };
             }
         }
 
