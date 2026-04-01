@@ -795,23 +795,12 @@
                 btnGroup: '.btn-group',
                 btnReset: '#btn-reset-scan',
                 btnStart: '#btn-start-scan',
-                btnCapture: '#btn-capture',
-                btnConfirm: '#btn-confirm',
-                btnNext: '#btn-next-scan',
                 modal: '#modal'
             };
 
             state = {
-                data: null,
-                isInitialized: false,
-                hasResult: false,
-                qrScanner: null
+                isInitialized: false
             };
-
-            constructor() {
-                let _self = this;
-                _self.videoId = 'qr-video';
-            }
 
             async init() {
                 let _self = this;
@@ -842,107 +831,29 @@
 
             setupDOM() {
                 let _self = this;
-                _self.state.ticketDetail = null;
-                $(_self.selectors.container).html(`
-                    <div class="scanner-line"></div>
-                    <video id="${_self.videoId}" width="100%" height="100%"></video>
-                `);
-                $(_self.selectors.instruction).html('Đặt mã QR vào khung để quét').removeClass('error');
+                $(_self.selectors.container).html('');
+                $(_self.selectors.instruction).html('Chụp ảnh bib có mã QR').removeClass('error');
                 $(_self.selectors.info).html('');
                 $(_self.selectors.btnGroup).html(`
                     <a href="#" title="Reset" class="btn grey" id="btn-reset-scan">Reset</a>
-                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Scan QR</a>
-                    <a href="#" title="Capture" class="btn" id="btn-capture">Capture</a>
-                    <a href="#" title="Confirm" class="btn" id="btn-confirm">Confirm</a>
-                    <a href="#" title="Next Scan" class="btn" id="btn-next-scan">Next Scan</a>
+                    <a href="#" title="Scan QR" class="btn" id="btn-start-scan">Mở Camera</a>
                 `);
                 $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnConfirm).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnCapture).hide();
                 $(_self.selectors.btnStart).show();
-            }
-
-            updateDOM(statusCode) {
-                let _self = this;
-                const {
-                    USER_READY_CHECKIN,
-                    USER_READY_CHECKOUT
-                } = Config.STATUS_CODES;
-                $(_self.selectors.instruction).html('');
-                $(_self.selectors.info).html('');
-                $(_self.selectors.btnReset).hide();
-                $(_self.selectors.btnStart).hide();
-                $(_self.selectors.btnNext).hide();
-                $(_self.selectors.btnCapture).hide();
-                $(_self.selectors.btnConfirm).hide();
-
-                switch (statusCode) {
-                    case USER_READY_CHECKIN:
-                        // $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Chưa Check-in'));
-                        $(_self.selectors.btnNext).show();
-                        break;
-                    case USER_READY_CHECKOUT:
-                        // $(_self.selectors.container).html(`<img src="${Config.ICONS.CLOCK}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('checked', 'Sẵn sàng Check-out'));
-                        $(_self.selectors.btnCapture).show();
-                        $(_self.selectors.btnReset).show();
-                        break;
-                    default:
-                        // $(_self.selectors.container).html(`<img src="${Config.ICONS.REMOVE}" alt="">`);
-                        $(_self.selectors.info).html(_self.generateInfoRows('error', 'Không hợp lệ'));
-                        $(_self.selectors.btnReset).show();
-                        break;
-                }
-            }
-
-            generateInfoRows(statusClass, statusText) {
-                let _self = this;
-                try {
-                    return `
-                        <div class="info-row"><span>Trạng thái: </span><span class="${statusClass}">${statusText}</span></div>
-                        <hr>
-                        <div class="info-row"><span>BiB: <strong>123456</strong></span></div>
-                        <div class="info-row"><span>Họ tên: <strong>Đoàn Chí Quang</strong></span></div>
-                        <div class="info-row"><span>Số điện thoại: <strong>0909000999</strong></span></div>
-                        <div class="info-row"><span>Email: <strong>example@gmail.com</strong></span></div>
-                    `;
-                } catch (error) {
-                    Logger.log('CheckinModule', 'error', error.message);
-                    return 'Thông tin không hợp lệ';
-                }
             }
 
             bindEvents() {
                 let _self = this;
-                $(document).on('click', _self.selectors.btnStart, () => _self.startScanner());
-                $(document).on('click', _self.selectors.btnReset, () => _self.resetScanner());
-                $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
-                $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckout());
-                $(document).on('click', _self.selectors.btnCapture, () => _self.capturePicture());
+                $(document).on('click', _self.selectors.btnStart, () => _self.startCapture());
+                $(document).on('click', _self.selectors.btnReset, () => _self.reset());
             }
 
-            async resetScanner() {
-                let _self = this;
-                if (!_self.state.hasResult && !_self.state.qrScanner?.isScanning()) {
-                    ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
-                    return;
-                }
-                _self.state.hasResult = false;
-
-                await _self.state.qrScanner?.stopScan();
-
-                _self.setupDOM();
-            }
-
-            nextScanner() {
+            reset() {
                 let _self = this;
                 _self.setupDOM();
-                _self.startScanner();
             }
 
-            async startScanner() {
+            async startCapture() {
                 const ZXing = ZXingWASM;
                 let _self = this;
 
@@ -950,160 +861,124 @@
                 $(_self.selectors.btnReset).show();
                 $('#file').click();
 
-                $('#file').on('change', async (event) => {
+                $('#file').off('change').on('change', async (event) => {
                     const file = event.target.files[0];
-                    if (file) {
-                        try {
-                            const { readBarcodes } = ZXing;
-                            console.log('Selected file:', file.name, file.size, file.type);
-                            const result = await readBarcodes(file, {
-                                tryHarder: true,
-                                tryDenoise: true,
-                                formats: ['QRCode'],
-                                maxNumberOfSymbols: 1
-                            });
+                    if (!file) return;
 
-                            if (result?.length > 0) {
-                                console.log('Decoded QR Code Result:', result);
-                                const qrData = result[0].rawValue;
-                                Logger.log('CheckoutModule', 'info', 'QR Code from Image:', qrData);
-                            } else {
-                                ToastService.show('No QR code found in the image', 'error', 5000);
-                            }
-                        } catch (error) {
-                            ToastService.show(`Error decoding QR code: ${error.message}`, 'error', 5000);
+                    try {
+                        const { readBarcodes } = ZXing;
+                        console.log('Selected file:', file.name, file.size, file.type);
+
+                        const result = await _self.processCheckoutImage({
+                            file,
+                            readBarcodes,
+                            debug: true
+                        });
+
+                        if (result.ok) {
+                            console.log('Decoded QR Code:', result.text);
+                            $(_self.selectors.instruction).html(`<span class="ok">QR: ${result.text}</span>`);
+                        } else {
+                            ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
                         }
+                    } catch (error) {
+                        ToastService.show(`Lỗi xử lý ảnh: ${error.message}`, 'error', 5000);
+                        console.error(error);
+                    } finally {
+                        event.target.value = '';
                     }
                 });
             }
 
-            async capturePicture() {
-                let _self = this;
-
-                $(_self.selectors.btnCapture).hide();
-                $(_self.selectors.btnReset).show();
-                $(_self.selectors.btnConfirm).show();
-
-                await _self.state.qrScanner.capturePicture({
-                    showPreview: true,
-                    previewContainer: _self.selectors.info,
-                    onSuccess: async (result) => {
-                        _self.state.capturedBlob = result.blob;
-                        await _self.state.qrScanner?.stopScan();
-                        Logger.log('CheckoutModule', 'info', 'Picture captured:', result.filename);
-                    },
-                    onError: async (error) => {
-                        await _self.state.qrScanner?.stopScan();
-                        Logger.log('CheckoutModule', 'error', 'Capture failed:', error.message);
-                    }
-                });
-            }
-
-            async handleScanResult(data) {
-                let _self = this;
-                Logger.log('CheckoutModule', 'info', 'Step 4: Handling Scan Result', data);
-                try {
-                    console.log('Raw QR Data:', data);
-                    // const content = _self.deobfuscateData(data);
-                    // const parsed = _self.parseScannedData(content);
-
-                    // Logger.log('CheckoutModule', 'info', 'Step 4.1: Deobfuscated Content:', content);
-                    // Logger.log('CheckoutModule', 'info', 'Step 4.2: Parsed Result:', parsed);
-
-                    // if (parsed.version != 1 || parsed.fields.length == 0) {
-                    //     throw new Error('Invalid QR Code Data');
-                    // }
-
-                    // _self.state.data = await _self.getData(content);
-                    // if (!_self.state.data) {
-                    //     throw new Error('Ticket Not Found or Invalid');
-                    // }
-
-                    _self.updateDOM(2); // For Debug
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            async handleConfirmCheckout() {
-                let _self = this;
-                Logger.log('CheckoutModule', 'info', 'Step 5: Confirming Check-in', _self.state.ticketDetail);
-                try {
-                    const {
-                        ticketDetail
-                    } = _self.state;
-                    if (!ticketDetail?.ticket_code) {
-                        throw new Error('No Ticket to Confirm');
-                    }
-
-                    const params = {
-                        ticket_code: ticketDetail.ticket_code,
-                        order_gift_id: ticketDetail.gifts?.order_gift_id || null
-                    };
-
-                    const isConfirmed = await _self.confirmCheckout(params);
-                    if (isConfirmed) {
-                        _self.updateDOM(Config.STATUS_CODES.USER_CONFIRMATION_SUCCESS);
-                        ToastService.show('Check-in Successful', 'success', 5000);
-                    } else {
-                        throw new Error('Check-in Failed');
-                    }
-                } catch (error) {
-                    ToastService.show(error.message, 'error', 5000);
-                }
-            }
-
-            deobfuscateData(encoded, secret = 'sEcReT123') {
-                try {
-                    const b64 = encoded.split('').reverse().join('')
-                        .replace(/-/g, '+')
-                        .replace(/_/g, '/');
-                    return atob(b64).replaceAll(secret, '');
-                } catch {
-                    return '';
-                }
-            }
-
-            parseScannedData(data) {
-                if (!data || typeof data !== 'string') {
-                    return {
-                        version: '',
-                        fields: []
-                    };
-                }
-                const parts = data.split('|');
-                return {
-                    version: parts[0] || '',
-                    fields: parts.slice(1)
+            async processCheckoutImage({ file, readBarcodes, debug }) {
+                const logger = (msg, data) => {
+                    if (debug) console.log(`[checkout] ${msg}`, data || '');
                 };
+
+                logger('processCheckoutImage', { name: file.name, type: file.type, sizeKB: Math.round(file.size / 1024) });
+
+                const bitmap = await createImageBitmap(file);
+                logger('bitmap.size', { width: bitmap.width, height: bitmap.height });
+
+                const masterMaxLongEdge = 2200;
+                const fitted = this.fitContain(bitmap.width, bitmap.height, masterMaxLongEdge);
+
+                const master = document.createElement('canvas');
+                const mctx = master.getContext('2d', { willReadFrequently: true });
+                master.width = fitted.w;
+                master.height = fitted.h;
+                mctx.drawImage(bitmap, 0, 0, fitted.w, fitted.h);
+                logger('master.size', { width: master.width, height: master.height });
+
+                const decodeFromCanvas = async (canvas, tag) => {
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const t = performance.now();
+                    const res = await readBarcodes(imgData);
+                    logger(`decode ${tag} took ${(performance.now() - t).toFixed(1)}ms`);
+                    return Array.isArray(res) ? res : [];
+                };
+
+                let barcodes = [];
+
+                logger('decode ROI...');
+                const roiCanvas = this.cropCenterROI(master, 0.70, 0.85);
+                const roiSmall = this.resizeToWidth(roiCanvas, 1200);
+                barcodes = await decodeFromCanvas(roiSmall, 'ROI-1200');
+
+                if (!barcodes.length) {
+                    logger('decode FULL 1600...');
+                    const fullSmall = this.resizeToWidth(master, 1600);
+                    barcodes = await decodeFromCanvas(fullSmall, 'FULL-1600');
+                }
+
+                if (!barcodes.length) {
+                    logger('decode FULL 2400...');
+                    const fullBigger = this.resizeToWidth(master, 2400);
+                    barcodes = await decodeFromCanvas(fullBigger, 'FULL-2400');
+                }
+
+                logger('barcodes', barcodes);
+                const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                const ok = Boolean(text);
+                logger('result', { ok, text });
+
+                return { ok, text, barcodes };
             }
 
-            async getData(content) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            content
-                        })
-                    });
-                } finally {
-                    $(_self.selectors.modal).removeClass('active');
-                }
+            fitContain(w, h, maxLongEdge) {
+                const longEdge = Math.max(w, h);
+                if (longEdge <= maxLongEdge) return { w, h };
+                const scale = maxLongEdge / longEdge;
+                return { w: Math.round(w * scale), h: Math.round(h * scale) };
             }
 
-            async confirmCheckout(params) {
-                let _self = this;
-                $(_self.selectors.modal).addClass('active');
-                try {
-                    return await ApiService.fetch('', {
-                        method: 'POST',
-                        body: JSON.stringify(params)
-                    });
-                } finally {
-                    $(_self.selectors.modal).removeClass('active');
-                }
+            cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
+                const sw = sourceCanvas.width, sh = sourceCanvas.height;
+                const rw = Math.max(1, Math.round(sw * roiWPercent));
+                const rh = Math.max(1, Math.round(sh * roiHPercent));
+                const rx = Math.round((sw - rw) / 2);
+                const ry = Math.round((sh - rh) / 2);
+
+                const c = document.createElement('canvas');
+                c.width = rw; c.height = rh;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+                return c;
+            }
+
+            resizeToWidth(sourceCanvas, targetW) {
+                if (sourceCanvas.width <= targetW) return sourceCanvas;
+
+                const scale = targetW / sourceCanvas.width;
+                const tw = targetW;
+                const th = Math.max(1, Math.round(sourceCanvas.height * scale));
+
+                const c = document.createElement('canvas');
+                c.width = tw; c.height = th;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(sourceCanvas, 0, 0, tw, th);
+                return c;
             }
         }
 
