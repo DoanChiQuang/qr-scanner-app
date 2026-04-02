@@ -132,14 +132,14 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    padding: 16px 20px;
+    padding: 20px 20px;
 }
 
 .scanner-screen__header {
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 28px;
+    margin-bottom: 16px;
 }
 
 .scanner-screen__back {
@@ -169,7 +169,7 @@ body {
 .scanner-screen__frame {
     width: 200px;
     height: 200px;
-    margin: 0 auto 24px;
+    margin: 0 auto 16px;
     background: var(--border-light);
     border: 2px dashed var(--border);
     border-radius: var(--radius);
@@ -316,7 +316,7 @@ body {
     gap: 10px;
     width: 100%;
     margin-top: auto;
-    padding: 16px 0;
+    padding: 0px 0;
 }
 
 .scanner-screen__btn {
