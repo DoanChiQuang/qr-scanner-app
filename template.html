@@ -35,10 +35,10 @@
 
 <body>
     <div id="main">
-        <div id="box-auth" class="box" style="display:none"></div>
-        <div id="box-screen-manager" class="box" style="display:none"></div>
-        <div id="box-checkin" class="box" style="display:none"></div>
-        <div id="box-checkout" class="box" style="display:none"></div>
+        <div id="screen-auth-root" class="screen-root screen-root--auth" style="display:none"></div>
+        <div id="screen-manager-root" class="screen-root screen-root--manager" style="display:none"></div>
+        <div id="screen-checkin-root" class="screen-root screen-root--checkin" style="display:none"></div>
+        <div id="screen-checkout-root" class="screen-root screen-root--checkout" style="display:none"></div>
     </div>
     <div id="turnstile-container"></div>
     <div class="modal" id="modal">
@@ -52,9 +52,20 @@
         let checkinModule = null;
         let checkoutModule = null;
 
-        function showBox(boxId) {
-            $('.box').not(boxId).hide().empty();
-            $(boxId).show();
+        const SCREEN_ROOT_SELECTORS = {
+            auth: '#screen-auth-root',
+            manager: '#screen-manager-root',
+            checkin: '#screen-checkin-root',
+            checkout: '#screen-checkout-root'
+        };
+
+        function showScreen(screenKey) {
+            const screenSelector = SCREEN_ROOT_SELECTORS[screenKey];
+            if (!screenSelector) {
+                throw new Error(`Unknown screen key: ${screenKey}`);
+            }
+            $('.screen-root').not(screenSelector).hide().empty();
+            $(screenSelector).show();
         }
 
         class Config {
@@ -121,7 +132,7 @@
 
         class ScreenManager {
             selectors = {
-                box: '#box-screen-manager',
+                box: SCREEN_ROOT_SELECTORS.manager,
             };
 
             constructor() {
@@ -183,7 +194,7 @@
                         </div>
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('manager');
             }
 
             bindEvents() {
@@ -210,7 +221,7 @@
 
         class AuthModule {
             selectors = {
-                box: '#box-auth',
+                box: SCREEN_ROOT_SELECTORS.auth,
                 form: '#form',
                 btnLogin: '#btn-login'
             };
@@ -261,7 +272,7 @@
                         </div>
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('auth');
             }
 
             isLoggedIn() {
@@ -386,7 +397,7 @@
 
         class CheckinModule {
             selectors = {
-                box: '#box-checkin',
+                box: SCREEN_ROOT_SELECTORS.checkin,
             };
 
             videoId = 'qr-video';
@@ -458,7 +469,7 @@
                         </div>
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('checkin');
             }
 
             updateDOM(result, isSuccess = false) {
@@ -577,7 +588,7 @@
 
         class CheckoutModule {
             selectors = {
-                box: '#box-checkout',
+                box: SCREEN_ROOT_SELECTORS.checkout,
             };
 
             state = {
@@ -636,7 +647,7 @@
                         </div>
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('checkout');
             }
 
             showResult(resultText, imageSrc) {

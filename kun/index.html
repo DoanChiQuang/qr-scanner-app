@@ -35,10 +35,10 @@
 
 <body>
     <div id="main">
-        <div id="box-auth" class="box" style="display:none"></div>
-        <div id="box-screen-manager" class="box" style="display:none"></div>
-        <div id="box-checkin" class="box" style="display:none"></div>
-        <div id="box-checkout" class="box" style="display:none"></div>
+        <div id="screen-auth-root" class="screen-root screen-root--auth" style="display:none"></div>
+        <div id="screen-manager-root" class="screen-root screen-root--manager" style="display:none"></div>
+        <div id="screen-checkin-root" class="screen-root screen-root--checkin" style="display:none"></div>
+        <div id="screen-checkout-root" class="screen-root screen-root--checkout" style="display:none"></div>
     </div>
     <div id="turnstile-container"></div>
     <div class="modal" id="modal">
@@ -51,9 +51,20 @@
         let checkinModule = null;
         let checkoutModule = null;
 
-        function showBox(boxId) {
-            $('.box').not(boxId).hide().empty();
-            $(boxId).show();
+        const SCREEN_ROOT_SELECTORS = {
+            auth: '#screen-auth-root',
+            manager: '#screen-manager-root',
+            checkin: '#screen-checkin-root',
+            checkout: '#screen-checkout-root'
+        };
+
+        function showScreen(screenKey) {
+            const screenSelector = SCREEN_ROOT_SELECTORS[screenKey];
+            if (!screenSelector) {
+                throw new Error(`Unknown screen key: ${screenKey}`);
+            }
+            $('.screen-root').not(screenSelector).hide().empty();
+            $(screenSelector).show();
         }
 
         class Config {
@@ -120,7 +131,7 @@
 
         class ScreenManager {
             selectors = {
-                box: '#box-screen-manager',
+                box: SCREEN_ROOT_SELECTORS.manager,
             };
 
             constructor() {
@@ -178,7 +189,7 @@
                         </div>
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('manager');
             }
 
             bindEvents() {
@@ -205,7 +216,7 @@
 
         class AuthModule {
             selectors = {
-                box: '#box-auth',
+                box: SCREEN_ROOT_SELECTORS.auth,
                 form: '#form',
                 btnLogin: '#btn-login'
             };
@@ -253,7 +264,7 @@
                         </div>
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('auth');
             }
 
             isLoggedIn() {
@@ -379,7 +390,7 @@
 
         class CheckinModule {
             selectors = {
-                box: '#box-checkin',
+                box: SCREEN_ROOT_SELECTORS.checkin,
             };
 
             videoId = 'qr-video';
@@ -415,13 +426,13 @@
                 $(this.selectors.box).html(`
                     <div class="scanner-screen">
                         <div class="scanner-screen__header">
-                            <button class="scanner-screen__back" id="btn-back">
+                            <button class="scanner-screen__back" id="checkin-btn-back">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                             </button>
                             <h2 class="scanner-screen__title">Check In</h2>
                         </div>
 
-                        <div class="scanner-screen__frame" id="scanner-frame-container">
+                        <div class="scanner-screen__frame" id="checkin-scanner-frame">
                             <video id="${this.videoId}" width="100%" height="100%"></video>
                             <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
                             <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
@@ -430,35 +441,35 @@
                         </div>
 
                         <div class="scanner-screen__content">
-                            <p class="scanner-screen__instruction" id="instruction">Đặt mã QR vào khung để quét</p>
+                            <p class="scanner-screen__instruction" id="checkin-instruction">Đặt mã QR vào khung để quét</p>
 
-                            <div class="scanner-screen__info" id="info-card" style="display:none">
+                            <div class="scanner-screen__info" id="checkin-info-card" style="display:none">
                                 <div class="scanner-screen__info-body">
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="info-bib">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="info-name">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="info-phone">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="info-status">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkin-info-bib">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkin-info-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkin-info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkin-info-status">—</span></div>
                                 </div>
                             </div>
 
-                            <div class="scanner-screen__actions" id="btn-group">
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">Quét QR</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-no-qr">Không có QR ? (Mở Camera)</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display:none">Reset</button>
+                            <div class="scanner-screen__actions" id="checkin-actions-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-no-qr">Không có QR ? (Mở Camera)</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
 
-                        <input type="file" id="file" accept="image/*" capture="environment" style="display:none" />
+                        <input type="file" id="checkin-file-input" accept="image/*" capture="environment" style="display:none" />
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('checkin');
             }
 
             updateDOM(result, isSuccess = false) {
                 const isNoQrMode = this.state.isNoQrMode;
-                const instruction = $(`${this.selectors.box} #instruction`);
-                const btnStart = $(`${this.selectors.box} #btn-start-scan`);
-                const btnReset = $(`${this.selectors.box} #btn-reset-scan`);
+                const instruction = $(`${this.selectors.box} #checkin-instruction`);
+                const btnStart = $(`${this.selectors.box} #checkin-btn-start-scan`);
+                const btnReset = $(`${this.selectors.box} #checkin-btn-reset-scan`);
 
                 btnStart.hide();
                 btnReset.hide();
@@ -466,35 +477,35 @@
                 if (result) {
                     instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass(`scanner-screen__instruction--${isSuccess ? 'success' : 'error'}`).text(isSuccess ? 'Thành công!' : 'Thất bại!');
                     const data = typeof result === 'object' ? result : { bib: result };
-                    $(`${this.selectors.box} #info-bib`).text(data.bib || '—');
-                    $(`${this.selectors.box} #info-name`).text(data.name || '—');
-                    $(`${this.selectors.box} #info-phone`).text(data.phone || '—');
+                    $(`${this.selectors.box} #checkin-info-bib`).text(data.bib || '—');
+                    $(`${this.selectors.box} #checkin-info-name`).text(data.name || '—');
+                    $(`${this.selectors.box} #checkin-info-phone`).text(data.phone || '—');
 
                     const statusText = data.status || '—';
                     const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
                         : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
                             : 'scanner-screen__info-status--success';
-                    $(`${this.selectors.box} #info-status`).html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
-                    $(`${this.selectors.box} #info-card`).show();
+                    $(`${this.selectors.box} #checkin-info-status`).html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                    $(`${this.selectors.box} #checkin-info-card`).show();
 
                 } else {
                     instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass('scanner-screen__instruction--error').text('Không phát hiện mã QR. Vui lòng thử lại!');
-                    $(`${this.selectors.box} #info-card`).hide();
+                    $(`${this.selectors.box} #checkin-info-card`).hide();
                 }
 
-                $(`${this.selectors.box} #btn-group`).html(`
+                $(`${this.selectors.box} #checkin-actions-group`).html(`
                     ${isNoQrMode ?
-                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-no-qr">Chụp tiếp</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>`
+                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-no-qr">Chụp tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>`
                         :
-                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-next-scan">Quét tiếp</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-next-scan">Quét tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
                     `}
                 `);
             }
 
             toggleLoading(isLoading) {
-                $(`${this.selectors.box} #modal`).toggleClass('is-open', isLoading);
+                $('#modal').toggleClass('is-open', isLoading);
             }
 
             cleanupNoQrImage() {
@@ -511,12 +522,12 @@
                 this.state.hasResult = false;
                 this.state.isSelectingNoQrImage = true;
 
-                $(`${this.selectors.box} #instruction`).text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
+                $(`${this.selectors.box} #checkin-instruction`).text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
                     .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $(`${this.selectors.box} #btn-start-scan`).hide();
-                $(`${this.selectors.box} #btn-reset-scan`).show();
+                $(`${this.selectors.box} #checkin-btn-start-scan`).hide();
+                $(`${this.selectors.box} #checkin-btn-reset-scan`).show();
 
-                $(`${this.selectors.box} #file`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
+                $(`${this.selectors.box} #checkin-file-input`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
                     const file = event.target.files?.[0];
                     event.target.value = '';
                     this.state.isSelectingNoQrImage = false;
@@ -531,26 +542,26 @@
                     this.state.noQrFile = file;
                     this.state.isNoQrMode = true;
 
-                    $(`${this.selectors.box} #scanner-frame-container`)
+                    $(`${this.selectors.box} #checkin-scanner-frame`)
                         .removeClass('scanner-screen__frame--active')
                         .addClass('scanner-screen__frame--has-image')
                         .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
 
-                    $(`${this.selectors.box} #instruction`)
+                    $(`${this.selectors.box} #checkin-instruction`)
                         .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
                         .removeClass('scanner-screen__instruction--error')
                         .addClass('scanner-screen__instruction--success');
 
-                    $(`${this.selectors.box} #btn-group`).html(`
-                        <input class="scanner-screen__bib-input" id="manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Xác nhận</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                    $(`${this.selectors.box} #checkin-actions-group`).html(`
+                        <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
+                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm">Xác nhận</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
                     `);
 
-                    $(`${this.selectors.box} #manual-bib-input`).trigger('focus');
+                    $(`${this.selectors.box} #checkin-manual-bib-input`).trigger('focus');
                 });
 
-                $(`${this.selectors.box} #file`).trigger('click');
+                $(`${this.selectors.box} #checkin-file-input`).trigger('click');
             }
 
             handleNextNoQrCapture() {
@@ -558,22 +569,22 @@
                 this.state.hasResult = false;
                 this.state.isSelectingNoQrImage = true;
 
-                $(`${this.selectors.box} #scanner-frame-container`)
+                $(`${this.selectors.box} #checkin-scanner-frame`)
                     .removeClass('scanner-screen__frame--has-image')
                     .addClass('scanner-screen__frame--active')
                     .html('');
 
-                $(`${this.selectors.box} #instruction`)
+                $(`${this.selectors.box} #checkin-instruction`)
                     .text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
                     .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                $(`${this.selectors.box} #info-card`).hide();
+                $(`${this.selectors.box} #checkin-info-card`).hide();
 
-                $(`${this.selectors.box} #btn-group`).html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                $(`${this.selectors.box} #checkin-actions-group`).html(`
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
                 `);
 
-                $(`${this.selectors.box} #file`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
+                $(`${this.selectors.box} #checkin-file-input`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
                     const file = event.target.files?.[0];
                     event.target.value = '';
                     this.state.isSelectingNoQrImage = false;
@@ -587,30 +598,30 @@
                     this.state.noQrImageSrc = URL.createObjectURL(file);
                     this.state.noQrFile = file;
 
-                    $(`${this.selectors.box} #scanner-frame-container`)
+                    $(`${this.selectors.box} #checkin-scanner-frame`)
                         .removeClass('scanner-screen__frame--active')
                         .addClass('scanner-screen__frame--has-image')
                         .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
 
-                    $(`${this.selectors.box} #instruction`)
+                    $(`${this.selectors.box} #checkin-instruction`)
                         .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
                         .removeClass('scanner-screen__instruction--error')
                         .addClass('scanner-screen__instruction--success');
 
-                    $(`${this.selectors.box} #btn-group`).html(`
-                        <input class="scanner-screen__bib-input" id="manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Xác nhận</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                    $(`${this.selectors.box} #checkin-actions-group`).html(`
+                        <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
+                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm">Xác nhận</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
                     `);
 
-                    $(`${this.selectors.box} #manual-bib-input`).trigger('focus');
+                    $(`${this.selectors.box} #checkin-manual-bib-input`).trigger('focus');
                 });
 
-                $(`${this.selectors.box} #file`).trigger('click');
+                $(`${this.selectors.box} #checkin-file-input`).trigger('click');
             }
 
             async handleConfirmCheckin() {
-                const bib = ($(`${this.selectors.box} #manual-bib-input`).val() || '').trim();
+                const bib = ($(`${this.selectors.box} #checkin-manual-bib-input`).val() || '').trim();
 
                 if (!this.state.isNoQrMode) {
                     ToastService.show('Vui lòng chọn luồng Không có QR trước.', 'error', 5000);
@@ -649,13 +660,13 @@
 
             bindEvents() {
                 const $box = $(this.selectors.box);
-                $box.on('click', '#btn-back', () => this.goBack());
-                $box.on('click', '#btn-start-scan', () => this.startScanner());
-                $box.on('click', '#btn-reset-scan', () => this.resetScanner());
-                $box.on('click', '#btn-next-scan', () => this.nextScanner());
+                $box.on('click', '#checkin-btn-back', () => this.goBack());
+                $box.on('click', '#checkin-btn-start-scan', () => this.startScanner());
+                $box.on('click', '#checkin-btn-reset-scan', () => this.resetScanner());
+                $box.on('click', '#checkin-btn-next-scan', () => this.nextScanner());
 
-                $box.on('click', '#btn-confirm', () => this.handleConfirmCheckin());
-                $box.on('click', '#btn-no-qr', () => {
+                $box.on('click', '#checkin-btn-confirm', () => this.handleConfirmCheckin());
+                $box.on('click', '#checkin-btn-no-qr', () => {
                     if (this.state.hasResult && this.state.isNoQrMode) {
                         this.handleNextNoQrCapture();
                     } else {
@@ -688,11 +699,11 @@
             }
 
             async startScanner() {
-                $(`${this.selectors.box} #btn-start-scan`).hide();
-                $(`${this.selectors.box} #btn-no-qr`).hide();
-                $(`${this.selectors.box} #btn-reset-scan`).show();
-                $(`${this.selectors.box} #scanner-frame-container`).addClass('scanner-screen__frame--active');
-                $(`${this.selectors.box} #instruction`).text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $(`${this.selectors.box} #checkin-btn-start-scan`).hide();
+                $(`${this.selectors.box} #checkin-btn-no-qr`).hide();
+                $(`${this.selectors.box} #checkin-btn-reset-scan`).show();
+                $(`${this.selectors.box} #checkin-scanner-frame`).addClass('scanner-screen__frame--active');
+                $(`${this.selectors.box} #checkin-instruction`).text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 const handleResult = async (result, isSuccess) => {
                     this.state.hasResult = true;
@@ -792,7 +803,7 @@
 
         class CheckoutModule {
             selectors = {
-                box: '#box-checkout',
+                box: SCREEN_ROOT_SELECTORS.checkout,
             };
 
             state = {
@@ -819,13 +830,13 @@
                 $(this.selectors.box).html(`
                     <div class="scanner-screen">
                         <div class="scanner-screen__header">
-                            <button class="scanner-screen__back" id="btn-back">
+                            <button class="scanner-screen__back" id="checkout-btn-back">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                             </button>
                             <h2 class="scanner-screen__title">Check Out</h2>
                         </div>
 
-                        <div class="scanner-screen__frame" id="scanner-frame-container">
+                        <div class="scanner-screen__frame" id="checkout-scanner-frame">
                             <div class="scanner-screen__placeholder">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
                                 <span>Chưa có ảnh</span>
@@ -833,36 +844,36 @@
                         </div>
 
                         <div class="scanner-screen__content">
-                            <p class="scanner-screen__instruction" id="instruction">Chụp ảnh QR trên BIB</p>
+                            <p class="scanner-screen__instruction" id="checkout-instruction">Chụp ảnh QR trên BIB</p>
 
-                            <div class="scanner-screen__info" id="info-card" style="display:none">
+                            <div class="scanner-screen__info" id="checkout-info-card" style="display:none">
                                 <div class="scanner-screen__info-header">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                                     <span>Quét thành công</span>
                                 </div>
                                 <div class="scanner-screen__info-body">
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="info-bib">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="info-name">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="info-phone">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="info-status">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkout-info-bib">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkout-info-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkout-info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkout-info-status">—</span></div>
                                 </div>
                             </div>
 
-                            <div class="scanner-screen__actions" id="btn-group">
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">Mở camera</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display:none">Reset</button>
+                            <div class="scanner-screen__actions" id="checkout-actions-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-start-scan">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
 
-                        <input type="file" id="file" accept="image/*" capture="environment" style="display:none" />
+                        <input type="file" id="checkout-file-input" accept="image/*" capture="environment" style="display:none" />
                     </div>
                 `);
-                showBox(this.selectors.box);
+                showScreen('checkout');
             }
 
             showResult(resultText, imageSrc) {
-                const instruction = $(`${this.selectors.box} #instruction`);
-                const frameContainer = $(`${this.selectors.box} #scanner-frame-container`);
+                const instruction = $(`${this.selectors.box} #checkout-instruction`);
+                const frameContainer = $(`${this.selectors.box} #checkout-scanner-frame`);
 
                 instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Phát hiện mã QR!');
 
@@ -872,25 +883,25 @@
 
                 // Show info card with result data
                 const data = typeof resultText === 'object' ? resultText : { bib: resultText };
-                $(`${this.selectors.box} #info-bib`).text(data.bib || '—');
-                $(`${this.selectors.box} #info-name`).text(data.name || '—');
-                $(`${this.selectors.box} #info-phone`).text(data.phone || '—');
+                $(`${this.selectors.box} #checkout-info-bib`).text(data.bib || '—');
+                $(`${this.selectors.box} #checkout-info-name`).text(data.name || '—');
+                $(`${this.selectors.box} #checkout-info-phone`).text(data.phone || '—');
 
                 const statusText = data.status || '—';
                 const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
                     : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
                         : 'scanner-screen__info-status--success';
-                $(`${this.selectors.box} #info-status`).html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
-                $(`${this.selectors.box} #info-card`).show();
+                $(`${this.selectors.box} #checkout-info-status`).html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                $(`${this.selectors.box} #checkout-info-card`).show();
 
-                $(`${this.selectors.box} #btn-reset-scan`).show();
-                $(`${this.selectors.box} #btn-start-scan`).show();
+                $(`${this.selectors.box} #checkout-btn-reset-scan`).show();
+                $(`${this.selectors.box} #checkout-btn-start-scan`).show();
             }
 
             showManualBibInput(imageSrc) {
-                const frameContainer = $(`${this.selectors.box} #scanner-frame-container`);
+                const frameContainer = $(`${this.selectors.box} #checkout-scanner-frame`);
 
-                $(`${this.selectors.box} #instruction`)
+                $(`${this.selectors.box} #checkout-instruction`)
                     .text('Không detect được QR. Nhập số BIB để xử lý thủ công.')
                     .removeClass('scanner-screen__instruction--success')
                     .addClass('scanner-screen__instruction--error');
@@ -899,12 +910,12 @@
                     .addClass('scanner-screen__frame--has-image')
                     .html(`<img src="${imageSrc}" alt="Bib photo">`);
 
-                $(`${this.selectors.box} #info-card`).hide();
+                $(`${this.selectors.box} #checkout-info-card`).hide();
 
-                $(`${this.selectors.box} #btn-group`).html(`
+                $(`${this.selectors.box} #checkout-actions-group`).html(`
                     <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" placeholder="Nhập số BIB">
-                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm-manual-bib">Xác nhận</button>
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm-manual-bib">Xác nhận</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan">Reset</button>
                 `);
 
                 $(`${this.selectors.box} #checkout-manual-bib-input`).trigger('focus');
@@ -937,10 +948,10 @@
 
             bindEvents() {
                 const $box = $(this.selectors.box);
-                $box.on('click', '#btn-back', () => this.goBack());
-                $box.on('click', '#btn-start-scan', () => this.startCapture());
-                $box.on('click', '#btn-reset-scan', () => this.reset());
-                $box.on('click', '#btn-confirm-manual-bib', () => this.handleManualBibConfirm());
+                $box.on('click', '#checkout-btn-back', () => this.goBack());
+                $box.on('click', '#checkout-btn-start-scan', () => this.startCapture());
+                $box.on('click', '#checkout-btn-reset-scan', () => this.reset());
+                $box.on('click', '#checkout-btn-confirm-manual-bib', () => this.handleManualBibConfirm());
                 $box.on('keypress', '#checkout-manual-bib-input', (event) => {
                     if (event.key === 'Enter') {
                         event.preventDefault();
@@ -955,13 +966,13 @@
             }
 
             async startCapture() {
-                $(`${this.selectors.box} #btn-start-scan`).hide();
-                $(`${this.selectors.box} #btn-reset-scan`).show();
-                $(`${this.selectors.box} #instruction`).text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $(`${this.selectors.box} #checkout-btn-start-scan`).hide();
+                $(`${this.selectors.box} #checkout-btn-reset-scan`).show();
+                $(`${this.selectors.box} #checkout-instruction`).text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                $(`${this.selectors.box} #file`).click();
+                $(`${this.selectors.box} #checkout-file-input`).click();
 
-                $(`${this.selectors.box} #file`).off('change.checkout-capture').on('change.checkout-capture', async (event) => {
+                $(`${this.selectors.box} #checkout-file-input`).off('change.checkout-capture').on('change.checkout-capture', async (event) => {
                     const file = event.target.files[0];
                     if (!file) {
                         this.render();
@@ -972,7 +983,7 @@
                         const { readBarcodes } = ZXingWASM;
                         Logger.log('CheckoutModule', 'info', `Selected file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
 
-                        $(`${this.selectors.box} #instruction`).text('Đang xử lý ảnh...');
+                        $(`${this.selectors.box} #checkout-instruction`).text('Đang xử lý ảnh...');
 
                         const result = await this.processCheckoutImage({ file, readBarcodes });
 
