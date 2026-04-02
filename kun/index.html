@@ -745,7 +745,7 @@
 
                     const result = await ApiService.fetch('902978df-abd2-4808-9a58-203bc442f7f3', {
                         method: 'POST',
-                        // body: formData
+                        body: formData
                     });
                     return result;
                 } catch (error) {
@@ -796,7 +796,8 @@
 
             state = {
                 isInitialized: false,
-                captureImageSrc: null
+                captureImageSrc: null,
+                captureFile: null
             };
 
             async init() {
@@ -862,40 +863,40 @@
             showResult(resultText, imageSrc) {
                 const instruction = $('#checkout-instruction');
                 const frameContainer = $('#checkout-scanner-frame');
+                const data = ScanResultUtils.normalizeData(resultText);
+                const isSuccess = data.statusType !== 'error';
 
-                instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Phát hiện mã QR!');
+                instruction
+                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success')
+                    .addClass(isSuccess ? 'scanner-screen__instruction--success' : 'scanner-screen__instruction--error')
+                    .text(isSuccess ? 'Hoàn tất checkout!' : 'Checkout thất bại!');
 
                 frameContainer.addClass('scanner-screen__frame--has-image').html(`
                     <img src="${imageSrc}" alt="Bib photo">
                 `);
 
-                const data = this.normalizeCheckoutResultData(resultText);
                 $('#checkout-info-bib').text(data.bib || '—');
                 $('#checkout-info-name').text(data.name || '—');
                 $('#checkout-info-phone').text(data.phone || '—');
 
                 const statusText = data.status || '—';
-                const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
-                    : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
-                        : 'scanner-screen__info-status--success';
+                const statusClass = ScanResultUtils.getStatusClass(data.statusType);
                 $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                 $('#checkout-info-card').show();
 
-                $('#checkout-btn-reset-scan').show();
-                $('#checkout-btn-start-scan').show();
+                $('#checkout-actions-group').html(`
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-start-scan">Chụp tiếp</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan">Reset</button>
+                `);
             }
 
-            normalizeCheckoutResultData(result) {
-                return typeof result === 'object' ? result : { bib: result };
-            }
-
-            buildManualCheckoutResultData(bib) {
+            buildCheckoutResultData(bib, response = null, isSuccess = false) {
                 return {
                     bib,
-                    name: '—',
-                    phone: '—',
-                    status: 'Nhập tay',
-                    statusType: 'pending'
+                    name: response?.name || '—',
+                    phone: response?.phone || '—',
+                    status: isSuccess ? 'Checkout thành công' : 'Checkout thất bại',
+                    statusType: isSuccess ? 'success' : 'error'
                 };
             }
 
@@ -922,7 +923,7 @@
                 $('#checkout-manual-bib-input').trigger('focus');
             }
 
-            handleManualBibConfirm() {
+            async handleManualBibConfirm() {
                 const bib = ($('#checkout-manual-bib-input').val() || '').trim();
 
                 if (!bib) {
@@ -930,9 +931,7 @@
                     return;
                 }
 
-                const manualResultData = this.buildManualCheckoutResultData(bib);
-                this.showResult(manualResultData, this.state.captureImageSrc);
-                ToastService.show('Đã ghi nhận BIB thủ công', 'success', 3000);
+                await this.confirmCheckoutAndShow({ bib, file: this.state.captureFile });
             }
 
             cleanupCaptureImage() {
@@ -940,6 +939,7 @@
                     URL.revokeObjectURL(this.state.captureImageSrc);
                     this.state.captureImageSrc = null;
                 }
+                this.state.captureFile = null;
             }
 
             bindEvents() {
@@ -977,11 +977,14 @@
                     const result = await this.processCheckoutImage({ file, readBarcodes });
 
                     this.cleanupCaptureImage();
+                    this.state.captureFile = file;
                     this.state.captureImageSrc = URL.createObjectURL(file);
 
                     if (result.ok) {
-                        const resultData = this.normalizeCheckoutResultData(result.text);
-                        this.showResult(resultData, this.state.captureImageSrc);
+                        await this.confirmCheckoutAndShow({
+                            bib: `${result.text || ''}`.trim(),
+                            file: this.state.captureFile
+                        });
                     } else {
                         ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
                         this.showManualBibInput(this.state.captureImageSrc);
@@ -1003,6 +1006,43 @@
                 $('#checkout-file-input').click();
 
                 $('#checkout-file-input').off('change.checkout-capture').on('change.checkout-capture', (event) => this.handleCaptureFileChange(event));
+            }
+
+            toggleLoading(isLoading) {
+                $('#modal').toggleClass('is-open', isLoading);
+            }
+
+            async confirmCheckout({ bib, file = null }) {
+                const formData = new FormData();
+                formData.append('bib', bib || '');
+                if (file) {
+                    formData.append('file', file);
+                }
+
+                return await ApiService.fetch('902978df-abd2-4808-9a58-203bc442f7f3', {
+                    method: 'POST',
+                    body: formData
+                });
+            }
+
+            async confirmCheckoutAndShow({ bib, file }) {
+                if (!bib) {
+                    ToastService.show('Không lấy được thông tin BIB.', 'error', 4000);
+                    return;
+                }
+
+                try {
+                    this.toggleLoading(true);
+                    const response = await this.confirmCheckout({ bib, file });
+                    const isSuccess = response?.status == 2 || response === true;
+                    const resultData = this.buildCheckoutResultData(bib, response, isSuccess);
+                    this.showResult(resultData, this.state.captureImageSrc);
+                } catch {
+                    const resultData = this.buildCheckoutResultData(bib, null, false);
+                    this.showResult(resultData, this.state.captureImageSrc);
+                } finally {
+                    this.toggleLoading(false);
+                }
             }
 
             async processCheckoutImage({ file, readBarcodes }) {
