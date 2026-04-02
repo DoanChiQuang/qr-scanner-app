@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- <?php echo $this->headTitle($this->title); ?> -->
+    <meta http-equiv="X-UA-Compatible" content="IE=100" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="FPT Online" />
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="moment.min.js"></script>
+
+    <!-- <? if ($this->debug): ?> -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+    </script>
+    <!-- <? endif; ?> -->
+
+    <!-- Captcha -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+
+<body>
+    <div id="main">
+        <div id="auth-screen" style="display:none"></div>
+        <div id="screen-manager" style="display:none"></div>
+        <div id="screen-checkin" style="display:none"></div>
+        <div id="screen-checkout" style="display:none"></div>
+    </div>
+    <div id="turnstile-container"></div>
+    <div class="modal" id="modal">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        class Config {
+            static API_BASE_URL = 'https://api.fpt-online.com';
+        }
+
+        class ApiService {
+            static async fetch(endpoint, options = {}) {
+                try {
+                    const response = await fetch(`${Config.API_BASE_URL}${endpoint}`, {
+                        ...options,
+                        // credentials: 'include',
+                    });
+                    const result = await response.json();
+                    if (response.code != 200) {
+                        throw new Error(result.message || 'API request failed');
+                    }
+
+                    return result.data || false;
+                } catch (error) {
+                    console.error('[ApiService] [fetch] Error: ', error);
+                    return false;
+                }
+            }
+        }
+
+        class AuthScreen {
+            constructor() {
+                this.user = null;
+            }
+
+            async init() {
+                this.user = await ApiService.fetch('e0d4c32e-4aca-40b1-b369-0617f1fe5df1', {
+                    method: 'GET'
+                });
+            }
+
+            render() {
+                $('#auth-screen').html(`
+                    <div class="auth-screen__header">
+                        <div class="screen-manager__logo">
+                            <img src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="VnExpress Marathon">
+                        </div>
+                        <h1 class="auth-screen__title">Đăng nhập</h1>
+                        <p class="auth-screen__subtitle">Nhập thông tin để tiếp tục</p>
+                    </div>
+
+                    <form class="auth-form" id="form" method="POST">
+                        <div class="auth-form__group">
+                            <label class="auth-form__label" for="email">Email</label>
+                            <input class="auth-form__input" type="email" id="email" name="email" placeholder="email@example.com" required>
+                        </div>
+                        <div class="auth-form__group">
+                            <label class="auth-form__label" for="password">Mật khẩu</label>
+                            <input class="auth-form__input" type="password" id="password" name="password" placeholder="******" required>
+                        </div>
+                        <button type="submit" class="auth-form__btn" id="btn-login">Đăng nhập</button>
+                    </form>
+
+                    <div class="auth-screen__footer">
+                        <p class="auth-screen__footer-text">Powered by vRace</p>
+                    </div>
+                `).show();
+            }
+        }
+
+        class App {
+            async start() {
+                const authScreen = new AuthScreen();
+                await authScreen.init();
+            }
+        }
+
+        $(document).ready(() => App.start());
+    </script>
+</body>
+
+</html>
