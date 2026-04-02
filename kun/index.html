@@ -433,10 +433,6 @@
                             <p class="scanner-screen__instruction" id="instruction">Đặt mã QR vào khung để quét</p>
 
                             <div class="scanner-screen__info" id="info-card" style="display:none">
-                                <div class="scanner-screen__info-header">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                    <span>Quét thành công</span>
-                                </div>
                                 <div class="scanner-screen__info-body">
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="info-bib">—</span></div>
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="info-name">—</span></div>
@@ -461,10 +457,11 @@
                 const btnStart = $('#btn-start-scan');
                 const btnReset = $('#btn-reset-scan');
 
-                if (isSuccess) {
-                    instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Quét thành công!');
+                btnStart.hide();
+                btnReset.hide();
 
-                    // Show info card with result data
+                if (result) {
+                    instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass(`scanner-screen__instruction--${isSuccess ? 'success' : 'error'}`).text(isSuccess ? 'Thành công!' : 'Thất bại!');
                     const data = typeof result === 'object' ? result : { bib: result };
                     $('#info-bib').text(data.bib || '—');
                     $('#info-name').text(data.name || '—');
@@ -477,20 +474,14 @@
                     $('#info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                     $('#info-card').show();
 
-                    // Hide frame when result shown
-                    // $('#scanner-frame-container').hide();
-
-                    btnStart.hide();
-                    btnReset.hide();
-
-                    $('#btn-group').html(`
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>
-                    `);
                 } else {
-                    instruction.addClass('scanner-screen__instruction--error').text('Không hợp lệ. Thử lại.');
-                    btnStart.show();
-                    btnReset.hide();
+                    instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass('scanner-screen__instruction--error').text('Không phát hiện mã QR. Vui lòng thử lại!');
+                    $('#info-card').hide();
                 }
+
+                $('#btn-group').html(`
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>
+                `);
             }
 
             toggleLoading(isLoading) {
@@ -593,10 +584,11 @@
                 const $box = $(this.selectors.box);
                 $box.on('click', '#btn-back', () => this.goBack());
                 $box.on('click', '#btn-start-scan', () => this.startScanner());
-                $box.on('click', '#btn-no-qr', () => this.handleNoQrCapture());
                 $box.on('click', '#btn-reset-scan', () => this.resetScanner());
                 $box.on('click', '#btn-next-scan', () => this.nextScanner());
+
                 $box.on('click', '#btn-confirm', () => this.handleConfirmCheckin());
+                $box.on('click', '#btn-no-qr', () => this.handleNoQrCapture());
             }
 
             resetScanner() {
@@ -628,19 +620,34 @@
                 $('#scanner-frame-container').addClass('scanner-screen__frame--active');
                 $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                const handleResult = async (bib, isSuccess) => {
-                    let result = null;
+                const handleResult = async (result, isSuccess) => {
+                    this.state.hasResult = true;
+                    this.state.qrScanner?.stopScan();
+
+                    let data = null;
                     if (isSuccess) {
                         try {
-                            result = await this.confirmCheckin(bib);
-                        } catch (error) {
-                            result = { bib, name: '—', phone: '—', status: 'Check-in failed', statusType: 'error' };
+                            response = await this.confirmCheckin(result);
+                            data = {
+                                bib: result,
+                                name: response.name || '—',
+                                phone: response.phone || '—',
+                                status: response.status || 'Đã checkin',
+                                statusType: response.statusType || 'success'
+                            };
+                        } catch {
+                            isSuccess = false;
+                            data = {
+                                bib: result,
+                                name: '—',
+                                phone: '—',
+                                status: 'Check-in thất bại',
+                                statusType: 'error'
+                            };
                         }
                     }
 
-                    this.state.hasResult = true;
-                    this.state.qrScanner?.stopScan();
-                    this.updateDOM(result, isSuccess);
+                    this.updateDOM(data, isSuccess);
                 };
 
                 await this.state.qrScanner.startScan({
@@ -660,10 +667,8 @@
                         method: 'GET',
                         // body: JSON.stringify({ bib: bib })
                     });
-                    ToastService.show('Check-in thành công', 'success', 4000);
                     return result;
                 } catch (error) {
-                    ToastService.show(error.message || 'Check-in thất bại', 'error', 5000);
                     throw error;
                 } finally {
                     this.toggleLoading(false);
