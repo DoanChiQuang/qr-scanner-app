@@ -627,13 +627,13 @@
                     let data = null;
                     if (isSuccess) {
                         try {
-                            response = await this.confirmCheckin(result);
+                            const response = await this.confirmCheckin(result);
                             data = {
                                 bib: result,
                                 name: response.name || '—',
                                 phone: response.phone || '—',
-                                status: response.status || 'Đã checkin',
-                                statusType: response.statusType || 'success'
+                                status: response.status == 2 ? 'Check-in thành công' : 'Check-in thất bại',
+                                statusType: response.status == 2 ? 'success' : 'error'
                             };
                         } catch {
                             isSuccess = false;
@@ -660,7 +660,7 @@
                 });
             }
 
-            async confirmCheckin(bib) {
+            async confirmCheckin(data) {
                 try {
                     this.toggleLoading(true);
                     const result = await ApiService.fetch('7c23033b-194b-4286-b6e2-a9f6e2be4025', {
