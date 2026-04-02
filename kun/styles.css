@@ -352,6 +352,23 @@ body {
 .scanner-screen__btn--secondary { background: var(--border-light); color: var(--text); }
 .scanner-screen__btn--secondary:active { background: var(--border); }
 
+.scanner-screen__bib-input {
+    width: 100%;
+    height: 46px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 0 16px;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--surface);
+}
+
+.scanner-screen__bib-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(159, 34, 78, 0.12);
+}
+
 /* ── Modal ── */
 
 .modal {

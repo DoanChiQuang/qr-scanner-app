@@ -387,10 +387,16 @@
 
             videoId = 'qr-video';
 
+            apis = {
+                confirmCheckin: 'ticket/confirm-checkin'
+            };
+
             state = {
                 isInitialized: false,
                 hasResult: false,
-                qrScanner: null
+                qrScanner: null,
+                isNoQrMode: false,
+                noQrImageSrc: null
             };
 
             async init(codeReader) {
@@ -406,6 +412,7 @@
 
             goBack() {
                 this.state.qrScanner?.stopScan();
+                this.cleanupNoQrImage();
                 screenManager.render();
             }
 
@@ -491,26 +498,129 @@
                 }
             }
 
+            toggleLoading(isLoading) {
+                $('#modal').toggleClass('is-open', isLoading);
+            }
+
+            cleanupNoQrImage() {
+                if (this.state.noQrImageSrc) {
+                    URL.revokeObjectURL(this.state.noQrImageSrc);
+                    this.state.noQrImageSrc = null;
+                }
+            }
+
+            async handleNoQrCapture() {
+                this.state.qrScanner?.stopScan();
+                this.state.isNoQrMode = false;
+                this.state.hasResult = false;
+
+                $('#instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
+                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#btn-start-scan').hide();
+                $('#btn-reset-scan').show();
+
+                $('#file').off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+
+                    console.log('Selected file for no-QR check-in:', file);
+
+                    if (!file) {
+                        this.render();
+                        return;
+                    }
+
+                    this.cleanupNoQrImage();
+                    this.state.noQrImageSrc = URL.createObjectURL(file);
+                    this.state.isNoQrMode = true;
+
+                    $('#scanner-frame-container')
+                        .removeClass('scanner-screen__frame--active')
+                        .addClass('scanner-screen__frame--has-image')
+                        .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
+
+                    $('#instruction')
+                        .text('Nhập số BIB rồi chọn Confirm để xử lý.')
+                        .removeClass('scanner-screen__instruction--error')
+                        .addClass('scanner-screen__instruction--success');
+
+                    $('#btn-group').html(`
+                        <input class="scanner-screen__bib-input" id="manual-bib-input" type="text" placeholder="Nhập số BIB">
+                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Confirm</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Làm lại</button>
+                    `);
+
+                    $('#manual-bib-input').trigger('focus');
+                });
+
+                $('#file').trigger('click');
+            }
+
+            async handleConfirmCheckin() {
+                const bib = ($('#manual-bib-input').val() || '').trim();
+
+                if (!this.state.isNoQrMode) {
+                    ToastService.show('Vui lòng chọn luồng Không có QR trước.', 'error', 5000);
+                    return;
+                }
+
+                if (!bib) {
+                    ToastService.show('Vui lòng nhập số BIB để xác nhận.', 'error', 5000);
+                    return;
+                }
+
+                try {
+                    this.toggleLoading(true);
+                    await ApiService.fetch(this.apis.confirmCheckin, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ticket_code: bib
+                        })
+                    });
+
+                    this.state.hasResult = true;
+                    this.updateDOM({
+                        bib,
+                        name: '—',
+                        phone: '—',
+                        status: 'Đã checkin',
+                        statusType: 'success'
+                    }, true);
+                    ToastService.show('Check-in thành công', 'success', 4000);
+                } catch (error) {
+                    ToastService.show(error.message || 'Check-in thất bại', 'error', 5000);
+                } finally {
+                    this.toggleLoading(false);
+                }
+            }
+
             bindEvents() {
                 const $box = $(this.selectors.box);
                 $box.on('click', '#btn-back', () => this.goBack());
                 $box.on('click', '#btn-start-scan', () => this.startScanner());
+                $box.on('click', '#btn-no-qr', () => this.handleNoQrCapture());
                 $box.on('click', '#btn-reset-scan', () => this.resetScanner());
                 $box.on('click', '#btn-next-scan', () => this.nextScanner());
+                $box.on('click', '#btn-confirm', () => this.handleConfirmCheckin());
             }
 
             resetScanner() {
-                if (!this.state.hasResult && !this.state.qrScanner?.isScanning()) {
+                if (!this.state.hasResult && !this.state.qrScanner?.isScanning() && !this.state.isNoQrMode) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
+
+                this.cleanupNoQrImage();
                 this.state.hasResult = false;
+                this.state.isNoQrMode = false;
                 this.state.qrScanner?.stopScan();
                 this.render();
             }
 
             nextScanner() {
+                this.cleanupNoQrImage();
                 this.state.hasResult = false;
+                this.state.isNoQrMode = false;
                 this.render();
                 setTimeout(() => this.startScanner(), 300);
             }
