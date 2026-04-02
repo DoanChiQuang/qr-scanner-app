@@ -391,7 +391,8 @@
                 qrScanner: null,
                 isNoQrMode: false,
                 noQrImageSrc: null,
-                isSelectingNoQrImage: false
+                isSelectingNoQrImage: false,
+                noQrFile: null
             };
 
             async init(codeReader) {
@@ -494,6 +495,7 @@
                     URL.revokeObjectURL(this.state.noQrImageSrc);
                     this.state.noQrImageSrc = null;
                 }
+                this.state.noQrFile = null;
             }
 
             async handleNoQrCapture() {
@@ -519,6 +521,7 @@
 
                     this.cleanupNoQrImage();
                     this.state.noQrImageSrc = URL.createObjectURL(file);
+                    this.state.noQrFile = file;
                     this.state.isNoQrMode = true;
 
                     $('#scanner-frame-container')
@@ -532,7 +535,7 @@
                         .addClass('scanner-screen__instruction--success');
 
                     $('#btn-group').html(`
-                        <input class="scanner-screen__bib-input" id="manual-bib-input" type="number" placeholder="Nhập số BIB">
+                        <input class="scanner-screen__bib-input" id="manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
                         <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Xác nhận</button>
                         <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
                     `);
@@ -557,27 +560,21 @@
                 }
 
                 try {
-                    this.toggleLoading(true);
-                    await ApiService.fetch(this.apis.confirmCheckin, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            ticket_code: bib
-                        })
+                    const result = await this.confirmCheckin({
+                        bib,
+                        file: this.state.noQrFile
                     });
-
                     this.state.hasResult = true;
+
                     this.updateDOM({
                         bib,
-                        name: '—',
-                        phone: '—',
-                        status: 'Đã checkin',
-                        statusType: 'success'
-                    }, true);
-                    ToastService.show('Check-in thành công', 'success', 4000);
+                        name: result?.name || '—',
+                        phone: result?.phone || '—',
+                        status: result?.status == 2 ? 'Check-in thành công' : 'Check-in thất bại',
+                        statusType: result?.status == 2 ? 'success' : 'error'
+                    }, result?.status == 2);
                 } catch (error) {
                     ToastService.show(error.message || 'Check-in thất bại', 'error', 5000);
-                } finally {
-                    this.toggleLoading(false);
                 }
             }
 
@@ -629,7 +626,7 @@
                     let data = null;
                     if (isSuccess) {
                         try {
-                            const response = await this.confirmCheckin(result);
+                            const response = await this.confirmCheckin({ bib: result });
                             data = {
                                 bib: result,
                                 name: response.name || '—',
@@ -662,12 +659,19 @@
                 });
             }
 
-            async confirmCheckin(data) {
+            async confirmCheckin({ bib, file = null }) {
                 try {
                     this.toggleLoading(true);
+
+                    const formData = new FormData();
+                    formData.append('bib', bib || '');
+                    if (file) {
+                        formData.append('file', file);
+                    }
+
                     const result = await ApiService.fetch('7c23033b-194b-4286-b6e2-a9f6e2be4025', {
-                        method: 'GET',
-                        // body: JSON.stringify({ bib: bib })
+                        method: 'POST',
+                        // body: formData
                     });
                     return result;
                 } catch (error) {
