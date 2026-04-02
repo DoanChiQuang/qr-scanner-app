@@ -454,6 +454,7 @@
             }
 
             updateDOM(result, isSuccess = false) {
+                const isNoQrMode = this.state.isNoQrMode;
                 const instruction = $('#instruction');
                 const btnStart = $('#btn-start-scan');
                 const btnReset = $('#btn-reset-scan');
@@ -481,8 +482,13 @@
                 }
 
                 $('#btn-group').html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-next-scan">Quét tiếp</button>
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                    ${isNoQrMode ?
+                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-next-scan">Chụp tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>`
+                        :
+                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-next-scan">Quét tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
+                    `}
                 `);
             }
 
