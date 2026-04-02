@@ -574,7 +574,13 @@
                         statusType: result?.status == 2 ? 'success' : 'error'
                     }, result?.status == 2);
                 } catch (error) {
-                    ToastService.show(error.message || 'Check-in thất bại', 'error', 5000);
+                    this.updateDOM({
+                        bib,
+                        name: '—',
+                        phone: '—',
+                        status: 'Check-in thất bại',
+                        statusType: 'error'
+                    }, false);
                 }
             }
 
