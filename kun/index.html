@@ -453,6 +453,7 @@
             }
 
             updateDOM(result, isSuccess = false) {
+                console.log('Updating DOM with result:', result, 'isSuccess:', isSuccess);
                 const instruction = $('#instruction');
                 const btnStart = $('#btn-start-scan');
                 const btnReset = $('#btn-reset-scan');
