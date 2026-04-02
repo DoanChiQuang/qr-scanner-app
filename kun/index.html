@@ -453,7 +453,6 @@
             }
 
             updateDOM(result, isSuccess = false) {
-                console.log('Updating DOM with result:', result, 'isSuccess:', isSuccess);
                 const instruction = $('#instruction');
                 const btnStart = $('#btn-start-scan');
                 const btnReset = $('#btn-reset-scan');
@@ -481,7 +480,8 @@
                 }
 
                 $('#btn-group').html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-next-scan">Quét tiếp</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
                 `);
             }
 
@@ -617,6 +617,7 @@
 
             async startScanner() {
                 $('#btn-start-scan').hide();
+                $('#btn-no-qr').hide();
                 $('#btn-reset-scan').show();
                 $('#scanner-frame-container').addClass('scanner-screen__frame--active');
                 $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
