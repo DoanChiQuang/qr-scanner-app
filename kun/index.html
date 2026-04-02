@@ -552,62 +552,6 @@
                 $(`${this.selectors.box} #file`).trigger('click');
             }
 
-            handleNextNoQrCapture() {
-                this.cleanupNoQrImage();
-                this.state.hasResult = false;
-                this.state.isSelectingNoQrImage = true;
-
-                $(`${this.selectors.box} #scanner-frame-container`)
-                    .removeClass('scanner-screen__frame--has-image')
-                    .addClass('scanner-screen__frame--active')
-                    .html('');
-
-                $(`${this.selectors.box} #instruction`)
-                    .text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
-                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-
-                $(`${this.selectors.box} #info-card`).hide();
-
-                $(`${this.selectors.box} #btn-group`).html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
-                `);
-
-                $(`${this.selectors.box} #file`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    this.state.isSelectingNoQrImage = false;
-
-                    if (!file) {
-                        this.render();
-                        return;
-                    }
-
-                    this.cleanupNoQrImage();
-                    this.state.noQrImageSrc = URL.createObjectURL(file);
-                    this.state.noQrFile = file;
-
-                    $(`${this.selectors.box} #scanner-frame-container`)
-                        .removeClass('scanner-screen__frame--active')
-                        .addClass('scanner-screen__frame--has-image')
-                        .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
-
-                    $(`${this.selectors.box} #instruction`)
-                        .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
-                        .removeClass('scanner-screen__instruction--error')
-                        .addClass('scanner-screen__instruction--success');
-
-                    $(`${this.selectors.box} #btn-group`).html(`
-                        <input class="scanner-screen__bib-input" id="manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Xác nhận</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
-                    `);
-
-                    $(`${this.selectors.box} #manual-bib-input`).trigger('focus');
-                });
-
-                $(`${this.selectors.box} #file`).trigger('click');
-            }
-
             async handleConfirmCheckin() {
                 const bib = ($(`${this.selectors.box} #manual-bib-input`).val() || '').trim();
 
@@ -654,13 +598,7 @@
                 $box.on('click', '#btn-next-scan', () => this.nextScanner());
 
                 $box.on('click', '#btn-confirm', () => this.handleConfirmCheckin());
-                $box.on('click', '#btn-no-qr', () => {
-                    if (this.state.hasResult && this.state.isNoQrMode) {
-                        this.handleNextNoQrCapture();
-                    } else {
-                        this.handleNoQrCapture();
-                    }
-                });
+                $box.on('click', '#btn-no-qr', () => this.handleNoQrCapture());
             }
 
             resetScanner() {
