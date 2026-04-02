@@ -58,7 +58,7 @@
         }
 
         class Config {
-            static API_BASE_URL = 'https://api.esportsfan.net/';
+            static API_BASE_URL = 'https://webhook.site/';
             static TURNSTILE_SITE_KEY = '0x4AAAAAAAOOjy5Nup_zy_9p';
             static TIMEOUT_DURATION = 15000;
             static STATUS_CODES = {
@@ -106,7 +106,7 @@
                 try {
                     const response = await fetch(`${Config.API_BASE_URL}${endpoint}`, {
                         ...options,
-                        credentials: 'include',
+                        // credentials: 'include',
                     });
                     const result = await response.json();
                     Logger.log('ApiService', 'info', `[API][${endpoint}] Response:`, result);
@@ -230,11 +230,8 @@
                 $(this.selectors.box).html(`
                     <div class="auth-screen">
                         <div class="auth-screen__header">
-                            <div class="auth-screen__logo">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                    <path d="M7 11V7a5 5 0 0110 0v4"/>
-                                </svg>
+                            <div class="screen-manager__logo">
+                                <img src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="VnExpress Marathon">
                             </div>
                             <h1 class="auth-screen__title">Đăng nhập</h1>
                             <p class="auth-screen__subtitle">Nhập thông tin để tiếp tục</p>
@@ -270,7 +267,8 @@
                     e.preventDefault();
                     $(selectors.btnLogin).prop('disabled', true).text('Đang đăng nhập...');
                     try {
-                        const token = await new Promise((resolve) => this.renderTurnstile(resolve));
+                        // const token = await new Promise((resolve) => this.renderTurnstile(resolve));
+                        const token = null;
                         await this.handleLogin(token);
                     } catch (error) {
                         ToastService.show(error.message, 'error', 5000);
@@ -286,7 +284,7 @@
                 const password = $('#password').val();
                 if (!email || !password) throw new Error('Please enter email and password');
 
-                const result = await ApiService.fetch('account/login', {
+                const result = await ApiService.fetch('73361666-dd44-4946-9a94-d3e1d7736615', {
                     method: 'POST',
                     body: JSON.stringify({ email, password, _token: token })
                 });
@@ -300,7 +298,7 @@
             }
 
             async getAccountInfo() {
-                return await ApiService.fetch('account/info', {
+                return await ApiService.fetch('e0d4c32e-4aca-40b1-b369-0617f1fe5df1', {
                     method: 'GET'
                 });
             }
@@ -386,10 +384,6 @@
             };
 
             videoId = 'qr-video';
-
-            apis = {
-                confirmCheckin: 'ticket/confirm-checkin'
-            };
 
             state = {
                 isInitialized: false,
@@ -634,20 +628,46 @@
                 $('#scanner-frame-container').addClass('scanner-screen__frame--active');
                 $('#instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                const handleResult = (result, isSuccess) => {
+                const handleResult = async (bib, isSuccess) => {
+                    let result = null;
+                    if (isSuccess) {
+                        try {
+                            result = await this.confirmCheckin(bib);
+                        } catch (error) {
+                            result = { bib, name: '—', phone: '—', status: 'Check-in failed', statusType: 'error' };
+                        }
+                    }
+
                     this.state.hasResult = true;
                     this.state.qrScanner?.stopScan();
                     this.updateDOM(result, isSuccess);
                 };
 
                 await this.state.qrScanner.startScan({
-                    onSuccess: (qrData) => handleResult(qrData, true),
+                    onSuccess: (result) => handleResult(result, true),
                     onError: (error) => {
                         Logger.log('CheckinModule', 'error', error.message);
                         return handleResult(null, false);
                     },
                     onTimeout: () => handleResult(null, false)
                 });
+            }
+
+            async confirmCheckin(bib) {
+                try {
+                    this.toggleLoading(true);
+                    const result = await ApiService.fetch('7c23033b-194b-4286-b6e2-a9f6e2be4025', {
+                        method: 'GET',
+                        // body: JSON.stringify({ bib: bib })
+                    });
+                    ToastService.show('Check-in thành công', 'success', 4000);
+                    return result;
+                } catch (error) {
+                    ToastService.show(error.message || 'Check-in thất bại', 'error', 5000);
+                    throw error;
+                } finally {
+                    this.toggleLoading(false);
+                }
             }
         }
 
