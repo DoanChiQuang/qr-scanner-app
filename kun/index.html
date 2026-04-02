@@ -467,9 +467,9 @@
 
             updateDOM(result, isSuccess = false) {
                 const isNoQrMode = this.state.isNoQrMode;
-                const instruction = $(`${this.selectors.box} #checkin-instruction`);
-                const btnStart = $(`${this.selectors.box} #checkin-btn-start-scan`);
-                const btnReset = $(`${this.selectors.box} #checkin-btn-reset-scan`);
+                const instruction = $('#checkin-instruction');
+                const btnStart = $('#checkin-btn-start-scan');
+                const btnReset = $('#checkin-btn-reset-scan');
 
                 btnStart.hide();
                 btnReset.hide();
@@ -477,23 +477,23 @@
                 if (result) {
                     instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass(`scanner-screen__instruction--${isSuccess ? 'success' : 'error'}`).text(isSuccess ? 'Thành công!' : 'Thất bại!');
                     const data = typeof result === 'object' ? result : { bib: result };
-                    $(`${this.selectors.box} #checkin-info-bib`).text(data.bib || '—');
-                    $(`${this.selectors.box} #checkin-info-name`).text(data.name || '—');
-                    $(`${this.selectors.box} #checkin-info-phone`).text(data.phone || '—');
+                    $('#checkin-info-bib').text(data.bib || '—');
+                    $('#checkin-info-name').text(data.name || '—');
+                    $('#checkin-info-phone').text(data.phone || '—');
 
                     const statusText = data.status || '—';
                     const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
                         : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
                             : 'scanner-screen__info-status--success';
-                    $(`${this.selectors.box} #checkin-info-status`).html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
-                    $(`${this.selectors.box} #checkin-info-card`).show();
+                    $('#checkin-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                    $('#checkin-info-card').show();
 
                 } else {
                     instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass('scanner-screen__instruction--error').text('Không phát hiện mã QR. Vui lòng thử lại!');
-                    $(`${this.selectors.box} #checkin-info-card`).hide();
+                    $('#checkin-info-card').hide();
                 }
 
-                $(`${this.selectors.box} #checkin-actions-group`).html(`
+                $('#checkin-actions-group').html(`
                     ${isNoQrMode ?
                         `<button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-no-qr">Chụp tiếp</button>
                         <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>`
@@ -502,6 +502,81 @@
                         <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
                     `}
                 `);
+            }
+
+            setNoQrInstruction(message) {
+                $('#checkin-instruction')
+                    .text(message)
+                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+            }
+
+            renderManualBibActions() {
+                $('#checkin-actions-group').html(`
+                    <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm">Xác nhận</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
+                `);
+
+                $('#checkin-manual-bib-input').trigger('focus');
+            }
+
+            showNoQrImage(file) {
+                this.cleanupNoQrImage();
+                this.state.noQrImageSrc = URL.createObjectURL(file);
+                this.state.noQrFile = file;
+                this.state.isNoQrMode = true;
+
+                $('#checkin-scanner-frame')
+                    .removeClass('scanner-screen__frame--active')
+                    .addClass('scanner-screen__frame--has-image')
+                    .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
+
+                $('#checkin-instruction')
+                    .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
+                    .removeClass('scanner-screen__instruction--error')
+                    .addClass('scanner-screen__instruction--success');
+
+                this.renderManualBibActions();
+            }
+
+            bindNoQrInputChange() {
+                $('#checkin-file-input').off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    this.state.isSelectingNoQrImage = false;
+
+                    if (!file) {
+                        this.render();
+                        return;
+                    }
+
+                    this.showNoQrImage(file);
+                });
+            }
+
+            prepareNoQrCapture({ resetFrame = false } = {}) {
+                this.state.qrScanner?.stopScan();
+                this.state.hasResult = false;
+                this.state.isNoQrMode = false;
+                this.state.isSelectingNoQrImage = true;
+
+                if (resetFrame) {
+                    $('#checkin-scanner-frame')
+                        .removeClass('scanner-screen__frame--has-image')
+                        .addClass('scanner-screen__frame--active')
+                        .html('');
+                    $('#checkin-info-card').hide();
+                    $('#checkin-actions-group').html(`
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
+                    `);
+                } else {
+                    $('#checkin-btn-start-scan').hide();
+                    $('#checkin-btn-reset-scan').show();
+                }
+
+                this.setNoQrInstruction('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.');
+                this.bindNoQrInputChange();
+                $('#checkin-file-input').trigger('click');
             }
 
             toggleLoading(isLoading) {
@@ -517,111 +592,52 @@
             }
 
             async handleNoQrCapture() {
-                this.state.qrScanner?.stopScan();
-                this.state.isNoQrMode = false;
-                this.state.hasResult = false;
-                this.state.isSelectingNoQrImage = true;
-
-                $(`${this.selectors.box} #checkin-instruction`).text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
-                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $(`${this.selectors.box} #checkin-btn-start-scan`).hide();
-                $(`${this.selectors.box} #checkin-btn-reset-scan`).show();
-
-                $(`${this.selectors.box} #checkin-file-input`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    this.state.isSelectingNoQrImage = false;
-
-                    if (!file) {
-                        this.render();
-                        return;
-                    }
-
-                    this.cleanupNoQrImage();
-                    this.state.noQrImageSrc = URL.createObjectURL(file);
-                    this.state.noQrFile = file;
-                    this.state.isNoQrMode = true;
-
-                    $(`${this.selectors.box} #checkin-scanner-frame`)
-                        .removeClass('scanner-screen__frame--active')
-                        .addClass('scanner-screen__frame--has-image')
-                        .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
-
-                    $(`${this.selectors.box} #checkin-instruction`)
-                        .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
-                        .removeClass('scanner-screen__instruction--error')
-                        .addClass('scanner-screen__instruction--success');
-
-                    $(`${this.selectors.box} #checkin-actions-group`).html(`
-                        <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm">Xác nhận</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
-                    `);
-
-                    $(`${this.selectors.box} #checkin-manual-bib-input`).trigger('focus');
-                });
-
-                $(`${this.selectors.box} #checkin-file-input`).trigger('click');
+                this.prepareNoQrCapture();
             }
 
             handleNextNoQrCapture() {
                 this.cleanupNoQrImage();
-                this.state.hasResult = false;
-                this.state.isSelectingNoQrImage = true;
+                this.prepareNoQrCapture({ resetFrame: true });
+            }
 
-                $(`${this.selectors.box} #checkin-scanner-frame`)
-                    .removeClass('scanner-screen__frame--has-image')
-                    .addClass('scanner-screen__frame--active')
-                    .html('');
+            buildCheckinFailureData(bib = null) {
+                return {
+                    bib: bib || '—',
+                    name: '—',
+                    phone: '—',
+                    status: 'Check-in thất bại',
+                    statusType: 'error'
+                };
+            }
 
-                $(`${this.selectors.box} #checkin-instruction`)
-                    .text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
-                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+            buildCheckinDataFromResponse(bib, response) {
+                const isSuccess = response?.status == 2;
+                return {
+                    data: {
+                        bib,
+                        name: response?.name || '—',
+                        phone: response?.phone || '—',
+                        status: isSuccess ? 'Check-in thành công' : 'Check-in thất bại',
+                        statusType: isSuccess ? 'success' : 'error'
+                    },
+                    isSuccess
+                };
+            }
 
-                $(`${this.selectors.box} #checkin-info-card`).hide();
-
-                $(`${this.selectors.box} #checkin-actions-group`).html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
-                `);
-
-                $(`${this.selectors.box} #checkin-file-input`).off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    this.state.isSelectingNoQrImage = false;
-
-                    if (!file) {
-                        this.render();
-                        return;
-                    }
-
-                    this.cleanupNoQrImage();
-                    this.state.noQrImageSrc = URL.createObjectURL(file);
-                    this.state.noQrFile = file;
-
-                    $(`${this.selectors.box} #checkin-scanner-frame`)
-                        .removeClass('scanner-screen__frame--active')
-                        .addClass('scanner-screen__frame--has-image')
-                        .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
-
-                    $(`${this.selectors.box} #checkin-instruction`)
-                        .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
-                        .removeClass('scanner-screen__instruction--error')
-                        .addClass('scanner-screen__instruction--success');
-
-                    $(`${this.selectors.box} #checkin-actions-group`).html(`
-                        <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm">Xác nhận</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
-                    `);
-
-                    $(`${this.selectors.box} #checkin-manual-bib-input`).trigger('focus');
-                });
-
-                $(`${this.selectors.box} #checkin-file-input`).trigger('click');
+            async finalizeCheckinByBib({ bib, file = null }) {
+                try {
+                    const response = await this.confirmCheckin({ bib, file });
+                    return this.buildCheckinDataFromResponse(bib, response);
+                } catch {
+                    return {
+                        data: this.buildCheckinFailureData(bib),
+                        isSuccess: false
+                    };
+                }
             }
 
             async handleConfirmCheckin() {
-                const bib = ($(`${this.selectors.box} #checkin-manual-bib-input`).val() || '').trim();
+                const bib = ($('#checkin-manual-bib-input').val() || '').trim();
 
                 if (!this.state.isNoQrMode) {
                     ToastService.show('Vui lòng chọn luồng Không có QR trước.', 'error', 5000);
@@ -634,27 +650,15 @@
                 }
 
                 try {
-                    const result = await this.confirmCheckin({
+                    const result = await this.finalizeCheckinByBib({
                         bib,
                         file: this.state.noQrFile
                     });
                     this.state.hasResult = true;
 
-                    this.updateDOM({
-                        bib,
-                        name: result?.name || '—',
-                        phone: result?.phone || '—',
-                        status: result?.status == 2 ? 'Check-in thành công' : 'Check-in thất bại',
-                        statusType: result?.status == 2 ? 'success' : 'error'
-                    }, result?.status == 2);
+                    this.updateDOM(result.data, result.isSuccess);
                 } catch (error) {
-                    this.updateDOM({
-                        bib,
-                        name: '—',
-                        phone: '—',
-                        status: 'Check-in thất bại',
-                        statusType: 'error'
-                    }, false);
+                    this.updateDOM(this.buildCheckinFailureData(bib), false);
                 }
             }
 
@@ -699,11 +703,11 @@
             }
 
             async startScanner() {
-                $(`${this.selectors.box} #checkin-btn-start-scan`).hide();
-                $(`${this.selectors.box} #checkin-btn-no-qr`).hide();
-                $(`${this.selectors.box} #checkin-btn-reset-scan`).show();
-                $(`${this.selectors.box} #checkin-scanner-frame`).addClass('scanner-screen__frame--active');
-                $(`${this.selectors.box} #checkin-instruction`).text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#checkin-btn-start-scan').hide();
+                $('#checkin-btn-no-qr').hide();
+                $('#checkin-btn-reset-scan').show();
+                $('#checkin-scanner-frame').addClass('scanner-screen__frame--active');
+                $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 const handleResult = async (result, isSuccess) => {
                     this.state.hasResult = true;
@@ -711,25 +715,9 @@
 
                     let data = null;
                     if (isSuccess) {
-                        try {
-                            const response = await this.confirmCheckin({ bib: result });
-                            data = {
-                                bib: result,
-                                name: response.name || '—',
-                                phone: response.phone || '—',
-                                status: response.status == 2 ? 'Check-in thành công' : 'Check-in thất bại',
-                                statusType: response.status == 2 ? 'success' : 'error'
-                            };
-                        } catch {
-                            isSuccess = false;
-                            data = {
-                                bib: result,
-                                name: '—',
-                                phone: '—',
-                                status: 'Check-in thất bại',
-                                statusType: 'error'
-                            };
-                        }
+                        const finalizedResult = await this.finalizeCheckinByBib({ bib: result });
+                        data = finalizedResult.data;
+                        isSuccess = finalizedResult.isSuccess;
                     }
 
                     this.updateDOM(data, isSuccess);
@@ -872,8 +860,8 @@
             }
 
             showResult(resultText, imageSrc) {
-                const instruction = $(`${this.selectors.box} #checkout-instruction`);
-                const frameContainer = $(`${this.selectors.box} #checkout-scanner-frame`);
+                const instruction = $('#checkout-instruction');
+                const frameContainer = $('#checkout-scanner-frame');
 
                 instruction.removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success').text('Phát hiện mã QR!');
 
@@ -881,27 +869,40 @@
                     <img src="${imageSrc}" alt="Bib photo">
                 `);
 
-                // Show info card with result data
-                const data = typeof resultText === 'object' ? resultText : { bib: resultText };
-                $(`${this.selectors.box} #checkout-info-bib`).text(data.bib || '—');
-                $(`${this.selectors.box} #checkout-info-name`).text(data.name || '—');
-                $(`${this.selectors.box} #checkout-info-phone`).text(data.phone || '—');
+                const data = this.normalizeCheckoutResultData(resultText);
+                $('#checkout-info-bib').text(data.bib || '—');
+                $('#checkout-info-name').text(data.name || '—');
+                $('#checkout-info-phone').text(data.phone || '—');
 
                 const statusText = data.status || '—';
                 const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
                     : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
                         : 'scanner-screen__info-status--success';
-                $(`${this.selectors.box} #checkout-info-status`).html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
-                $(`${this.selectors.box} #checkout-info-card`).show();
+                $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                $('#checkout-info-card').show();
 
-                $(`${this.selectors.box} #checkout-btn-reset-scan`).show();
-                $(`${this.selectors.box} #checkout-btn-start-scan`).show();
+                $('#checkout-btn-reset-scan').show();
+                $('#checkout-btn-start-scan').show();
+            }
+
+            normalizeCheckoutResultData(result) {
+                return typeof result === 'object' ? result : { bib: result };
+            }
+
+            buildManualCheckoutResultData(bib) {
+                return {
+                    bib,
+                    name: '—',
+                    phone: '—',
+                    status: 'Nhập tay',
+                    statusType: 'pending'
+                };
             }
 
             showManualBibInput(imageSrc) {
-                const frameContainer = $(`${this.selectors.box} #checkout-scanner-frame`);
+                const frameContainer = $('#checkout-scanner-frame');
 
-                $(`${this.selectors.box} #checkout-instruction`)
+                $('#checkout-instruction')
                     .text('Không detect được QR. Nhập số BIB để xử lý thủ công.')
                     .removeClass('scanner-screen__instruction--success')
                     .addClass('scanner-screen__instruction--error');
@@ -910,32 +911,27 @@
                     .addClass('scanner-screen__frame--has-image')
                     .html(`<img src="${imageSrc}" alt="Bib photo">`);
 
-                $(`${this.selectors.box} #checkout-info-card`).hide();
+                $('#checkout-info-card').hide();
 
-                $(`${this.selectors.box} #checkout-actions-group`).html(`
+                $('#checkout-actions-group').html(`
                     <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" placeholder="Nhập số BIB">
                     <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm-manual-bib">Xác nhận</button>
                     <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan">Reset</button>
                 `);
 
-                $(`${this.selectors.box} #checkout-manual-bib-input`).trigger('focus');
+                $('#checkout-manual-bib-input').trigger('focus');
             }
 
             handleManualBibConfirm() {
-                const bib = ($(`${this.selectors.box} #checkout-manual-bib-input`).val() || '').trim();
+                const bib = ($('#checkout-manual-bib-input').val() || '').trim();
 
                 if (!bib) {
                     ToastService.show('Vui lòng nhập số BIB', 'error', 4000);
                     return;
                 }
 
-                this.showResult({
-                    bib,
-                    name: '—',
-                    phone: '—',
-                    status: 'Nhập tay',
-                    statusType: 'pending'
-                }, this.state.captureImageSrc);
+                const manualResultData = this.buildManualCheckoutResultData(bib);
+                this.showResult(manualResultData, this.state.captureImageSrc);
                 ToastService.show('Đã ghi nhận BIB thủ công', 'success', 3000);
             }
 
@@ -965,45 +961,48 @@
                 this.render();
             }
 
+            async handleCaptureFileChange(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    this.render();
+                    return;
+                }
+
+                try {
+                    const { readBarcodes } = ZXingWASM;
+                    Logger.log('CheckoutModule', 'info', `Selected file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
+
+                    $('#checkout-instruction').text('Đang xử lý ảnh...');
+
+                    const result = await this.processCheckoutImage({ file, readBarcodes });
+
+                    this.cleanupCaptureImage();
+                    this.state.captureImageSrc = URL.createObjectURL(file);
+
+                    if (result.ok) {
+                        const resultData = this.normalizeCheckoutResultData(result.text);
+                        this.showResult(resultData, this.state.captureImageSrc);
+                    } else {
+                        ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
+                        this.showManualBibInput(this.state.captureImageSrc);
+                    }
+                } catch (error) {
+                    ToastService.show(`Lỗi xử lý ảnh: ${error.message}`, 'error', 5000);
+                    Logger.log('CheckoutModule', 'error', error.message);
+                    this.render();
+                } finally {
+                    event.target.value = '';
+                }
+            }
+
             async startCapture() {
-                $(`${this.selectors.box} #checkout-btn-start-scan`).hide();
-                $(`${this.selectors.box} #checkout-btn-reset-scan`).show();
-                $(`${this.selectors.box} #checkout-instruction`).text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#checkout-btn-start-scan').hide();
+                $('#checkout-btn-reset-scan').show();
+                $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                $(`${this.selectors.box} #checkout-file-input`).click();
+                $('#checkout-file-input').click();
 
-                $(`${this.selectors.box} #checkout-file-input`).off('change.checkout-capture').on('change.checkout-capture', async (event) => {
-                    const file = event.target.files[0];
-                    if (!file) {
-                        this.render();
-                        return;
-                    }
-
-                    try {
-                        const { readBarcodes } = ZXingWASM;
-                        Logger.log('CheckoutModule', 'info', `Selected file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
-
-                        $(`${this.selectors.box} #checkout-instruction`).text('Đang xử lý ảnh...');
-
-                        const result = await this.processCheckoutImage({ file, readBarcodes });
-
-                        this.cleanupCaptureImage();
-                        this.state.captureImageSrc = URL.createObjectURL(file);
-
-                        if (result.ok) {
-                            this.showResult(result.text, this.state.captureImageSrc);
-                        } else {
-                            ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
-                            this.showManualBibInput(this.state.captureImageSrc);
-                        }
-                    } catch (error) {
-                        ToastService.show(`Lỗi xử lý ảnh: ${error.message}`, 'error', 5000);
-                        Logger.log('CheckoutModule', 'error', error.message);
-                        this.render();
-                    } finally {
-                        event.target.value = '';
-                    }
-                });
+                $('#checkout-file-input').off('change.checkout-capture').on('change.checkout-capture', (event) => this.handleCaptureFileChange(event));
             }
 
             async processCheckoutImage({ file, readBarcodes }) {
