@@ -396,7 +396,8 @@
                 hasResult: false,
                 qrScanner: null,
                 isNoQrMode: false,
-                noQrImageSrc: null
+                noQrImageSrc: null,
+                isSelectingNoQrImage: false
             };
 
             async init(codeReader) {
@@ -452,7 +453,7 @@
 
                             <div class="scanner-screen__actions" id="btn-group">
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">Quét QR</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-no-qr">Không có QR ?</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-no-qr">Không có QR ? (Mở Camera)</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
@@ -513,6 +514,7 @@
                 this.state.qrScanner?.stopScan();
                 this.state.isNoQrMode = false;
                 this.state.hasResult = false;
+                this.state.isSelectingNoQrImage = true;
 
                 $('#instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.')
                     .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
@@ -522,8 +524,7 @@
                 $('#file').off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
                     const file = event.target.files?.[0];
                     event.target.value = '';
-
-                    console.log('Selected file for no-QR check-in:', file);
+                    this.state.isSelectingNoQrImage = false;
 
                     if (!file) {
                         this.render();
@@ -546,8 +547,8 @@
 
                     $('#btn-group').html(`
                         <input class="scanner-screen__bib-input" id="manual-bib-input" type="text" placeholder="Nhập số BIB">
-                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Confirm</button>
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Làm lại</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-confirm">Xác nhận</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Reset</button>
                     `);
 
                     $('#manual-bib-input').trigger('focus');
@@ -605,7 +606,7 @@
             }
 
             resetScanner() {
-                if (!this.state.hasResult && !this.state.qrScanner?.isScanning() && !this.state.isNoQrMode) {
+                if (!this.state.hasResult && !this.state.qrScanner?.isScanning() && !this.state.isNoQrMode && !this.state.isSelectingNoQrImage) {
                     ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
                     return;
                 }
@@ -613,6 +614,7 @@
                 this.cleanupNoQrImage();
                 this.state.hasResult = false;
                 this.state.isNoQrMode = false;
+                this.state.isSelectingNoQrImage = false;
                 this.state.qrScanner?.stopScan();
                 this.render();
             }
@@ -621,6 +623,7 @@
                 this.cleanupNoQrImage();
                 this.state.hasResult = false;
                 this.state.isNoQrMode = false;
+                this.state.isSelectingNoQrImage = false;
                 this.render();
                 setTimeout(() => this.startScanner(), 300);
             }
@@ -739,6 +742,7 @@
 
                             <div class="scanner-screen__actions" id="btn-group">
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="btn-start-scan">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
                     </div>
@@ -769,9 +773,7 @@
                 $('#info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                 $('#info-card').show();
 
-                $('#btn-group').html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Chụp lại</button>
-                `);
+                $('#btn-reset-scan').show();
             }
 
             bindEvents() {
@@ -787,6 +789,7 @@
 
             async startCapture() {
                 $('#btn-start-scan').hide();
+                $('#btn-reset-scan').show();
                 $('#instruction').text('Chọn ảnh từ thư viện...');
 
                 $('#file').click();
