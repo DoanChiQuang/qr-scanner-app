@@ -17,6 +17,15 @@
     --radius: 16px;
     --radius-sm: 12px;
     --radius-full: 9999px;
+    --app-height: 100vh;
+}
+
+@supports (height: 100svh) {
+    :root { --app-height: 100svh; }
+}
+
+@supports (height: 100dvh) {
+    :root { --app-height: 100dvh; }
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -32,17 +41,17 @@ body {
 #main {
     width: 100%;
     max-width: 480px;
-    min-height: 100vh;
+    min-height: var(--app-height);
     margin: 0 auto;
 }
 
 /* ── Screen Manager ── */
 
 .screen-manager {
-    min-height: 100vh;
+    min-height: var(--app-height);
     display: flex;
     flex-direction: column;
-    padding: 32px 20px;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .screen-manager__header {
@@ -129,10 +138,10 @@ body {
 /* ── Scanner Screen ── */
 
 .scanner-screen {
-    min-height: 100vh;
+    min-height: var(--app-height);
     display: flex;
     flex-direction: column;
-    padding: 20px 20px;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 .scanner-screen__header {
@@ -316,7 +325,7 @@ body {
     gap: 10px;
     width: 100%;
     margin-top: auto;
-    padding: 0px 0;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
 }
 
 .scanner-screen__btn {
@@ -373,10 +382,10 @@ body {
 /* ── Auth Screen ── */
 
 .auth-screen {
-    min-height: 100vh;
+    min-height: var(--app-height);
     display: flex;
     flex-direction: column;
-    padding: 32px 20px;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .auth-screen__header {

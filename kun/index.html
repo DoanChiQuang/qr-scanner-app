@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
-        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
 
@@ -481,7 +481,7 @@
                     btnReset.hide();
 
                     $('#btn-group').html(`
-                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>                        
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-next-scan">Quét tiếp</button>
                     `);
                 } else {
                     instruction.addClass('scanner-screen__instruction--error').text('Không hợp lệ. Thử lại.');
@@ -659,7 +659,7 @@
                 $('#info-card').show();
 
                 $('#btn-group').html(`
-                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Chụp lại</button>                    
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="btn-reset-scan">Chụp lại</button>
                 `);
             }
 
