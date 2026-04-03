@@ -142,6 +142,30 @@
             // }
         }
 
+        function deobfuscateData(encoded, secret = 'sEcReT123') {
+            const b64 = encoded.split('').reverse().join('');
+            const base64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+            let raw = '';
+            try {
+                raw = atob(base64);
+            } catch (e) {
+                raw = '';
+            }
+            return raw.replaceAll(secret, '');
+        }
+
+        function parseScannedData(data) {
+            if (!data || typeof data !== 'string') return {
+                version: '',
+                fields: []
+            };
+            const parts = data.split('|');
+            return {
+                version: parts[0] || '',
+                fields: parts.slice(1)
+            };
+        }
+
         async function apiRequest(endpoint, options = {}) {
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
@@ -407,7 +431,7 @@
                             </div>
 
                             <div class="scanner-screen__actions" id="checkin-actions-group">
-                                <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
+                                <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm" style="display:none">Xác nhận</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-open-camera">Không có QR ? (Mở Camera)</button>
@@ -441,6 +465,10 @@
                 const handleResult = async (result, isSuccess) => {
                     console.log('[CheckinModule] [startScan] Step 1: Result=', result, ' Success=', isSuccess);
                     this.scanner.stop();
+
+                    // const result = parseScannedData(deobfuscateData(result));
+                    // console.log('[CheckinModule] [startScan] Step 2: Parsed Result=', result);
+
                     let data = null;
                     if (result) {
                         const formData = new FormData();
@@ -448,7 +476,7 @@
                         data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
                     }
 
-                    console.log('[CheckinModule] [startScan] Step 2: Response Data=', data);
+                    console.log('[CheckinModule] [startScan] Step 3: Response Data=', data);
                     if (isSuccess && data) {
                         $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this.renderCheckinInfo(data);
@@ -601,7 +629,7 @@
                             </div>
 
                             <div class="scanner-screen__actions" id="checkout-actions-group">
-                                <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
+                                <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset" style="display:none">Reset</button>
@@ -649,6 +677,8 @@
                         console.log('[CheckoutModule] [openCamera] Step 1: QR Processing Result=', result);
 
                         if (result.ok) {
+                            // const parsedResult = parseScannedData(deobfuscateData(result.text));
+                            // console.log('[CheckinModule] [startScan] Step 2: Parsed Result=', parsedResult);
                             const compressedFile = await imageCompression(file, {
                                 maxSizeMB: 0.3,
                                 maxWidthOrHeight: 1600,
