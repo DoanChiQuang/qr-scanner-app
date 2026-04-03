@@ -117,6 +117,12 @@
         }
 
         function downloadBlob(blob, filename) {
+            // iOS Safari: use Web Share API if available
+            if (navigator.share && navigator.canShare?.({ files: [new File([blob], filename, { type: blob.type })] })) {
+                navigator.share({ files: [new File([blob], filename, { type: blob.type })] }).catch(() => { });
+                return;
+            }
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
