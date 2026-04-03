@@ -491,6 +491,7 @@
                 $('#checkin-btn-start-scan, #checkin-btn-open-camera').hide();
                 $('#checkin-btn-reset-scan').show();
                 $('#checkin-instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để Xác nhận').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#checkin-info-card').hide();
 
                 const handleResult = (event) => {
                     const file = event.target.files[0];
