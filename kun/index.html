@@ -476,7 +476,7 @@
                     if (result) {
                         const formData = new FormData();
                         formData.append('bib', result);
-                        data = await apiRequest('2ac622b4-f094-4a6c-80bc-fac883fa584b', { method: 'POST', body: formData });
+                        data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
                     }
 
                     if (isSuccess && data) {
@@ -555,7 +555,7 @@
                     formData.append('bib', bib);
                     if (file) formData.append('file', file);
 
-                    const data = await apiRequest('2ac622b4-f094-4a6c-80bc-fac883fa584b', {
+                    const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', {
                         method: 'POST',
                         body: formData
                     });
@@ -682,7 +682,7 @@
                         const formData = new FormData();
                         formData.append('bib', result.text);
                         formData.append('file', file);
-                        const data = await apiRequest('25cb3d82-3996-4ac9-81a3-9f1c35bdc41d', { method: 'POST', body: formData });
+                        const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
 
                         if (data) {
                             try {
@@ -748,7 +748,7 @@
                     form.append('bib', bib);
                     if (file) form.append('file', file);
 
-                    const data = await apiRequest('25cb3d82-3996-4ac9-81a3-9f1c35bdc41d', { method: 'POST', body: form });
+                    const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: form });
 
                     if (data) {
                         $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
