@@ -150,18 +150,79 @@
             }
         }
 
-        class CameraService {
-            static openCamera(inputElement) {
-                inputElement.click();
-                inputElement.onchange = (event) => {
-                    const file = event.target.files[0];
-                    if (file) {
-                        const url = URL.createObjectURL(file);
-                        return url;
+        class FileService {
+            static fitContain(w, h, maxLongEdge) {
+                const longEdge = Math.max(w, h);
+                if (longEdge <= maxLongEdge) return { w, h };
+                const scale = maxLongEdge / longEdge;
+                return { w: Math.round(w * scale), h: Math.round(h * scale) };
+            }
+
+            static cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
+                const sw = sourceCanvas.width, sh = sourceCanvas.height;
+                const rw = Math.max(1, Math.round(sw * roiWPercent));
+                const rh = Math.max(1, Math.round(sh * roiHPercent));
+                const rx = Math.round((sw - rw) / 2);
+                const ry = Math.round((sh - rh) / 2);
+
+                const c = document.createElement('canvas');
+                c.width = rw; c.height = rh;
+                c.getContext('2d').drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+                return c;
+            }
+
+            static resizeToWidth(sourceCanvas, targetW) {
+                if (sourceCanvas.width <= targetW) return sourceCanvas;
+                const scale = targetW / sourceCanvas.width;
+                const th = Math.max(1, Math.round(sourceCanvas.height * scale));
+
+                const c = document.createElement('canvas');
+                c.width = targetW; c.height = th;
+                c.getContext('2d').drawImage(sourceCanvas, 0, 0, targetW, th);
+                return c;
+            }
+
+            static downloadFile(blob, filename) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            }
+
+            static compressImage(file, minSize = 300, maxSize) { // size in KB
+                return new Promise((resolve, reject) => {
+                    if (!file.type.startsWith('image/')) {
+                        reject(new Error('File is not an image'));
+                        return;
                     }
 
-                    return null;
-                };
+                    const img = new Image();
+                    img.onload = () => {
+                        const { w, h } = FileService.fitContain(img.width, img.height, 2000);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w; canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+
+                        canvas.toBlob(blob => {
+                            if (blob.size / 1024 <= minSize) {
+                                resolve(blob);
+                            } else if (blob.size / 1024 > minSize && blob.size / 1024 <= maxSize) {
+                                resolve(blob);
+                            } else {
+                                reject(new Error('Compressed image exceeds maximum size'));
+                            }
+                        }, 'image/jpeg', 0.8);
+                    };
+                    img.onerror = () => reject(new Error('Failed to load image'));
+                    img.src = URL.createObjectURL(file);
+                });
             }
         }
         class AuthScreen {
@@ -411,6 +472,11 @@
                     $('#modal').toggleClass('is-open', true);
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
+
+                    if (file) {
+                        const compressedFile = await FileService.compressImage(file, 300, 500);
+                        FileService.downloadFile(compressedFile, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
+                    }
 
                     const form = new FormData();
                     form.append('bib', bib);
