@@ -609,10 +609,6 @@
                             <p class="scanner-screen__instruction" id="checkout-instruction">Chụp ảnh QR trên BIB</p>
 
                             <div class="scanner-screen__info" id="checkout-info-card" style="display:none">
-                                <div class="scanner-screen__info-header">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                                    <span>Quét thành công</span>
-                                </div>
                                 <div class="scanner-screen__info-body">
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkout-info-bib">—</span></div>
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkout-info-name">—</span></div>
@@ -625,7 +621,7 @@
                                 <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan" style="display:none">Reset</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset" style="display:none">Reset</button>
                             </div>
                         </div>
 
@@ -641,10 +637,14 @@
                 $('#checkout-btn-open-camera').on('click', () => this.openCamera());
                 $('#checkout-btn-confirm').on('click', () => this.confirmCheckout());
                 $('#checkout-btn-back').on('click', () => this.goBack());
-                $('#checkout-btn-reset-scan').on('click', () => this.reset());
+                $('#checkout-btn-reset').on('click', () => this.reset());
             }
 
             openCamera() {
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image');
+                $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#checkout-info-card').hide();
+
                 const handleResult = async (event) => {
                     const file = event.target.files[0];
                     if (!file) return;
@@ -667,7 +667,7 @@
                                 downloadBlob(compressed, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
                             } catch (e) { }
 
-                            $('#checkout-instruction').text('Quét thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
+                            $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                             this._showResultInfo(data);
                         } else {
                             this._showManualInput();
@@ -695,8 +695,9 @@
             }
 
             _showManualInput() {
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image');
                 $('#checkout-instruction').text('Không nhận diện được QR. Vui lòng thử lại.').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
-                $('#checkout-manual-bib-input, #checkout-btn-confirm').show();
+                $('#checkout-manual-bib-input, #checkout-btn-reset').show();
             }
 
             async confirmCheckout() {
@@ -711,21 +712,22 @@
                     const fileInput = $('#checkout-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
+                    let fileCompressed = null;
                     if (file) {
                         try {
-                            const compressed = await compressImage(file, 300, 500);
-                            downloadBlob(compressed, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
+                            fileCompressed = await compressImage(file, 300, 500);
+                            downloadBlob(fileCompressed, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
                         } catch (e) { }
                     }
 
                     const form = new FormData();
                     form.append('bib', bib);
-                    if (file) form.append('file', file);
+                    if (fileCompressed) form.append('file', fileCompressed);
 
                     const data = await apiRequest('add3f330-5159-466c-a8a5-d9967322d651', { method: 'POST', body: form });
 
                     if (data) {
-                        $('#checkout-instruction').text('Check-out thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
+                        $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this._showResultInfo(data);
                     } else {
                         $('#checkout-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
@@ -740,6 +742,7 @@
             }
 
             goBack() {
+                this.reset();
                 $('#checkout-screen-wrapper').hide();
                 $('#screen-manager').show();
             }
