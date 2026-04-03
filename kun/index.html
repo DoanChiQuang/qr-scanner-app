@@ -119,7 +119,6 @@
         }
 
         async function downloadBlob(blobOrFile, filename) {
-            // const file = new File([blobOrFile], filename, { type: blobOrFile.type || 'image/jpeg' });
             const url = URL.createObjectURL(blobOrFile);
             const a = document.createElement('a');
             a.href = url;
@@ -130,15 +129,17 @@
             setTimeout(() => URL.revokeObjectURL(url), 1000);
 
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-            if (isIOS) {                
+            if (isIOS) {
                 setTimeout(() => {
                     try { window.open(url, '_blank', 'noopener'); } catch (e) { }
                 }, 300);
-                // if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                //     await navigator.share({ files: [file], title: filename });
-                //     return;
-                // }
             }
+
+            // const file = new File([blobOrFile], filename, { type: blobOrFile.type || 'image/jpeg' });
+            // if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            //     await navigator.share({ files: [file], title: filename });
+            //     return;
+            // }
         }
 
         async function apiRequest(endpoint, options = {}) {
@@ -253,6 +254,7 @@
             ];
 
             for (const strategy of strategies) {
+                console.log('[QR Code Processor] Running strategy:', strategy.name || 'anonymous');
                 const barcodes = await strategy();
                 if (barcodes.length) {
                     const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
@@ -433,11 +435,11 @@
             startScan() {
                 $('#checkin-btn-start-scan, #checkin-btn-open-camera').hide();
                 $('#checkin-btn-reset-scan').show();
-                // $('#checkin-scanner-frame').remove('scanner-screen__frame--active');
                 $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
                 $('#checkin-info-card').hide();
 
                 const handleResult = async (result, isSuccess) => {
+                    console.log('[CheckinModule] [startScan] Step 1: Result=', result, ' Success=', isSuccess);
                     this.scanner.stop();
                     let data = null;
                     if (result) {
@@ -446,6 +448,7 @@
                         data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
                     }
 
+                    console.log('[CheckinModule] [startScan] Step 2: Response Data=', data);
                     if (isSuccess && data) {
                         $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this.renderCheckinInfo(data);
@@ -493,13 +496,13 @@
             }
 
             async confirmCheckin() {
-                const bib = ($('#checkin-manual-bib-input').val() || '').trim();
-                if (!bib) {
-                    showToast('Vui lòng nhập số BIB', 'error', 5000);
-                    return;
-                }
-
                 try {
+                    const bib = ($('#checkin-manual-bib-input').val() || '').trim();
+                    if (!bib) {
+                        showToast('Vui lòng nhập số BIB', 'error', 5000);
+                        return;
+                    }
+
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
@@ -510,6 +513,7 @@
                         useWebWorker: true,
                     });
                     downloadBlob(compressedFile, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
+                    console.log('[CheckinModule] [confirmCheckin] Step 1: Compressed & Downloaded File=', compressedFile);
 
                     const formData = new FormData();
                     formData.append('bib', bib);
@@ -520,19 +524,21 @@
                         body: formData
                     });
 
+                    console.log('[CheckinModule] [confirmCheckin] Step 2: API Response Data=', data);
+
                     if (data) {
                         $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this.renderCheckinInfo(data);
                     } else {
                         $('#checkin-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
                     }
-
+                } catch (error) {
+                    console.log('[CheckinModule] [confirmCheckin] Error:', error);
+                    $('#checkin-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
+                } finally {
                     $('#checkin-manual-bib-input, #checkin-btn-confirm').hide();
                     $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
                     $('#checkin-manual-bib-input, #checkin-file-input').val('');
-                } catch (error) {
-                    console.log(error);
-                } finally {
                     $('#modal').removeClass('is-open');
                 }
             }
@@ -628,38 +634,44 @@
                 $('#checkout-info-card').hide();
 
                 const handleResult = async (event) => {
-                    const file = event.target.files[0];
-                    if (!file) return;
+                    try {
+                        const file = event.target.files[0];
+                        if (!file) return;
 
-                    const url = URL.createObjectURL(file);
-                    $('#checkout-instruction').text('Đang xử lý ảnh...');
+                        const url = URL.createObjectURL(file);
+                        $('#checkout-instruction').text('Đang xử lý ảnh...');
 
-                    $('#checkout-scanner-frame')
-                        .addClass('scanner-screen__frame--has-image')
-                        .html(`<img src="${url}" alt="Captured" width="100%" height="100%" style="object-fit: contain;" />`);
+                        $('#checkout-scanner-frame')
+                            .addClass('scanner-screen__frame--has-image')
+                            .html(`<img src="${url}" alt="Captured" width="100%" height="100%" style="object-fit: contain;" />`);
 
-                    const result = await processQRFromImage(file);
+                        const result = await processQRFromImage(file);
+                        console.log('[CheckoutModule] [openCamera] Step 1: QR Processing Result=', result);
 
-                    if (result.ok) {
-                        const compressedFile = await imageCompression(file, {
-                            maxSizeMB: 0.3,
-                            maxWidthOrHeight: 1600,
-                            useWebWorker: true,
-                        });
-                        downloadBlob(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
+                        if (result.ok) {
+                            const compressedFile = await imageCompression(file, {
+                                maxSizeMB: 0.3,
+                                maxWidthOrHeight: 1600,
+                                useWebWorker: true,
+                            });
+                            downloadBlob(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
 
-                        const formData = new FormData();
-                        formData.append('bib', result.text);
-                        formData.append('file', compressedFile);
-                        const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
+                            const formData = new FormData();
+                            formData.append('bib', result.text);
+                            formData.append('file', compressedFile);
+                            const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
 
-                        if (data) {
-                            $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
-                            this._showResultInfo(data);
+                            if (data) {
+                                $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
+                                this._showResultInfo(data);
+                            } else {
+                                throw new Error('API response invalid');
+                            }
                         } else {
-                            this._showManualInput();
+                            throw new Error('QR code not detected');
                         }
-                    } else {
+                    } catch (error) {
+                        console.log('[CheckoutModule] [openCamera] Error:', error);
                         this._showManualInput();
                     }
                 };
@@ -689,13 +701,13 @@
             }
 
             async confirmCheckout() {
-                const bib = ($('#checkout-manual-bib-input').val() || '').trim();
-                if (!bib) {
-                    showToast('Vui lòng nhập số BIB', 'error', 5000);
-                    return;
-                }
-
                 try {
+                    const bib = ($('#checkout-manual-bib-input').val() || '').trim();
+                    if (!bib) {
+                        showToast('Vui lòng nhập số BIB', 'error', 5000);
+                        return;
+                    }
+
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkout-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
@@ -706,12 +718,14 @@
                         useWebWorker: true,
                     });
                     downloadBlob(compressedFile, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
+                    console.log('[CheckoutModule] [confirmCheckout] Step 1: Compressed & Downloaded File=', compressedFile);
 
                     const form = new FormData();
                     form.append('bib', bib);
                     if (compressedFile) form.append('file', compressedFile);
-
                     const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: form });
+
+                    console.log('[CheckoutModule] [confirmCheckout] Step 2: API Response Data=', data);
 
                     if (data) {
                         $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
@@ -719,11 +733,14 @@
                     } else {
                         $('#checkout-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
                     }
-
+                } catch (error) {
+                    console.log('[CheckoutModule] [confirmCheckout] Error:', error);
+                    $('#checkout-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
+                }
+                finally {
                     $('#checkout-manual-bib-input, #checkout-btn-confirm').hide();
                     $('#checkout-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
                     $('#checkout-manual-bib-input, #checkout-file-input').val('');
-                } finally {
                     $('#modal').removeClass('is-open');
                 }
             }
