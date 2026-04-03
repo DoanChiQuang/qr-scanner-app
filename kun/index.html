@@ -535,12 +535,16 @@
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
+                    console.log('Confirming check-in for BIB:', fileInput);
+                    console.log('Selected file:', file);
+
                     const fileCompressed = null;
                     if (file) {
                         try {
                             fileCompressed = await compressImage(file, 300, 500);
                             downloadBlob(fileCompressed, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
                         } catch (e) {
+                            console.log('Image compression failed:', e.message);
                             console.log('Compress failed, using original');
                         }
                     }
