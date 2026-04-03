@@ -117,13 +117,15 @@
         }
 
         function downloadBlob(blob, filename) {
-            // iOS Safari: use Web Share API if available
-            if (navigator.share && navigator.canShare?.({ files: [new File([blob], filename, { type: blob.type })] })) {
-                navigator.share({ files: [new File([blob], filename, { type: blob.type })] }).catch(() => { });
+            const url = URL.createObjectURL(blob);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if (isIOS) {
+                window.open(url, '_blank');
                 return;
             }
 
-            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
