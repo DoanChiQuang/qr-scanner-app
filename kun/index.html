@@ -701,8 +701,9 @@
 
             _showManualInput() {
                 $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image');
-                $('#checkout-instruction').text('Không nhận diện được QR. Vui lòng thử lại.').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
-                $('#checkout-manual-bib-input, #checkout-btn-reset').show();
+                $('#checkout-instruction').text('Không nhận diện được QR. Thử lại hoặc nhập thủ công số Bib').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
+                $('#checkout-manual-bib-input, #checkout-btn-reset, #checkout-btn-confirm').show();
+                $('#checkout-btn-open-camera').hide();
             }
 
             async confirmCheckout() {
