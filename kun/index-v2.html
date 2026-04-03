@@ -121,7 +121,7 @@
                 }, timeout);
 
                 try {
-                    const result = await this.codeReader.decodeOnceFromVideoDevice(undefined, this.videoElement);
+                    const result = await this.codeReader.decodeOnceFromVideoDevice(undefined, this.videoId);
                     if (result?.text) {
                         this.clearTimeout();
                         if (onSuccess) await onSuccess(result.text);
@@ -316,7 +316,7 @@
                 });
                 $('#checkin-btn-reset-scan').on('click', () => {
                     this.scanner.stopScan();
-                    $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image').html(`
+                    $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active').html(`
                         <video id="${this.videoId}" width="100%" height="100%"></video>
                         <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
                         <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
