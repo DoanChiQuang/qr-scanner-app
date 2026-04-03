@@ -125,15 +125,16 @@
 
             try {
                 if (isIOS) {
-                    const shareFile = new File([blob], filename, { type: blob.type || "application/octet-stream" });
+                    console.log('iOS detected, opening image in new tab');
+                    // const shareFile = new File([blob], filename, { type: blob.type || "application/octet-stream" });
 
-                    if (navigator.canShare?.({ files: [shareFile] }) && navigator.share) {
-                        await navigator.share({
-                            files: [shareFile],
-                            title: filename,
-                        });
-                        return;
-                    }
+                    // if (navigator.canShare?.({ files: [shareFile] }) && navigator.share) {
+                    //     await navigator.share({
+                    //         files: [shareFile],
+                    //         title: filename,
+                    //     });
+                    //     return;
+                    // }
 
                     const w = window.open(url, "_blank", "noopener,noreferrer");
                     if (!w) {
