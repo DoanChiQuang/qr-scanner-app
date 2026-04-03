@@ -119,16 +119,8 @@
         }
 
         async function downloadBlob(blobOrFile, filename) {
-            const file = new File([blobOrFile], filename, { type: blobOrFile.type || 'image/jpeg' });
-
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-            if (isIOS) {
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    await navigator.share({ files: [file], title: filename });
-                    return;
-                }
-            }
-
+            // const file = new File([blobOrFile], filename, { type: blobOrFile.type || 'image/jpeg' });
+            const url = URL.createObjectURL(blobOrFile);
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
@@ -136,6 +128,17 @@
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+            if (isIOS) {                
+                setTimeout(() => {
+                    try { window.open(url, '_blank', 'noopener'); } catch (e) { }
+                }, 300);
+                // if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                //     await navigator.share({ files: [file], title: filename });
+                //     return;
+                // }
+            }
         }
 
         async function apiRequest(endpoint, options = {}) {
