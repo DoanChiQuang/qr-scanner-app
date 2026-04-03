@@ -565,7 +565,7 @@
                             </div>
 
                             <div class="scanner-screen__actions" id="checkout-actions-group">
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-start-scan">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
@@ -575,6 +575,111 @@
                 `).show();
 
                 this.isInit = true;
+                this.handleEvents();
+            }
+
+            handleEvents() {
+                $('#checkout-btn-open-camera').on('click', () => this.openCamera());
+                $('#checkout-btn-confirm').on('click', () => this.confirmCheckout());
+                $('#checkout-btn-back').on('click', () => this.goBack());
+                $('#checkout-btn-reset-scan').on('click', () => this.reset());
+            }
+
+            openCamera() {
+                const handleResult = async (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const url = URL.createObjectURL(file);
+
+                        $('#checkout-instruction').text('Đang xử lý ảnh...');
+
+                        $('#checkout-scanner-frame')
+                            .addClass('scanner-screen__frame--has-image')
+                            .html(`<img src="${url}" alt="Captured Image" width="100%" height="100%" style="object-fit: contain;" />`);
+
+                        const result = await this.processQRCodeImage(file);
+                        console.log('QR Processing Result: ', result);
+                        if (result.ok) {
+                            const data = await ApiService.fetch('902978df-abd2-4808-9a58-203bc442f7f3', {
+                                method: 'POST',
+                                // headers: {
+                                //     'Content-Type': 'application/json'
+                                // },
+                                // body: JSON.stringify({ bib: result.text })
+                            });
+
+                            const compressedFile = await FileService.compressImage(file, 300, 500);
+                            FileService.downloadFile(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
+
+                            if (data) {
+                                $('#checkout-instruction').text('Quét thành công').removeClass('scanner-screen__instruction--error').addClass('scanner-screen__instruction--success');
+                                $('#checkout-info-card').show();
+                                $('#checkout-info-bib').text(data.bib || '—');
+                                $('#checkout-info-name').text(data.name || '—');
+                                $('#checkout-info-phone').text(data.phone || '—');
+
+                                const statusText = data.status == 3 ? 'Check-out thành công' : 'Check-out thất bại';
+                                const statusClass = data.status == 3
+                                    ? 'scanner-screen__info-status--success'
+                                    : 'scanner-screen__info-status--error';
+
+                                $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                            } else {
+                                $('#checkout-instruction').text('Không nhận diện được QR. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
+                            }
+                        } else {
+                            // Thêm nhập liệu thủ công nếu không nhận diện được QR
+                        }
+                    }
+                };
+
+                $('#checkout-file-input').on('change', handleResult);
+                $('#checkout-file-input').trigger('click');
+            }
+
+            confirmCheckout() {
+            }
+
+            goBack() {
+                $('#checkout-screen-wrapper').hide();
+                $('#screen-manager').show();
+            }
+
+            reset() {
+            }
+
+            async processQRCodeImage(file) {
+                const { readBarcodes } = ZXingWASM;
+                const bitmap = await createImageBitmap(file);
+                const fitted = FileService.fitContain(bitmap.width, bitmap.height, 2200);
+
+                const master = document.createElement('canvas');
+                master.width = fitted.w;
+                master.height = fitted.h;
+                master.getContext('2d', { willReadFrequently: true }).drawImage(bitmap, 0, 0, fitted.w, fitted.h);
+
+                const decodeFromCanvas = async (canvas) => {
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const res = await readBarcodes(imgData);
+                    return Array.isArray(res) ? res : [];
+                };
+
+                const strategies = [
+                    () => decodeFromCanvas(FileService.resizeToWidth(FileService.cropCenterROI(master, 0.70, 0.85), 1200)),
+                    () => decodeFromCanvas(FileService.resizeToWidth(master, 1600)),
+                    () => decodeFromCanvas(FileService.resizeToWidth(master, 2400)),
+                ];
+
+                for (const strategy of strategies) {
+                    const barcodes = await strategy();
+                    if (barcodes.length) {
+                        const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                        if (text) return { ok: true, text, barcodes };
+                    }
+                }
+
+                return { ok: false, text: '', barcodes: [] };
             }
         }
 
