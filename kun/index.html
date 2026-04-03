@@ -459,12 +459,17 @@
                 $('#checkin-btn-reset-scan').show();
                 $('#checkin-scanner-frame').addClass('scanner-screen__frame--active');
                 $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#checkin-info-card').hide();
 
                 const handleResult = async (result, isSuccess) => {
                     this.scanner.stop();
-                    const data = await apiRequest('709140c2-5b37-421b-bb43-46f1e407f2b1', { method: 'POST' });
+                    let data = null;
+                    if (result) {
+                        data = await apiRequest('709140c2-5b37-421b-bb43-46f1e407f2b1', { method: 'POST' });
+                    }
 
                     if (isSuccess && data) {
+                        $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this.renderCheckinInfo(data);
                     } else {
                         $('#checkin-instruction').text('Quét thất bại. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
@@ -520,10 +525,11 @@
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
+                    const fileCompressed = null;
                     if (file) {
                         try {
-                            const compressed = await compressImage(file, 300, 500);
-                            downloadBlob(compressed, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
+                            fileCompressed = await compressImage(file, 300, 500);
+                            downloadBlob(fileCompressed, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
                         } catch (e) {
                             console.log('Compress failed, using original');
                         }
@@ -531,7 +537,7 @@
 
                     const form = new FormData();
                     form.append('bib', bib);
-                    if (file) form.append('file', file);
+                    if (fileCompressed) form.append('file', fileCompressed);
 
                     const data = await apiRequest('709140c2-5b37-421b-bb43-46f1e407f2b1', {
                         method: 'POST',
@@ -539,6 +545,7 @@
                     });
 
                     if (data) {
+                        $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this.renderCheckinInfo(data);
                     } else {
                         $('#checkin-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
@@ -553,6 +560,7 @@
             }
 
             reset() {
+                this.scanner.stop();
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active');
                 this.renderVideoFrame();
                 $('#checkin-instruction').text(this.defaultInstruction).removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
@@ -564,6 +572,7 @@
             }
 
             goBack() {
+                this.reset();
                 $('#checkin-screen-wrapper').hide();
                 $('#screen-manager').show();
             }
