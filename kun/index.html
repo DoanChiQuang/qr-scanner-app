@@ -19,6 +19,8 @@
     <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"
         integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript"
+        src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="moment.min.js"></script>
 
@@ -116,62 +118,24 @@
             return canvas;
         }
 
-        async function downloadBlob(blob, filename) {
-            const isIOS =
-                /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        async function downloadBlob(blobOrFile, filename) {
+            const file = new File([blobOrFile], filename, { type: blobOrFile.type || 'image/jpeg' });
 
-            const url = URL.createObjectURL(blob);
-
-            try {
-                if (isIOS) {
-                    console.log('iOS detected, opening image in new tab');
-                    setTimeout(() => {
-                        try { window.open(url, '_blank', 'noopener'); } catch (e) { }
-                    }, 300);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+            if (isIOS) {
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: filename });
                     return;
                 }
-
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = filename;
-                a.rel = "noopener";
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-            } catch(e) {
-                console.log(e);
-            } finally {
-                setTimeout(() => URL.revokeObjectURL(url), 60_000);
-            }
-        }
-
-        async function compressImage(file, minSizeKB = 300, maxSizeKB = 500) {
-            if (!file.type.startsWith('image/')) {
-                return Promise.reject(new Error('File is not an image'));
             }
 
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const { width, height } = formatImageSize(img.width, img.height, CONFIG.IMAGE_MAX_SIZE);
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width; canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    canvas.toBlob(blob => {
-                        const sizeKB = blob.size / 1024;
-                        if (sizeKB <= minSizeKB || sizeKB <= maxSizeKB) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Compressed image exceeds maximum size'));
-                        }
-                    }, 'image/jpeg', CONFIG.IMAGE_COMPRESS_QUALITY);
-                };
-                img.onerror = () => reject(new Error('Failed to load image'));
-                img.src = URL.createObjectURL(file);
-            });
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
         async function apiRequest(endpoint, options = {}) {
@@ -537,23 +501,16 @@
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
-                    console.log('Confirming check-in for BIB:', fileInput);
-                    console.log('Selected file:', file);
-
-                    const fileCompressed = null;
-                    if (file) {
-                        try {
-                            fileCompressed = await compressImage(file, 300, 500);
-                            downloadBlob(fileCompressed, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
-                        } catch (e) {
-                            console.log('Image compression failed:', e.message);
-                            console.log('Compress failed, using original');
-                        }
-                    }
+                    const compressedFile = await imageCompression(file, {
+                        maxSizeMB: 0.3,
+                        maxWidthOrHeight: 1600,
+                        useWebWorker: true,
+                    });
+                    downloadBlob(compressedFile, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
 
                     const formData = new FormData();
                     formData.append('bib', bib);
-                    if (file) formData.append('file', file);
+                    if (compressedFile) formData.append('file', compressedFile);
 
                     const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', {
                         method: 'POST',
@@ -570,6 +527,8 @@
                     $('#checkin-manual-bib-input, #checkin-btn-confirm').hide();
                     $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
                     $('#checkin-manual-bib-input, #checkin-file-input').val('');
+                } catch (error) {
+                    console.log(error);
                 } finally {
                     $('#modal').removeClass('is-open');
                 }
@@ -679,17 +638,19 @@
                     const result = await processQRFromImage(file);
 
                     if (result.ok) {
+                        const compressedFile = await imageCompression(file, {
+                            maxSizeMB: 0.3,
+                            maxWidthOrHeight: 1600,
+                            useWebWorker: true,
+                        });
+                        downloadBlob(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
+
                         const formData = new FormData();
                         formData.append('bib', result.text);
-                        formData.append('file', file);
+                        formData.append('file', compressedFile);
                         const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
 
                         if (data) {
-                            try {
-                                const compressed = await compressImage(file, 300, 500);
-                                downloadBlob(compressed, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
-                            } catch (e) { }
-
                             $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                             this._showResultInfo(data);
                         } else {
@@ -736,17 +697,16 @@
                     const fileInput = $('#checkout-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
-                    let fileCompressed = null;
-                    if (file) {
-                        try {
-                            fileCompressed = await compressImage(file, 300, 500);
-                            downloadBlob(fileCompressed, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
-                        } catch (e) { }
-                    }
+                    const compressedFile = await imageCompression(file, {
+                        maxSizeMB: 0.3,
+                        maxWidthOrHeight: 1600,
+                        useWebWorker: true,
+                    });
+                    downloadBlob(compressedFile, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
 
                     const form = new FormData();
                     form.append('bib', bib);
-                    if (file) form.append('file', file);
+                    if (compressedFile) form.append('file', compressedFile);
 
                     const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: form });
 
