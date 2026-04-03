@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- <?php echo $this->headTitle($this->title); ?> -->
+    <meta http-equiv="X-UA-Compatible" content="IE=100" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="FPT Online" />
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/@zxing/library@0.21.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="moment.min.js"></script>
+
+    <!-- <? if ($this->debug): ?> -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+    </script>
+    <!-- <? endif; ?> -->
+
+    <!-- Captcha -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+
+<body>
+    <div id="main">
+        <div id="screen-auth-root" class="screen-root screen-root--auth" style="display:none"></div>
+        <div id="screen-manager-root" class="screen-root screen-root--manager" style="display:none"></div>
+        <div id="screen-checkin-root" class="screen-root screen-root--checkin" style="display:none"></div>
+        <div id="screen-checkout-root" class="screen-root screen-root--checkout" style="display:none"></div>
+    </div>
+    <div id="turnstile-container"></div>
+    <div class="modal" id="modal">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        let authModule = null;
+        let screenManager = null;
+        let checkinModule = null;
+        let checkoutModule = null;
+
+        const SCREEN_ROOT_SELECTORS = {
+            auth: '#screen-auth-root',
+            manager: '#screen-manager-root',
+            checkin: '#screen-checkin-root',
+            checkout: '#screen-checkout-root'
+        };
+
+        function showScreen(screenKey) {
+            const screenSelector = SCREEN_ROOT_SELECTORS[screenKey];
+            if (!screenSelector) {
+                throw new Error(`Unknown screen key: ${screenKey}`);
+            }
+            $('.screen-root').not(screenSelector).hide().empty();
+            $(screenSelector).show();
+        }
+
+        class Config {
+            static API_BASE_URL = 'https://webhook.site/';
+            static TURNSTILE_SITE_KEY = '0x4AAAAAAAOOjy5Nup_zy_9p';
+            static TIMEOUT_DURATION = 15000;
+            static STATUS_CODES = {
+                USER_READY_CHECKIN: 1,
+                USER_READY_CHECKOUT: 2
+            };
+            static ICONS = {
+                CHECK: 'icon-check.png',
+                CLOCK: 'icon-clock.png',
+                REMOVE: 'icon-remove.png',
+            };
+        }
+
+        class Logger {
+            static log(module, type, message, data = null) {
+                const logMessage = `[${module}] [${type}] ${message}`;
+                type === 'error' ? console.error(logMessage) : console.log(logMessage);
+                if (data) console.log(data);
+            }
+        }
+
+        class ToastService {
+            static show(message, type = 'info', duration = 3000) {
+                const backgrounds = {
+                    info: 'linear-gradient(to right, #00b09b, #96c93d)',
+                    error: 'linear-gradient(to right, #ff5f6d, #ffc371)',
+                    success: 'linear-gradient(to right, #56ab2f, #a8e063)'
+                };
+
+                Toastify({
+                    text: message,
+                    duration,
+                    close: true,
+                    gravity: "top",
+                    position: "center",
+                    style: {
+                        background: backgrounds[type] || backgrounds.info
+                    }
+                }).showToast();
+            }
+        }
+
+        class ApiService {
+            static async fetch(endpoint, options = {}) {
+                try {
+                    const response = await fetch(`${Config.API_BASE_URL}${endpoint}`, {
+                        ...options,
+                        // credentials: 'include',
+                    });
+                    const result = await response.json();
+                    Logger.log('ApiService', 'info', `[API][${endpoint}] Response:`, result);
+                    if (result.code != 200) throw new Error(result.message || 'API request failed');
+                    return result.data ? result.data : true;
+                } catch (error) {
+                    Logger.log('ApiService', 'error', `[API][${endpoint}]: ${error.message}`);
+                    throw error;
+                }
+            }
+        }
+
+        class ScreenManager {
+            selectors = {
+                box: SCREEN_ROOT_SELECTORS.manager,
+            };
+
+            constructor() {
+                this.bindEvents();
+            }
+
+            render() {
+                $(this.selectors.box).html(`
+                    <div class="screen-manager">
+                        <div class="screen-manager__header">
+                            <div class="screen-manager__logo">
+                                <img src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="VnExpress Marathon">
+                            </div>
+                            <h1 class="screen-manager__title">QR Scanner</h1>
+                            <p class="screen-manager__subtitle">Chọn thao tác để tiếp tục</p>
+                        </div>
+
+                        <div class="screen-manager__cards">
+                            <div class="screen-manager__card" id="card-checkin">
+                                <div class="screen-manager__card-icon screen-manager__card-icon--checkin">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 11l3 3L22 4"/>
+                                        <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                                    </svg>
+                                </div>
+                                <div class="screen-manager__card-content">
+                                    <h3 class="screen-manager__card-title">Check In</h3>
+                                    <p class="screen-manager__card-desc">Quét QR để vào cổng</p>
+                                </div>
+                                <div class="screen-manager__card-arrow">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                </div>
+                            </div>
+
+                            <div class="screen-manager__card" id="card-checkout">
+                                <div class="screen-manager__card-icon screen-manager__card-icon--checkout">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                                        <polyline points="16 17 21 12 16 7"/>
+                                        <line x1="21" y1="12" x2="9" y2="12"/>
+                                    </svg>
+                                </div>
+                                <div class="screen-manager__card-content">
+                                    <h3 class="screen-manager__card-title">Check Out</h3>
+                                    <p class="screen-manager__card-desc">Chụp ảnh QR để ra cổng</p>
+                                </div>
+                                <div class="screen-manager__card-arrow">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="screen-manager__footer">
+                            <p class="screen-manager__footer-text">Powered by vRace</p>
+                        </div>
+                    </div>
+                `);
+                showScreen('manager');
+            }
+
+            bindEvents() {
+                const $box = $(this.selectors.box);
+                $box.on('click', '#card-checkin', async () => {
+                    if (checkinModule) {
+                        checkinModule.render();
+                    } else {
+                        const codeReader = new ZXing.BrowserQRCodeReader();
+                        checkinModule = new CheckinModule();
+                        await checkinModule.init(codeReader);
+                    }
+                });
+                $box.on('click', '#card-checkout', async () => {
+                    if (checkoutModule) {
+                        checkoutModule.render();
+                    } else {
+                        checkoutModule = new CheckoutModule();
+                        await checkoutModule.init();
+                    }
+                });
+            }
+        }
+
+        class AuthModule {
+            selectors = {
+                box: SCREEN_ROOT_SELECTORS.auth,
+                form: '#form',
+                btnLogin: '#btn-login'
+            };
+
+            state = {
+                accountInfo: null
+            };
+
+            async init() {
+                this.bindEvents();
+                try {
+                    this.state.accountInfo = await this.getAccountInfo();
+                } catch {
+                    ToastService.show('Session expired. Please log in again.', 'error', 5000);
+                }
+                Logger.log('AuthModule', 'info', 'Initialized');
+                return this;
+            }
+
+            render() {
+                $(this.selectors.box).html(`
+                    <div class="auth-screen">
+                        <div class="auth-screen__header">
+                            <div class="screen-manager__logo">
+                                <img src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="VnExpress Marathon">
+                            </div>
+                            <h1 class="auth-screen__title">Đăng nhập</h1>
+                            <p class="auth-screen__subtitle">Nhập thông tin để tiếp tục</p>
+                        </div>
+
+                        <form class="auth-form" id="form" method="POST">
+                            <div class="auth-form__group">
+                                <label class="auth-form__label" for="email">Email</label>
+                                <input class="auth-form__input" type="email" id="email" name="email" placeholder="email@example.com" required>
+                            </div>
+                            <div class="auth-form__group">
+                                <label class="auth-form__label" for="password">Mật khẩu</label>
+                                <input class="auth-form__input" type="password" id="password" name="password" placeholder="******" required>
+                            </div>
+                            <button type="submit" class="auth-form__btn" id="btn-login">Đăng nhập</button>
+                        </form>
+
+                        <div class="auth-screen__footer">
+                            <p class="auth-screen__footer-text">Powered by vRace</p>
+                        </div>
+                    </div>
+                `);
+                showScreen('auth');
+            }
+
+            isLoggedIn() {
+                return !!this.state.accountInfo;
+            }
+
+            bindEvents() {
+                const { selectors } = this;
+                $(selectors.box).on('submit', selectors.form, async (e) => {
+                    e.preventDefault();
+                    $(selectors.btnLogin).prop('disabled', true).text('Đang đăng nhập...');
+                    try {
+                        // const token = await new Promise((resolve) => this.renderTurnstile(resolve));
+                        const token = null;
+                        await this.handleLogin(token);
+                    } catch (error) {
+                        ToastService.show(error.message, 'error', 5000);
+                        Logger.log('AuthModule', 'error', error.message);
+                    } finally {
+                        $(selectors.btnLogin).prop('disabled', false).text('Đăng nhập');
+                    }
+                });
+            }
+
+            async handleLogin(token = null) {
+                const email = $('#email').val();
+                const password = $('#password').val();
+                if (!email || !password) throw new Error('Please enter email and password');
+
+                const result = await ApiService.fetch('73361666-dd44-4946-9a94-d3e1d7736615', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password, _token: token })
+                });
+
+                if (result?.session_id && result?.account) {
+                    this.state.accountInfo = result.account;
+                    window.location.reload();
+                } else {
+                    throw new Error('Login failed. Please check your credentials');
+                }
+            }
+
+            async getAccountInfo() {
+                return await ApiService.fetch('e0d4c32e-4aca-40b1-b369-0617f1fe5df1', {
+                    method: 'GET'
+                });
+            }
+
+            renderTurnstile(callback) {
+                if (window.turnstile) {
+                    turnstile.render('#turnstile-container', {
+                        sitekey: Config.TURNSTILE_SITE_KEY,
+                        callback,
+                        'error-callback': () => ToastService.show('Captcha verification failed. Please try again', 'error', 5000)
+                    });
+                }
+            }
+        }
+
+        class QRScannerLibrary {
+            constructor(codeReader, videoId) {
+                this.videoId = videoId;
+                this.codeReader = codeReader;
+                this.state = {
+                    isScanning: false,
+                    timeoutId: null
+                };
+            }
+
+            async startScan({ onSuccess, onError, onTimeout, timeout = Config.TIMEOUT_DURATION }) {
+                if (this.state.isScanning) {
+                    ToastService.show('Scanner Already Running', 'error', 5000);
+                    return false;
+                }
+
+                this.state.isScanning = true;
+
+                const videoElement = document.getElementById(this.videoId);
+                if (videoElement) {
+                    videoElement.setAttribute('playsinline', '');
+                    videoElement.muted = true;
+                }
+
+                this.state.timeoutId = setTimeout(() => {
+                    this.stopScan();
+                    ToastService.show('Scan Timeout. Please try again', 'error', 5000);
+                    if (onTimeout) onTimeout();
+                }, timeout);
+
+                try {
+                    const result = await this.codeReader.decodeOnceFromVideoDevice(undefined, this.videoId);
+                    if (result?.text) {
+                        this.clearTimeout();
+                        if (onSuccess) await onSuccess(result.text);
+                    }
+                    return true;
+                } catch (error) {
+                    if (this.state.isScanning) {
+                        ToastService.show(`Scanning Error: ${error.message}`, 'error', 5000);
+                        if (onError) onError(error);
+                    }
+                    return false;
+                }
+            }
+
+            stopScan() {
+                this.state.isScanning = false;
+                this.clearTimeout();
+                this.codeReader.reset();
+            }
+
+            clearTimeout() {
+                if (this.state.timeoutId) {
+                    clearTimeout(this.state.timeoutId);
+                    this.state.timeoutId = null;
+                }
+            }
+
+            isScanning() {
+                return this.state.isScanning;
+            }
+        }
+
+        class CheckinModule {
+            selectors = {
+                box: SCREEN_ROOT_SELECTORS.checkin,
+            };
+
+            videoId = 'qr-video';
+
+            state = {
+                isInitialized: false,
+                hasResult: false,
+                qrScanner: null,
+                isNoQrMode: false,
+                noQrImageSrc: null,
+                isSelectingNoQrImage: false,
+                noQrFile: null
+            };
+
+            async init(codeReader) {
+                if (this.state.isInitialized) return this;
+
+                this.state.isInitialized = true;
+                this.state.qrScanner = new QRScannerLibrary(codeReader, this.videoId);
+                this.bindEvents();
+                this.render();
+                Logger.log('CheckinModule', 'info', 'Initialized');
+                return this;
+            }
+
+            goBack() {
+                this.state.qrScanner?.stopScan();
+                this.cleanupNoQrImage();
+                screenManager.render();
+            }
+
+            render() {
+                $(this.selectors.box).html(`
+                    <div class="scanner-screen">
+                        <div class="scanner-screen__header">
+                            <button class="scanner-screen__back" id="checkin-btn-back">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                            </button>
+                            <h2 class="scanner-screen__title">Check In</h2>
+                        </div>
+
+                        <div class="scanner-screen__frame" id="checkin-scanner-frame">
+                            <video id="${this.videoId}" width="100%" height="100%"></video>
+                            <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
+                            <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
+                            <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
+                            <div class="scanner-screen__corner scanner-screen__corner--br"></div>
+                        </div>
+
+                        <div class="scanner-screen__content">
+                            <p class="scanner-screen__instruction" id="checkin-instruction">Đặt mã QR vào khung để quét</p>
+
+                            <div class="scanner-screen__info" id="checkin-info-card" style="display:none">
+                                <div class="scanner-screen__info-body">
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkin-info-bib">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkin-info-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkin-info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkin-info-status">—</span></div>
+                                </div>
+                            </div>
+
+                            <div class="scanner-screen__actions" id="checkin-actions-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-no-qr">Không có QR ? (Mở Camera)</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan" style="display:none">Reset</button>
+                            </div>
+                        </div>
+
+                        <input type="file" id="checkin-file-input" accept="image/*" capture="environment" style="display:none" />
+                    </div>
+                `);
+                showScreen('checkin');
+            }
+
+            updateDOM(result, isSuccess = false) {
+                const isNoQrMode = this.state.isNoQrMode;
+                const instruction = $('#checkin-instruction');
+                const btnStart = $('#checkin-btn-start-scan');
+                const btnReset = $('#checkin-btn-reset-scan');
+
+                btnStart.hide();
+                btnReset.hide();
+
+                if (result) {
+                    instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass(`scanner-screen__instruction--${isSuccess ? 'success' : 'error'}`).text(isSuccess ? 'Thành công!' : 'Thất bại!');
+                    const data = typeof result === 'object' ? result : { bib: result };
+                    $('#checkin-info-bib').text(data.bib || '—');
+                    $('#checkin-info-name').text(data.name || '—');
+                    $('#checkin-info-phone').text(data.phone || '—');
+
+                    const statusText = data.status || '—';
+                    const statusClass = data.statusType === 'error' ? 'scanner-screen__info-status--error'
+                        : data.statusType === 'pending' ? 'scanner-screen__info-status--pending'
+                            : 'scanner-screen__info-status--success';
+                    $('#checkin-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                    $('#checkin-info-card').show();
+
+                } else {
+                    instruction.removeClass('scanner-screen__instruction--error scanner-screen__instruction--success').addClass('scanner-screen__instruction--error').text('Không phát hiện mã QR. Vui lòng thử lại!');
+                    $('#checkin-info-card').hide();
+                }
+
+                $('#checkin-actions-group').html(`
+                    ${isNoQrMode ?
+                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-no-qr">Chụp tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>`
+                        :
+                        `<button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-next-scan">Quét tiếp</button>
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
+                    `}
+                `);
+            }
+
+            setNoQrInstruction(message) {
+                $('#checkin-instruction')
+                    .text(message)
+                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+            }
+
+            renderManualBibActions() {
+                $('#checkin-actions-group').html(`
+                    <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB">
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm">Xác nhận</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
+                `);
+
+                $('#checkin-manual-bib-input').trigger('focus');
+            }
+
+            showNoQrImage(file) {
+                this.cleanupNoQrImage();
+                this.state.noQrImageSrc = URL.createObjectURL(file);
+                this.state.noQrFile = file;
+                this.state.isNoQrMode = true;
+
+                $('#checkin-scanner-frame')
+                    .removeClass('scanner-screen__frame--active')
+                    .addClass('scanner-screen__frame--has-image')
+                    .html(`<img src="${this.state.noQrImageSrc}" alt="BIB image">`);
+
+                $('#checkin-instruction')
+                    .text('Nhập số BIB rồi chọn xác nhận để xử lý.')
+                    .removeClass('scanner-screen__instruction--error')
+                    .addClass('scanner-screen__instruction--success');
+
+                this.renderManualBibActions();
+            }
+
+            bindNoQrInputChange() {
+                $('#checkin-file-input').off('change.checkin-no-qr').on('change.checkin-no-qr', (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    this.state.isSelectingNoQrImage = false;
+
+                    if (!file) {
+                        this.render();
+                        return;
+                    }
+
+                    this.showNoQrImage(file);
+                });
+            }
+
+            prepareNoQrCapture({ resetFrame = false } = {}) {
+                this.state.qrScanner?.stopScan();
+                this.state.hasResult = false;
+                this.state.isNoQrMode = false;
+                this.state.isSelectingNoQrImage = true;
+
+                if (resetFrame) {
+                    $('#checkin-scanner-frame')
+                        .removeClass('scanner-screen__frame--has-image')
+                        .addClass('scanner-screen__frame--active')
+                        .html('');
+                    $('#checkin-info-card').hide();
+                    $('#checkin-actions-group').html(`
+                        <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan">Reset</button>
+                    `);
+                } else {
+                    $('#checkin-btn-start-scan').hide();
+                    $('#checkin-btn-reset-scan').show();
+                }
+
+                this.setNoQrInstruction('Chụp ảnh BIB, sau đó nhập số BIB để xác nhận.');
+                this.bindNoQrInputChange();
+                $('#checkin-file-input').trigger('click');
+            }
+
+            toggleLoading(isLoading) {
+                $('#modal').toggleClass('is-open', isLoading);
+            }
+
+            cleanupNoQrImage() {
+                if (this.state.noQrImageSrc) {
+                    URL.revokeObjectURL(this.state.noQrImageSrc);
+                    this.state.noQrImageSrc = null;
+                }
+                this.state.noQrFile = null;
+            }
+
+            async handleNoQrCapture() {
+                this.prepareNoQrCapture();
+            }
+
+            handleNextNoQrCapture() {
+                this.cleanupNoQrImage();
+                this.prepareNoQrCapture({ resetFrame: true });
+            }
+
+            buildCheckinFailureData(bib = null) {
+                return {
+                    bib: bib || '—',
+                    name: '—',
+                    phone: '—',
+                    status: 'Check-in thất bại',
+                    statusType: 'error'
+                };
+            }
+
+            buildCheckinDataFromResponse(bib, response) {
+                const isSuccess = response?.status == 2;
+                return {
+                    data: {
+                        bib,
+                        name: response?.name || '—',
+                        phone: response?.phone || '—',
+                        status: isSuccess ? 'Check-in thành công' : 'Check-in thất bại',
+                        statusType: isSuccess ? 'success' : 'error'
+                    },
+                    isSuccess
+                };
+            }
+
+            async finalizeCheckinByBib({ bib, file = null }) {
+                try {
+                    const response = await this.confirmCheckin({ bib, file });
+                    return this.buildCheckinDataFromResponse(bib, response);
+                } catch {
+                    return {
+                        data: this.buildCheckinFailureData(bib),
+                        isSuccess: false
+                    };
+                }
+            }
+
+            async handleConfirmCheckin() {
+                const bib = ($('#checkin-manual-bib-input').val() || '').trim();
+
+                if (!this.state.isNoQrMode) {
+                    ToastService.show('Vui lòng chọn luồng Không có QR trước.', 'error', 5000);
+                    return;
+                }
+
+                if (!bib) {
+                    ToastService.show('Vui lòng nhập số BIB để xác nhận.', 'error', 5000);
+                    return;
+                }
+
+                try {
+                    const result = await this.finalizeCheckinByBib({
+                        bib,
+                        file: this.state.noQrFile
+                    });
+                    this.state.hasResult = true;
+
+                    this.updateDOM(result.data, result.isSuccess);
+                } catch (error) {
+                    this.updateDOM(this.buildCheckinFailureData(bib), false);
+                }
+            }
+
+            bindEvents() {
+                const $box = $(this.selectors.box);
+                $box.on('click', '#checkin-btn-back', () => this.goBack());
+                $box.on('click', '#checkin-btn-start-scan', () => this.startScanner());
+                $box.on('click', '#checkin-btn-reset-scan', () => this.resetScanner());
+                $box.on('click', '#checkin-btn-next-scan', () => this.nextScanner());
+
+                $box.on('click', '#checkin-btn-confirm', () => this.handleConfirmCheckin());
+                $box.on('click', '#checkin-btn-no-qr', () => {
+                    if (this.state.hasResult && this.state.isNoQrMode) {
+                        this.handleNextNoQrCapture();
+                    } else {
+                        this.handleNoQrCapture();
+                    }
+                });
+            }
+
+            resetScanner() {
+                if (!this.state.hasResult && !this.state.qrScanner?.isScanning() && !this.state.isNoQrMode && !this.state.isSelectingNoQrImage) {
+                    ToastService.show('Preparing Scanner. Please wait...', 'error', 5000);
+                    return;
+                }
+
+                this.cleanupNoQrImage();
+                this.state.hasResult = false;
+                this.state.isNoQrMode = false;
+                this.state.isSelectingNoQrImage = false;
+                this.state.qrScanner?.stopScan();
+                this.render();
+            }
+
+            nextScanner() {
+                this.cleanupNoQrImage();
+                this.state.hasResult = false;
+                this.state.isNoQrMode = false;
+                this.state.isSelectingNoQrImage = false;
+                this.render();
+                setTimeout(() => this.startScanner(), 300);
+            }
+
+            async startScanner() {
+                $('#checkin-btn-start-scan').hide();
+                $('#checkin-btn-no-qr').hide();
+                $('#checkin-btn-reset-scan').show();
+                $('#checkin-scanner-frame').addClass('scanner-screen__frame--active');
+                $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+
+                const handleResult = async (result, isSuccess) => {
+                    this.state.hasResult = true;
+                    this.state.qrScanner?.stopScan();
+
+                    let data = null;
+                    if (isSuccess) {
+                        const finalizedResult = await this.finalizeCheckinByBib({ bib: result });
+                        data = finalizedResult.data;
+                        isSuccess = finalizedResult.isSuccess;
+                    }
+
+                    this.updateDOM(data, isSuccess);
+                };
+
+                await this.state.qrScanner.startScan({
+                    onSuccess: (result) => handleResult(result, true),
+                    onError: (error) => {
+                        Logger.log('CheckinModule', 'error', error.message);
+                        return handleResult(null, false);
+                    },
+                    onTimeout: () => handleResult(null, false)
+                });
+            }
+
+            async confirmCheckin({ bib, file = null }) {
+                try {
+                    this.toggleLoading(true);
+
+                    const formData = new FormData();
+                    formData.append('bib', bib || '');
+                    if (file) {
+                        formData.append('file', file);
+                    }
+
+                    const result = await ApiService.fetch('902978df-abd2-4808-9a58-203bc442f7f3', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    return result;
+                } catch (error) {
+                    throw error;
+                } finally {
+                    this.toggleLoading(false);
+                }
+            }
+        }
+
+        class ImageUtils {
+            static fitContain(w, h, maxLongEdge) {
+                const longEdge = Math.max(w, h);
+                if (longEdge <= maxLongEdge) return { w, h };
+                const scale = maxLongEdge / longEdge;
+                return { w: Math.round(w * scale), h: Math.round(h * scale) };
+            }
+
+            static cropCenterROI(sourceCanvas, roiWPercent, roiHPercent) {
+                const sw = sourceCanvas.width, sh = sourceCanvas.height;
+                const rw = Math.max(1, Math.round(sw * roiWPercent));
+                const rh = Math.max(1, Math.round(sh * roiHPercent));
+                const rx = Math.round((sw - rw) / 2);
+                const ry = Math.round((sh - rh) / 2);
+
+                const c = document.createElement('canvas');
+                c.width = rw; c.height = rh;
+                c.getContext('2d').drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
+                return c;
+            }
+
+            static resizeToWidth(sourceCanvas, targetW) {
+                if (sourceCanvas.width <= targetW) return sourceCanvas;
+                const scale = targetW / sourceCanvas.width;
+                const th = Math.max(1, Math.round(sourceCanvas.height * scale));
+
+                const c = document.createElement('canvas');
+                c.width = targetW; c.height = th;
+                c.getContext('2d').drawImage(sourceCanvas, 0, 0, targetW, th);
+                return c;
+            }
+        }
+
+        class CheckoutModule {
+            selectors = {
+                box: SCREEN_ROOT_SELECTORS.checkout,
+            };
+
+            state = {
+                isInitialized: false,
+                captureImageSrc: null,
+                captureFile: null
+            };
+
+            async init() {
+                if (this.state.isInitialized) return this;
+
+                this.state.isInitialized = true;
+                this.bindEvents();
+                this.render();
+                Logger.log('CheckoutModule', 'info', 'Initialized');
+                return this;
+            }
+
+            goBack() {
+                this.cleanupCaptureImage();
+                screenManager.render();
+            }
+
+            render() {
+                $(this.selectors.box).html(`
+                    <div class="scanner-screen">
+                        <div class="scanner-screen__header">
+                            <button class="scanner-screen__back" id="checkout-btn-back">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                            </button>
+                            <h2 class="scanner-screen__title">Check Out</h2>
+                        </div>
+
+                        <div class="scanner-screen__frame" id="checkout-scanner-frame">
+                            <div class="scanner-screen__placeholder">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                <span>Chưa có ảnh</span>
+                            </div>
+                        </div>
+
+                        <div class="scanner-screen__content">
+                            <p class="scanner-screen__instruction" id="checkout-instruction">Chụp ảnh QR trên BIB</p>
+
+                            <div class="scanner-screen__info" id="checkout-info-card" style="display:none">
+                                <div class="scanner-screen__info-header">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                    <span>Quét thành công</span>
+                                </div>
+                                <div class="scanner-screen__info-body">
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkout-info-bib">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkout-info-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkout-info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkout-info-status">—</span></div>
+                                </div>
+                            </div>
+
+                            <div class="scanner-screen__actions" id="checkout-actions-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-start-scan">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan" style="display:none">Reset</button>
+                            </div>
+                        </div>
+
+                        <input type="file" id="checkout-file-input" accept="image/*" capture="environment" style="display:none" />
+                    </div>
+                `);
+                showScreen('checkout');
+            }
+
+            showResult(resultText, imageSrc) {
+                const instruction = $('#checkout-instruction');
+                const frameContainer = $('#checkout-scanner-frame');
+                const data = ScanResultUtils.normalizeData(resultText);
+                const isSuccess = data.statusType !== 'error';
+
+                instruction
+                    .removeClass('scanner-screen__instruction--error scanner-screen__instruction--success')
+                    .addClass(isSuccess ? 'scanner-screen__instruction--success' : 'scanner-screen__instruction--error')
+                    .text(isSuccess ? 'Hoàn tất checkout!' : 'Checkout thất bại!');
+
+                frameContainer.addClass('scanner-screen__frame--has-image').html(`
+                    <img src="${imageSrc}" alt="Bib photo">
+                `);
+
+                $('#checkout-info-bib').text(data.bib || '—');
+                $('#checkout-info-name').text(data.name || '—');
+                $('#checkout-info-phone').text(data.phone || '—');
+
+                const statusText = data.status || '—';
+                const statusClass = ScanResultUtils.getStatusClass(data.statusType);
+                $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                $('#checkout-info-card').show();
+
+                $('#checkout-actions-group').html(`
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-start-scan">Chụp tiếp</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan">Reset</button>
+                `);
+            }
+
+            buildCheckoutResultData(bib, response = null, isSuccess = false) {
+                return {
+                    bib,
+                    name: response?.name || '—',
+                    phone: response?.phone || '—',
+                    status: isSuccess ? 'Checkout thành công' : 'Checkout thất bại',
+                    statusType: isSuccess ? 'success' : 'error'
+                };
+            }
+
+            showManualBibInput(imageSrc) {
+                const frameContainer = $('#checkout-scanner-frame');
+
+                $('#checkout-instruction')
+                    .text('Không detect được QR. Nhập số BIB để xử lý thủ công.')
+                    .removeClass('scanner-screen__instruction--success')
+                    .addClass('scanner-screen__instruction--error');
+
+                frameContainer
+                    .addClass('scanner-screen__frame--has-image')
+                    .html(`<img src="${imageSrc}" alt="Bib photo">`);
+
+                $('#checkout-info-card').hide();
+
+                $('#checkout-actions-group').html(`
+                    <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" placeholder="Nhập số BIB">
+                    <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm-manual-bib">Xác nhận</button>
+                    <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset-scan">Reset</button>
+                `);
+
+                $('#checkout-manual-bib-input').trigger('focus');
+            }
+
+            async handleManualBibConfirm() {
+                const bib = ($('#checkout-manual-bib-input').val() || '').trim();
+
+                if (!bib) {
+                    ToastService.show('Vui lòng nhập số BIB', 'error', 4000);
+                    return;
+                }
+
+                await this.confirmCheckoutAndShow({ bib, file: this.state.captureFile });
+            }
+
+            cleanupCaptureImage() {
+                if (this.state.captureImageSrc) {
+                    URL.revokeObjectURL(this.state.captureImageSrc);
+                    this.state.captureImageSrc = null;
+                }
+                this.state.captureFile = null;
+            }
+
+            bindEvents() {
+                const $box = $(this.selectors.box);
+                $box.on('click', '#checkout-btn-back', () => this.goBack());
+                $box.on('click', '#checkout-btn-start-scan', () => this.startCapture());
+                $box.on('click', '#checkout-btn-reset-scan', () => this.reset());
+                $box.on('click', '#checkout-btn-confirm-manual-bib', () => this.handleManualBibConfirm());
+                $box.on('keypress', '#checkout-manual-bib-input', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        this.handleManualBibConfirm();
+                    }
+                });
+            }
+
+            reset() {
+                this.cleanupCaptureImage();
+                this.render();
+            }
+
+            async handleCaptureFileChange(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    this.render();
+                    return;
+                }
+
+                try {
+                    const { readBarcodes } = ZXingWASM;
+                    Logger.log('CheckoutModule', 'info', `Selected file: ${file.name} (${Math.round(file.size / 1024)}KB)`);
+
+                    $('#checkout-instruction').text('Đang xử lý ảnh...');
+
+                    const result = await this.processCheckoutImage({ file, readBarcodes });
+
+                    this.cleanupCaptureImage();
+                    this.state.captureFile = file;
+                    this.state.captureImageSrc = URL.createObjectURL(file);
+
+                    if (result.ok) {
+                        await this.confirmCheckoutAndShow({
+                            bib: `${result.text || ''}`.trim(),
+                            file: this.state.captureFile
+                        });
+                    } else {
+                        ToastService.show('Không detect được QR. Gợi ý: chụp lại, đưa bib vào giữa khung và tăng ánh sáng.', 'error', 5000);
+                        this.showManualBibInput(this.state.captureImageSrc);
+                    }
+                } catch (error) {
+                    ToastService.show(`Lỗi xử lý ảnh: ${error.message}`, 'error', 5000);
+                    Logger.log('CheckoutModule', 'error', error.message);
+                    this.render();
+                } finally {
+                    event.target.value = '';
+                }
+            }
+
+            async startCapture() {
+                $('#checkout-btn-start-scan').hide();
+                $('#checkout-btn-reset-scan').show();
+                $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+
+                $('#checkout-file-input').click();
+
+                $('#checkout-file-input').off('change.checkout-capture').on('change.checkout-capture', (event) => this.handleCaptureFileChange(event));
+            }
+
+            toggleLoading(isLoading) {
+                $('#modal').toggleClass('is-open', isLoading);
+            }
+
+            async confirmCheckout({ bib, file = null }) {
+                const formData = new FormData();
+                formData.append('bib', bib || '');
+                if (file) {
+                    formData.append('file', file);
+                }
+
+                return await ApiService.fetch('902978df-abd2-4808-9a58-203bc442f7f3', {
+                    method: 'POST',
+                    body: formData
+                });
+            }
+
+            async confirmCheckoutAndShow({ bib, file }) {
+                if (!bib) {
+                    ToastService.show('Không lấy được thông tin BIB.', 'error', 4000);
+                    return;
+                }
+
+                try {
+                    this.toggleLoading(true);
+                    const response = await this.confirmCheckout({ bib, file });
+                    const isSuccess = response?.status == 2 || response === true;
+                    const resultData = this.buildCheckoutResultData(bib, response, isSuccess);
+                    this.showResult(resultData, this.state.captureImageSrc);
+                } catch {
+                    const resultData = this.buildCheckoutResultData(bib, null, false);
+                    this.showResult(resultData, this.state.captureImageSrc);
+                } finally {
+                    this.toggleLoading(false);
+                }
+            }
+
+            async processCheckoutImage({ file, readBarcodes }) {
+                const bitmap = await createImageBitmap(file);
+                const fitted = ImageUtils.fitContain(bitmap.width, bitmap.height, 2200);
+
+                const master = document.createElement('canvas');
+                master.width = fitted.w;
+                master.height = fitted.h;
+                master.getContext('2d', { willReadFrequently: true }).drawImage(bitmap, 0, 0, fitted.w, fitted.h);
+
+                const decodeFromCanvas = async (canvas) => {
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const res = await readBarcodes(imgData);
+                    return Array.isArray(res) ? res : [];
+                };
+
+                const strategies = [
+                    () => decodeFromCanvas(ImageUtils.resizeToWidth(ImageUtils.cropCenterROI(master, 0.70, 0.85), 1200)),
+                    () => decodeFromCanvas(ImageUtils.resizeToWidth(master, 1600)),
+                    () => decodeFromCanvas(ImageUtils.resizeToWidth(master, 2400)),
+                ];
+
+                for (const strategy of strategies) {
+                    const barcodes = await strategy();
+                    if (barcodes.length) {
+                        const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                        if (text) return { ok: true, text, barcodes };
+                    }
+                }
+
+                return { ok: false, text: '', barcodes: [] };
+            }
+        }
+
+        class App {
+            static async start() {
+                // const auth = await new AuthModule().init();
+                // if (!auth.isLoggedIn()) {
+                //     auth.render();
+                //     return;
+                // }
+
+                screenManager = new ScreenManager();
+                screenManager.render();
+            }
+        }
+
+        $(document).ready(() => App.start());
+    </script>
+</body>
+
+</html>
