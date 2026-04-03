@@ -287,6 +287,8 @@
                             </div>
 
                             <div class="scanner-screen__actions" id="checkin-actions-group">
+                                <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm" style="display:none">Xác nhận</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-open-camera">Không có QR ? (Mở Camera)</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan" style="display:none">Reset</button>
@@ -305,6 +307,19 @@
 
             handleEvents() {
                 $('#checkin-btn-start-scan').on('click', () => this.startScan());
+                $('#checkin-btn-open-camera').on('click', () => this.openCamera());
+                $('#checkin-btn-confirm').on('click', () => this.confirmCheckin());
+                $('#checkin-btn-reset-scan').on('click', () => {
+                    this.scanner.stopScan();
+                    $('#checkin-instruction').text('Đặt mã QR vào khung để quét').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                    $('#checkin-info-card').hide();
+                    $('#checkin-btn-start-scan').text('Quét QR').show();
+                    $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--primary')
+                        .addClass('scanner-screen__btn--secondary')
+                        .text('Không có QR ? (Mở Camera)')
+                        .show();
+                    $('#checkin-btn-reset-scan').hide();
+                });
             }
 
             startScan() {
@@ -334,6 +349,8 @@
                     } else {
                         $('#checkin-instruction').text('Quét thất bại. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
                     }
+
+                    $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
                 };
 
                 this.scanner.startScan({
@@ -341,6 +358,83 @@
                     onError: (error) => handleResult(null, false),
                     onTimeout: () => handleResult(null, false)
                 });
+            }
+
+            openCamera() {
+                $('#checkin-btn-start-scan').hide();
+                $('#checkin-btn-open-camera').hide();
+                $('#checkin-btn-reset-scan').show();
+                $('#checkin-instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để Xác nhận').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+
+                const handleResult = async (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const url = URL.createObjectURL(file);
+                        $('#checkin-scanner-frame')
+                            .addClass('scanner-screen__frame--has-image')
+                            .html(`<img src="${url}" alt="Captured Image" width="100%" height="100%" style="object-fit: contain;" />`);
+
+                        $('#checkin-instruction')
+                            .text('Nhập số BIB, sau đó nhấn Xác nhận')
+                            .removeClass('scanner-screen__instruction--error')
+                            .addClass('scanner-screen__instruction--success');
+
+                        $('#checkin-manual-bib-input').show();
+                        $('#checkin-btn-confirm').show();
+                        $('#checkin-manual-bib-input').trigger('focus');
+                    }
+                };
+
+                $('#checkin-file-input').on('change', handleResult);
+                $('#checkin-file-input').trigger('click');
+            }
+
+            async confirmCheckin() {
+                const bib = ($('#checkin-manual-bib-input').val() || '').trim();
+                if (!bib) {
+                    ToastService.show('Vui lòng nhập số BIB', 'error', 5000);
+                    return;
+                }
+
+                const fileInput = $('#checkin-file-input')[0];
+                const file = fileInput?.files?.[0] || null;
+
+                const form = new FormData();
+                form.append('bib', bib);
+                if (file) form.append('file', file);
+
+                $('#modal').toggleClass('is-open', true);
+                const data = await ApiService.fetch('902978df-abd2-4808-9a58-203bc442f7f3', {
+                    method: 'POST',
+                    body: form
+                });
+
+                if (data) {
+                    $('#checkin-info-bib').text(data.bib || '—');
+                    $('#checkin-info-name').text(data.name || '—');
+                    $('#checkin-info-phone').text(data.phone || '—');
+
+                    const ok = data.status == 2;
+                    const statusText = ok ? 'Check-in thành công' : 'Check-in thất bại';
+                    const statusClass = ok
+                        ? 'scanner-screen__info-status--success'
+                        : 'scanner-screen__info-status--error';
+
+                    $('#checkin-info-status').html(
+                        `<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`
+                    );
+                    $('#checkin-info-card').show();
+                } else {
+                    $('#checkin-instruction')
+                        .text('Lỗi. Vui lòng thử lại.')
+                        .addClass('scanner-screen__instruction--error');
+                }
+
+                $('#checkin-manual-bib-input').hide().val('');
+                $('#checkin-file-input').val('');
+                $('#checkin-btn-confirm').hide();
+                $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
+                $('#modal').toggleClass('is-open', false);
             }
         }
 
