@@ -188,7 +188,7 @@ body {
 
 .scanner-screen__frame--active {
     border: 2px solid var(--primary);
-    background: rgba(159, 34, 78, 0.1);
+    background: #0C0C0C;
 }
 
 .scanner-screen__frame video,
