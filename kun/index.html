@@ -474,7 +474,7 @@
                     this.scanner.stop();
                     let data = null;
                     if (result) {
-                        data = await apiRequest('add3f330-5159-466c-a8a5-d9967322d651', { method: 'POST' });
+                        data = await apiRequest('2ac622b4-f094-4a6c-80bc-fac883fa584b', { method: 'POST', body: JSON.stringify({ bib: result }) });
                     }
 
                     if (isSuccess && data) {
@@ -553,9 +553,9 @@
                     form.append('bib', bib);
                     if (fileCompressed) form.append('file', fileCompressed);
 
-                    const data = await apiRequest('add3f330-5159-466c-a8a5-d9967322d651', {
+                    const data = await apiRequest('2ac622b4-f094-4a6c-80bc-fac883fa584b', {
                         method: 'POST',
-                        // body: form
+                        body: form
                     });
 
                     if (data) {
@@ -677,7 +677,7 @@
                     const result = await processQRFromImage(file);
 
                     if (result.ok) {
-                        const data = await apiRequest('add3f330-5159-466c-a8a5-d9967322d651', { method: 'POST' });
+                        const data = await apiRequest('25cb3d82-3996-4ac9-81a3-9f1c35bdc41d', { method: 'POST', body: JSON.stringify({ bib: result.text }) });
 
                         if (data) {
                             try {
@@ -743,7 +743,7 @@
                     form.append('bib', bib);
                     if (fileCompressed) form.append('file', fileCompressed);
 
-                    const data = await apiRequest('add3f330-5159-466c-a8a5-d9967322d651', { method: 'POST', body: form });
+                    const data = await apiRequest('25cb3d82-3996-4ac9-81a3-9f1c35bdc41d', { method: 'POST', body: form });
 
                     if (data) {
                         $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
