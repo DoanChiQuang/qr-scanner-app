@@ -309,6 +309,11 @@
                 $('#checkin-btn-start-scan').on('click', () => this.startScan());
                 $('#checkin-btn-open-camera').on('click', () => this.openCamera());
                 $('#checkin-btn-confirm').on('click', () => this.confirmCheckin());
+                $('#checkin-btn-back').on('click', () => {
+                    this.scanner.stopScan();
+                    $('#checkin-screen-wrapper').hide();
+                    $('#screen-manager').show();
+                });
                 $('#checkin-btn-reset-scan').on('click', () => {
                     this.scanner.stopScan();
                     $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image').html(`
@@ -336,6 +341,7 @@
                 $('#checkin-btn-start-scan').hide();
                 $('#checkin-btn-open-camera').hide();
                 $('#checkin-btn-reset-scan').show();
+                $('#checkin-scanner-frame').addClass('scanner-screen__frame--active');
                 $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 const handleResult = async (result, isSuccess) => {
