@@ -67,6 +67,16 @@
         // UTILITIES
         // ========================================
 
+        function setCookie(name, value, days = 1) {
+            const expires = new Date(Date.now() + days * 864e5).toUTCString();
+            document.cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
+        }
+
+        function getCookie(name) {
+            const match = document.cookie.match(new RegExp('(?:^|; )' + encodeURIComponent(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
+            return match ? decodeURIComponent(match[1]) : null;
+        }
+
         function showToast(message, type = 'info', duration = 3000) {
             const styles = {
                 info: 'linear-gradient(to right, #00b09b, #96c93d)',
@@ -295,18 +305,14 @@
 
         class AuthScreen {
             constructor() {
-                this.user = null;
-            }
-
-            async init() {
-                this.user = await apiRequest('', { method: 'GET' });
+                this.username = getCookie('username');
             }
 
             isLoggedIn() {
-                return !!this.user;
+                return !!this.username;
             }
 
-            render() {
+            render(onSuccess) {
                 $('#auth-screen-wrapper').html(`
                     <div class="auth-screen">
                         <div class="auth-screen__header">
@@ -314,19 +320,15 @@
                                 <img src="https://st-vm.vnecdn.net/v74/images/marathon/graphics/vm_new_logo.svg" alt="VnExpress Marathon">
                             </div>
                             <h1 class="auth-screen__title">Đăng nhập</h1>
-                            <p class="auth-screen__subtitle">Nhập thông tin để tiếp tục</p>
+                            <p class="auth-screen__subtitle">Nhập tên để tiếp tục</p>
                         </div>
 
-                        <form class="auth-form" id="form" method="POST">
+                        <form class="auth-form" id="form">
                             <div class="auth-form__group">
-                                <label class="auth-form__label" for="email">Email</label>
-                                <input class="auth-form__input" type="email" id="email" name="email" placeholder="email@example.com" required>
+                                <label class="auth-form__label" for="username">Username</label>
+                                <input class="auth-form__input" type="text" id="username" name="username" placeholder="Nhập tên của bạn" required>
                             </div>
-                            <div class="auth-form__group">
-                                <label class="auth-form__label" for="password">Mật khẩu</label>
-                                <input class="auth-form__input" type="password" id="password" name="password" placeholder="******" required>
-                            </div>
-                            <button type="submit" class="auth-form__btn" id="btn-login">Đăng nhập</button>
+                            <button type="submit" class="auth-form__btn" id="btn-login">Xác nhận</button>
                         </form>
 
                         <div class="auth-screen__footer">
@@ -335,33 +337,23 @@
                     </div>
                 `).show();
 
-                this.bindEvents();
+                this.bindEvents(onSuccess);
             }
 
-            bindEvents() {
-                $('#form').on('submit', async (e) => {
+            bindEvents(onSuccess) {
+                $('#form').on('submit', (e) => {
                     e.preventDefault();
-                    const email = $('#email').val();
-                    const password = $('#password').val();
-                    const btn = $('#btn-login');
-
-                    btn.prop('disabled', true).text('Đang đăng nhập...');
-
-                    try {
-                        const result = await apiRequest('/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email, password })
-                        });
-
-                        if (result) {
-                            showToast('Đăng nhập thành công', 'success');
-                        }
-                    } catch (error) {
-                        showToast('Đăng nhập thất bại', 'error');
-                    } finally {
-                        btn.prop('disabled', false).text('Đăng nhập');
+                    const username = ($('#username').val() || '').trim();
+                    if (!username) {
+                        showToast('Vui lòng nhập tên', 'error');
+                        return;
                     }
+
+                    setCookie('username', username);
+                    this.username = username;
+                    showToast('Xin chào, ' + username, 'success');
+                    $('#auth-screen-wrapper').hide();
+                    if (onSuccess) onSuccess();
                 });
             }
         }
@@ -799,10 +791,15 @@
 
         class App {
             static async start() {
-                // const authScreen = new AuthScreen();
-                // await authScreen.init();
-                // if (!authScreen.isLoggedIn()) { authScreen.render(); return; }
+                const authScreen = new AuthScreen();
+                if (!authScreen.isLoggedIn()) {
+                    authScreen.render(() => App.showScreenManager());
+                    return;
+                }
+                App.showScreenManager();
+            }
 
+            static showScreenManager() {
                 $('#screen-manager').html(`
                     <div class="screen-manager">
                         <div class="screen-manager__header">
