@@ -2,7 +2,6 @@
 <html>
 
 <head>
-    <!-- <?php echo $this->headTitle($this->title); ?> -->
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
@@ -55,14 +54,17 @@
             API_BASE_URL: 'https://webhook.site/',
             TIMEOUT_DURATION: 10000,
             IMAGE_MAX_SIZE: 2000,
-            IMAGE_COMPRESS_QUALITY: 0.8
+            IMAGE_COMPRESS_QUALITY: 0.8,
+            CHECKIN_ACTION: 1,
+            CHECKOUT_ACTION: 2,
+            MATCH_ID: 77
         };
 
         const ACCOUNTS = [
             { username: 'user1', password: '111111' },
             { username: 'user2', password: '222222' },
             { username: 'user3', password: '333333' },
-            { username: 'user4', password: '444444' },            
+            { username: 'user4', password: '444444' },
         ];
 
         const STATUS = {
@@ -73,7 +75,6 @@
         // ========================================
         // UTILITIES
         // ========================================
-
         function setCookie(name, value, days = 1) {
             const expires = new Date(Date.now() + days * 864e5).toUTCString();
             document.cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
@@ -97,13 +98,18 @@
                 close: true,
                 gravity: 'top',
                 position: 'center',
-                style: { background: styles[type] || styles.info }
+                style: {
+                    background: styles[type] || styles.info
+                }
             }).showToast();
         }
 
         function formatImageSize(width, height, maxEdge) {
             const longEdge = Math.max(width, height);
-            if (longEdge <= maxEdge) return { width, height };
+            if (longEdge <= maxEdge) return {
+                width,
+                height
+            };
             const scale = maxEdge / longEdge;
             return {
                 width: Math.round(width * scale),
@@ -112,14 +118,16 @@
         }
 
         function cropCenterImage(sourceCanvas, widthPercent, heightPercent) {
-            const sw = sourceCanvas.width, sh = sourceCanvas.height;
+            const sw = sourceCanvas.width,
+                sh = sourceCanvas.height;
             const rw = Math.max(1, Math.round(sw * widthPercent));
             const rh = Math.max(1, Math.round(sh * heightPercent));
             const rx = Math.round((sw - rw) / 2);
             const ry = Math.round((sh - rh) / 2);
 
             const canvas = document.createElement('canvas');
-            canvas.width = rw; canvas.height = rh;
+            canvas.width = rw;
+            canvas.height = rh;
             canvas.getContext('2d').drawImage(sourceCanvas, rx, ry, rw, rh, 0, 0, rw, rh);
             return canvas;
         }
@@ -130,7 +138,8 @@
             const th = Math.max(1, Math.round(sourceCanvas.height * scale));
 
             const canvas = document.createElement('canvas');
-            canvas.width = targetWidth; canvas.height = th;
+            canvas.width = targetWidth;
+            canvas.height = th;
             canvas.getContext('2d').drawImage(sourceCanvas, 0, 0, targetWidth, th);
             return canvas;
         }
@@ -148,7 +157,9 @@
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
             if (isIOS) {
                 setTimeout(() => {
-                    try { window.open(url, '_blank', 'noopener'); } catch (e) { }
+                    try {
+                        window.open(url, '_blank', 'noopener');
+                    } catch (e) { }
                 }, 300);
             }
 
@@ -186,6 +197,8 @@
         async function apiRequest(endpoint, options = {}) {
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
+                    mode: 'cors',
+                    credentials: 'include',
                     ...options,
                 });
                 const result = await response.json();
@@ -213,7 +226,12 @@
             }
 
             async start(options = {}) {
-                const { onSuccess, onError, onTimeout, timeout = CONFIG.TIMEOUT_DURATION } = options;
+                const {
+                    onSuccess,
+                    onError,
+                    onTimeout,
+                    timeout = CONFIG.TIMEOUT_DURATION
+                } = options;
 
                 if (this.isScanning) {
                     showToast('Scanner Already Running', 'error', 5000);
@@ -272,7 +290,9 @@
         // ========================================
 
         async function processQRFromImage(file) {
-            const { readBarcodes } = ZXingWASM;
+            const {
+                readBarcodes
+            } = ZXingWASM;
             const bitmap = await createImageBitmap(file);
             const fitted = formatImageSize(bitmap.width, bitmap.height, 2200);
 
@@ -282,7 +302,9 @@
             master.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
 
             async function decodeFrom(canvas) {
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const ctx = canvas.getContext('2d', {
+                    willReadFrequently: true
+                });
                 const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const res = await readBarcodes(imgData);
                 return Array.isArray(res) ? res : [];
@@ -299,11 +321,19 @@
                 const barcodes = await strategy();
                 if (barcodes.length) {
                     const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
-                    if (text) return { ok: true, text, barcodes };
+                    if (text) return {
+                        ok: true,
+                        text,
+                        barcodes
+                    };
                 }
             }
 
-            return { ok: false, text: '', barcodes: [] };
+            return {
+                ok: false,
+                text: '',
+                barcodes: []
+            };
         }
 
         // ========================================
@@ -406,16 +436,29 @@
             }
 
             renderCheckinInfo(data) {
-                $('#checkin-info-bib').text(data.bib || '—');
-                $('#checkin-info-name').text(data.name || '—');
+                $('#checkin-scanner-frame').html(`
+                    <div class="scanner-screen__bib-success">
+                        <div class="scanner-screen__bib-success-label">BIB</div>
+                        <div class="scanner-screen__bib-success-number">${data.bib}</div>
+                    </div>
+                `).addClass('scanner-screen__frame--success');
+                $('#checkin-info-children-name').text(data.name || '—');
+                $('#checkin-info-parent-name').text(data.parent_name || '—');
                 $('#checkin-info-phone').text(data.phone || '—');
 
-                const statusText = data.status === STATUS.CHECKIN_SUCCESS ? 'Check-in thành công' : 'Check-in thất bại';
-                const statusClass = data.status === STATUS.CHECKIN_SUCCESS
-                    ? 'scanner-screen__info-status--success'
-                    : 'scanner-screen__info-status--error';
+                const statusText = data.status === STATUS.CHECKIN_SUCCESS ? 'Thành công' : 'Thất bại';
+                const statusClass = data.status === STATUS.CHECKIN_SUCCESS ?
+                    'scanner-screen__info-status--success' :
+                    'scanner-screen__info-status--error';
 
                 $('#checkin-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                if (data?.history) {
+                    const historyText = data.history.map(item => {
+                        const time = moment.unix(item).format('HH:mm:ss');
+                        return `Check-in: ${time}`;
+                    }).join('<br>');
+                    $('#checkin-info-history').html(historyText);
+                }
                 $('#checkin-info-card').show();
             }
 
@@ -435,11 +478,12 @@
                             <p class="scanner-screen__instruction" id="checkin-instruction">${this.defaultInstruction}</p>
 
                             <div class="scanner-screen__info" id="checkin-info-card" style="display:none">
-                                <div class="scanner-screen__info-body">
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkin-info-bib">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkin-info-name">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkin-info-phone">—</span></div>
+                                <div class="scanner-screen__info-body">                                    
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkin-info-status">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Bé</span><span class="scanner-screen__info-value" id="checkin-info-children-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Người thân</span><span class="scanner-screen__info-value" id="checkin-info-parent-name">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkin-info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Lịch sử</span><span class="scanner-screen__info-value" id="checkin-info-history">—</span></div>                                    
                                 </div>
                             </div>
 
@@ -485,13 +529,19 @@
                     let data = null;
                     if (result) {
                         const formData = new FormData();
-                        formData.append('bib', result);
-                        data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
+                        formData.append('bib_id', result);
+                        formData.append('match_id', CONFIG.MATCH_ID);
+                        formData.append('action', CONFIG.CHECKIN_ACTION);
+                        formData.append('username', getCookie('username') || '');
+                        data = await apiRequest('kun/checkinout-confirm', {
+                            method: 'POST',
+                            body: formData
+                        });
                     }
 
                     console.log('[CheckinModule] [startScan] Step 3: Response Data=', data);
                     if (isSuccess && data) {
-                        $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
+                        $('#checkin-instruction').hide();
                         this.renderCheckinInfo(data);
                     } else {
                         $('#checkin-instruction').text('Quét thất bại. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
@@ -537,38 +587,49 @@
             }
 
             async confirmCheckin() {
+                const bib = ($('#checkin-manual-bib-input').val() || '').trim();
+                if (!bib) {
+                    showToast('Vui lòng nhập số BIB', 'error', 5000);
+                    return;
+                }
+
                 try {
-                    const bib = ($('#checkin-manual-bib-input').val() || '').trim();
-                    if (!bib) {
-                        showToast('Vui lòng nhập số BIB', 'error', 5000);
-                        return;
-                    }
 
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
-                    const compressedFile = await imageCompression(file, {
+                    const compressedBlob = await imageCompression(file, {
                         maxSizeMB: 0.3,
                         maxWidthOrHeight: 1600,
                         useWebWorker: true,
                     });
-                    downloadBlob(compressedFile, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
-                    console.log('[CheckinModule] [confirmCheckin] Step 1: Compressed & Downloaded File=', compressedFile);
+                    if (!compressedBlob?.size) {
+                        throw new Error("Compress Image Fail");
+                    }
+
+                    const compressedFile = new File([compressedBlob], `VM_CHECKIN_${bib}.jpg`, {
+                        type: compressedBlob.type || 'image/jpeg'
+                    });
+                    console.log('[CheckinModule] [confirmCheckin] Step 1: Compressed File=', compressedFile);
 
                     const formData = new FormData();
-                    formData.append('bib', bib);
-                    if (compressedFile) formData.append('file', compressedFile);
+                    formData.append('bib_id', bib);
+                    formData.append('match_id', CONFIG.MATCH_ID);
+                    formData.append('action', CONFIG.CHECKIN_ACTION);
+                    formData.append('username', getCookie('username') || '');
+                    // if (compressedFile) formData.append('file', compressedFile);
 
-                    const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', {
+                    const data = await apiRequest('kun/checkinout-confirm', {
                         method: 'POST',
                         body: formData
                     });
 
                     console.log('[CheckinModule] [confirmCheckin] Step 2: API Response Data=', data);
+                    downloadBlob(compressedFile, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
 
                     if (data) {
-                        $('#checkin-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
+                        $('#checkin-instruction').hide();
                         this.renderCheckinInfo(data);
                     } else {
                         $('#checkin-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
@@ -586,7 +647,7 @@
 
             reset() {
                 this.scanner.stop();
-                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active');
+                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
                 this.renderVideoFrame();
                 $('#checkin-instruction').text(this.defaultInstruction).removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
                 $('#checkin-info-card').hide();
@@ -638,6 +699,8 @@
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkout-info-name">—</span></div>
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkout-info-phone">—</span></div>
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkout-info-status">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Thông báo</span><span class="scanner-screen__info-value" id="checkout-info-message">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Lịch sử</span><span class="scanner-screen__info-value" id="checkout-info-history">—</span></div>
                                 </div>
                             </div>
 
@@ -692,20 +755,32 @@
                         if (result.ok) {
                             // const parsedResult = parseScannedData(deobfuscateData(result.text));
                             // console.log('[CheckinModule] [startScan] Step 2: Parsed Result=', parsedResult);
-                            const compressedFile = await imageCompression(file, {
+                            const compressedBlob = await imageCompression(file, {
                                 maxSizeMB: 0.3,
                                 maxWidthOrHeight: 1600,
                                 useWebWorker: true,
                             });
-                            downloadBlob(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
+                            if (!compressedBlob?.size) {
+                                throw new Error("Compress Image Fail");
+                            }
+
+                            const compressedFile = new File([compressedBlob], `VM_CHECKOUT_${result.text}.jpg`, {
+                                type: compressedBlob.type || 'image/jpeg'
+                            });
 
                             const formData = new FormData();
-                            formData.append('bib', result.text);
+                            formData.append('bib_id', result.text);
+                            formData.append('match_id', CONFIG.MATCH_ID);
+                            formData.append('action', CONFIG.CHECKOUT_ACTION);
+                            formData.append('username', getCookie('username') || '');
                             formData.append('file', compressedFile);
-                            const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: formData });
+                            const data = await apiRequest('kun/checkinout-confirm', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            downloadBlob(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
 
                             if (data) {
-                                $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                                 this._showResultInfo(data);
                             } else {
                                 throw new Error('API response invalid');
@@ -724,16 +799,27 @@
 
             _showResultInfo(data) {
                 $('#checkout-info-card').show();
+                const status = data.status === STATUS.CHECKOUT_SUCCESS || false;
+                $('#checkout-instruction').text(status ? 'Thành công' : 'Thất bại').addClass(status ? 'scanner-screen__instruction--success' : 'scanner-screen__instruction--error').removeClass(status ? 'scanner-screen__instruction--error' : 'scanner-screen__instruction--success');
+
                 $('#checkout-info-bib').text(data.bib || '—');
                 $('#checkout-info-name').text(data.name || '—');
                 $('#checkout-info-phone').text(data.phone || '—');
 
                 const statusText = data.status === STATUS.CHECKOUT_SUCCESS ? 'Check-out thành công' : 'Check-out thất bại';
-                const statusClass = data.status === STATUS.CHECKOUT_SUCCESS
-                    ? 'scanner-screen__info-status--success'
-                    : 'scanner-screen__info-status--error';
+                const statusClass = data.status === STATUS.CHECKOUT_SUCCESS ?
+                    'scanner-screen__info-status--success' :
+                    'scanner-screen__info-status--error';
 
                 $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
+                if (data?.history) {
+                    const historyText = data.history.map(item => {
+                        const time = moment.unix(item).format('HH:mm:ss');
+                        return `Check-out: ${time}`;
+                    }).join('<br>');
+                    $('#checkout-info-history').html(historyText);
+                }
+                $('#checkout-info-message').text(data.message || '—');
             }
 
             _showManualInput() {
@@ -755,23 +841,35 @@
                     const fileInput = $('#checkout-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
 
-                    const compressedFile = await imageCompression(file, {
+                    const compressedBlob = await imageCompression(file, {
                         maxSizeMB: 0.3,
                         maxWidthOrHeight: 1600,
                         useWebWorker: true,
                     });
-                    downloadBlob(compressedFile, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
-                    console.log('[CheckoutModule] [confirmCheckout] Step 1: Compressed & Downloaded File=', compressedFile);
+                    if (!compressedBlob?.size) {
+                        throw new Error("Compress Image Fail");
+                    }
 
-                    const form = new FormData();
-                    form.append('bib', bib);
-                    if (compressedFile) form.append('file', compressedFile);
-                    const data = await apiRequest('2608bbdb-7f9b-4ca5-83c0-5d568d974179', { method: 'POST', body: form });
+                    const compressedFile = new File([compressedBlob], `VM_CHECKOUT_${bib}.jpg`, {
+                        type: compressedBlob.type || 'image/jpeg'
+                    });
+                    console.log('[CheckoutModule] [confirmCheckout] Step 1: Compressed File=', compressedFile);
+
+                    const formData = new FormData();
+                    formData.append('bib_id', bib);
+                    formData.append('match_id', CONFIG.MATCH_ID);
+                    formData.append('action', CONFIG.CHECKOUT_ACTION);
+                    formData.append('username', getCookie('username') || '');
+                    if (compressedFile) formData.append('file', compressedFile);
+                    const data = await apiRequest('kun/checkinout-confirm', {
+                        method: 'POST',
+                        body: formData
+                    });
 
                     console.log('[CheckoutModule] [confirmCheckout] Step 2: API Response Data=', data);
+                    downloadBlob(compressedFile, `VM_CHECKOUT_${bib}_${Date.now()}.jpg`);
 
                     if (data) {
-                        $('#checkout-instruction').text('Thành công').addClass('scanner-screen__instruction--success').removeClass('scanner-screen__instruction--error');
                         this._showResultInfo(data);
                     } else {
                         $('#checkout-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
@@ -779,8 +877,7 @@
                 } catch (error) {
                     console.log('[CheckoutModule] [confirmCheckout] Error:', error);
                     $('#checkout-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
-                }
-                finally {
+                } finally {
                     $('#checkout-manual-bib-input, #checkout-btn-confirm').hide();
                     $('#checkout-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
                     $('#checkout-manual-bib-input, #checkout-file-input').val('');
@@ -803,6 +900,7 @@
                 `);
                 $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
                 $('#checkout-info-card, #checkout-manual-bib-input, #checkout-btn-confirm').hide();
+                $('#checkout-btn-open-camera').show();
             }
         }
 
