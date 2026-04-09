@@ -58,6 +58,13 @@
             IMAGE_COMPRESS_QUALITY: 0.8
         };
 
+        const ACCOUNTS = [
+            { username: 'user1', password: '111111' },
+            { username: 'user2', password: '222222' },
+            { username: 'user3', password: '333333' },
+            { username: 'user4', password: '444444' },            
+        ];
+
         const STATUS = {
             CHECKIN_SUCCESS: 2,
             CHECKOUT_SUCCESS: 3
@@ -328,6 +335,10 @@
                                 <label class="auth-form__label" for="username">Username</label>
                                 <input class="auth-form__input" type="text" id="username" name="username" placeholder="Nhập tên của bạn" required>
                             </div>
+                            <div class="auth-form__group">
+                                <label class="auth-form__label" for="password">Password</label>
+                                <input class="auth-form__input" type="password" id="password" name="password" placeholder="Nhập mật khẩu của bạn" required>
+                            </div>
                             <button type="submit" class="auth-form__btn" id="btn-login">Xác nhận</button>
                         </form>
 
@@ -344,8 +355,18 @@
                 $('#form').on('submit', (e) => {
                     e.preventDefault();
                     const username = ($('#username').val() || '').trim();
+                    const password = ($('#password').val() || '').trim();
                     if (!username) {
                         showToast('Vui lòng nhập tên', 'error');
+                        return;
+                    }
+                    if (!password) {
+                        showToast('Vui lòng nhập mật khẩu', 'error');
+                        return;
+                    }
+
+                    if (!ACCOUNTS.some(acc => acc.username === username && acc.password === password)) {
+                        showToast('Tên hoặc mật khẩu không đúng', 'error');
                         return;
                     }
 
@@ -871,6 +892,9 @@
                         $('#checkout-screen-wrapper').show();
                     }
                 });
+
+                window.checkinModule = checkinModule;
+                window.checkoutModule = checkoutModule;
             }
         }
 
