@@ -289,293 +289,120 @@
         // QR CODE PROCESSOR (For Image Processing)
         // ========================================
 
-        async function processQRFromImage(file, options = {}) {
-            const {
-                readBarcodes
-            } = ZXingWASM;
-
-            // options with sensible defaults
-            const {
-                maxEdge = 3000,        // max image edge to rescale to (increase for better accuracy if memory allows)
-                patchGrid = 6,         // grid density for patches
-                patchSizes = null,     // if null auto computed
-                maxPatches = 200,      // cap patches processed
-                tryRotations = [0, 90, 180, 270],
-                resizeSmallTo = 1200,  // upscale small patches to at least this width before decode
-                debug = true
-            } = options;
-
+        async function processQRFromImage(file, zxingOptions = {}) {
+            const { readBarcodes } = ZXingWASM;
             const bitmap = await createImageBitmap(file);
-            const fitted = formatImageSize(bitmap.width, bitmap.height, maxEdge);
+            const fitted = formatImageSize(bitmap.width, bitmap.height, 2200);
 
             const master = document.createElement('canvas');
             master.width = fitted.width;
             master.height = fitted.height;
             master.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
 
-            // simple decode wrapper
-            async function decodeFromCanvasWithReadBarcodes(canvas) {
-                const ctx = canvas.getContext('2d', {
-                    willReadFrequently: true
-                });
+            // safe wrapper: try calling readBarcodes with options, fallback to no-options if it fails
+            async function tryReadBarcodes(imgData, opts) {
+                if (!readBarcodes) return [];
+                if (opts && Object.keys(opts).length) {
+                    try {
+                        const res = await readBarcodes(imgData, opts);
+                        return Array.isArray(res) ? res : [];
+                    } catch (e) {
+                        console.warn('[QR] readBarcodes(opts) failed, falling back to readBarcodes(imgData):', e && e.message);
+                    }
+                }
                 try {
-                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const res = await readBarcodes(imgData);
                     return Array.isArray(res) ? res : [];
                 } catch (e) {
-                    if (debug) console.warn('[QR] decode error', e);
+                    console.error('[QR] readBarcodes failed:', e && e.message);
                     return [];
                 }
             }
 
-            // Reuse a light "first pass" similar to your original strategies (center + full-scale)
-            const centerTrySizes = [Math.round(master.width * 0.7)];
-            const initialStrategies = [
-                () => decodeFromCanvasWithReadBarcodes(resizeToWidth(cropCenterImage(master, 0.70, 0.85), Math.min(1400, master.width))),
-                () => decodeFromCanvasWithReadBarcodes(resizeToWidth(master, Math.min(2000, master.width))),
-                () => decodeFromCanvasWithReadBarcodes(resizeToWidth(master, Math.min(maxEdge, master.width)))
+            async function decodeFrom(canvas, opts) {
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                return await tryReadBarcodes(imgData, opts);
+            }
+
+            // Build options candidates:
+            // - Start with user-provided options (highest priority)
+            // - Then try sensible defaults
+            // - If ZXingWASM exposes Binarizer enum, try each binarizer value as well
+            const candidates = [];
+
+            // user-supplied first
+            if (zxingOptions && Object.keys(zxingOptions).length) {
+                candidates.push(zxingOptions);
+            }
+
+            // sensible defaults
+            const defaults = [
+                { tryHarder: true, tryRotate: true, tryInverted: true, formats: ['QR_CODE'] },
+                { tryHarder: true, tryRotate: true, formats: ['QR_CODE'] },
+                { tryHarder: true, formats: ['QR_CODE'] },
+                { formats: ['QR_CODE'] },
+                {}
             ];
-            for (const s of initialStrategies) {
-                if (debug) console.log('[QR] Running initial strategy');
-                const res = await s();
-                if (res.length) {
-                    const text = res[0]?.text || res[0]?.rawValue || '';
-                    if (text) return { ok: true, text, barcodes: res };
-                }
-            }
+            candidates.push(...defaults);
 
-            // Helpers: canvas cloning and preprocessing
-            function cloneCanvas(src) {
-                const c = document.createElement('canvas');
-                c.width = src.width;
-                c.height = src.height;
-                c.getContext('2d').drawImage(src, 0, 0);
-                return c;
-            }
-
-            function toGrayscale(canvas) {
-                const ctx = canvas.getContext('2d');
-                const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const d = img.data;
-                for (let i = 0; i < d.length; i += 4) {
-                    const v = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-                    d[i] = d[i + 1] = d[i + 2] = v;
-                }
-                ctx.putImageData(img, 0, 0);
-                return canvas;
-            }
-
-            function adjustContrast(canvas, contrast = 1.3, brightness = 0) {
-                const ctx = canvas.getContext('2d');
-                const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const d = img.data;
-                // contrast scale where 1 = no change. We use a simple linear formula scaled to 0-255.
-                const factor = (259 * (contrast * 255 + 255)) / ((259 - contrast * 255) || 1);
-                for (let i = 0; i < d.length; i += 4) {
-                    for (let c = 0; c < 3; c++) {
-                        let v = factor * (d[i + c] - 128) + 128 + brightness;
-                        d[i + c] = Math.max(0, Math.min(255, Math.round(v)));
+            // If ZXingWASM exports a Binarizer enum/object, add candidates combining defaults with each binarizer
+            try {
+                const Binarizer = ZXingWASM && ZXingWASM.Binarizer;
+                if (Binarizer && typeof Binarizer === 'object') {
+                    const binValues = Object.values(Binarizer).filter(v => typeof v === 'string' || typeof v === 'number');
+                    for (const b of binValues) {
+                        // prefer most aggressive default when trying binarizers
+                        candidates.push({ tryHarder: true, tryRotate: true, tryInverted: true, binarizer: b, formats: ['QR_CODE'] });
                     }
                 }
-                ctx.putImageData(img, 0, 0);
-                return canvas;
+            } catch (e) {
+                // ignore if not present
             }
 
-            function convolve(canvas, kernel, divisor = 1, offset = 0) {
-                const ctx = canvas.getContext('2d');
-                const w = canvas.width,
-                    h = canvas.height;
-                const src = ctx.getImageData(0, 0, w, h);
-                const dst = ctx.createImageData(w, h);
-                const d = src.data,
-                    o = dst.data;
-                const kw = Math.sqrt(kernel.length),
-                    kh = kw;
-                const half = Math.floor(kw / 2);
-                for (let y = 0; y < h; y++) {
-                    for (let x = 0; x < w; x++) {
-                        let r = 0,
-                            g = 0,
-                            b = 0;
-                        for (let ky = 0; ky < kh; ky++) {
-                            for (let kx = 0; kx < kw; kx++) {
-                                const ix = x + kx - half;
-                                const iy = y + ky - half;
-                                if (ix < 0 || iy < 0 || ix >= w || iy >= h) continue;
-                                const si = (iy * w + ix) * 4;
-                                const kv = kernel[ky * kw + kx];
-                                r += d[si] * kv;
-                                g += d[si + 1] * kv;
-                                b += d[si + 2] * kv;
-                            }
-                        }
-                        const di = (y * w + x) * 4;
-                        o[di] = Math.max(0, Math.min(255, Math.round(r / divisor + offset)));
-                        o[di + 1] = Math.max(0, Math.min(255, Math.round(g / divisor + offset)));
-                        o[di + 2] = Math.max(0, Math.min(255, Math.round(b / divisor + offset)));
-                        o[di + 3] = d[di + 3];
+            // Deduplicate candidate options by JSON string to avoid exact duplicates
+            const seen = new Set();
+            const uniqCandidates = [];
+            for (const c of candidates) {
+                try {
+                    const key = JSON.stringify(c || {});
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqCandidates.push(c);
                     }
+                } catch (e) {
+                    // non-serializable, just push
+                    uniqCandidates.push(c);
                 }
-                ctx.putImageData(dst, 0, 0);
-                return canvas;
             }
 
-            function sharpen(canvas) {
-                const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
-                return convolve(canvas, kernel);
-            }
+            // Try combinations: rotations x resize widths x options
+            const rotations = [0, 90, 180, 270];
+            const widthsToTry = [1200, 1600, 2400];
 
-            // Crude adaptive threshold using integral image (assumes grayscale)
-            function adaptiveThresholdSimple(canvas, blockSize = 25, C = 10) {
-                const w = canvas.width,
-                    h = canvas.height;
-                const ctx = canvas.getContext('2d');
-                const img = ctx.getImageData(0, 0, w, h);
-                const d = img.data;
-                const gray = new Uint32Array(w * h);
-                for (let i = 0, p = 0; i < d.length; i += 4, p++) gray[p] = d[i]; // single channel
-
-                const integral = new Uint32Array((w + 1) * (h + 1));
-                for (let y = 1; y <= h; y++) {
-                    let rowSum = 0;
-                    for (let x = 1; x <= w; x++) {
-                        rowSum += gray[(y - 1) * w + (x - 1)];
-                        integral[y * (w + 1) + x] = integral[(y - 1) * (w + 1) + x] + rowSum;
-                    }
-                }
-                const half = Math.floor(blockSize / 2);
-                for (let y = 0; y < h; y++) {
-                    for (let x = 0; x < w; x++) {
-                        const x1 = Math.max(0, x - half),
-                            y1 = Math.max(0, y - half);
-                        const x2 = Math.min(w - 1, x + half),
-                            y2 = Math.min(h - 1, y + half);
-                        const count = (x2 - x1 + 1) * (y2 - y1 + 1);
-                        const sum = integral[(y2 + 1) * (w + 1) + (x2 + 1)] - integral[y1 * (w + 1) + (x2 + 1)] - integral[(y2 + 1) * (w + 1) + x1] + integral[y1 * (w + 1) + x1];
-                        const mean = sum / count;
-                        const idx = (y * w + x) * 4;
-                        const val = (gray[y * w + x] < mean - C) ? 0 : 255;
-                        d[idx] = d[idx + 1] = d[idx + 2] = val;
-                    }
-                }
-                ctx.putImageData(img, 0, 0);
-                return canvas;
-            }
-
-            function rotateCanvas(srcCanvas, angleDeg) {
-                if (!angleDeg || angleDeg % 360 === 0) return srcCanvas;
-                const c = document.createElement('canvas');
-                const rad = angleDeg * Math.PI / 180;
-                const sin = Math.abs(Math.sin(rad)),
-                    cos = Math.abs(Math.cos(rad));
-                c.width = Math.max(1, Math.round(srcCanvas.width * cos + srcCanvas.height * sin));
-                c.height = Math.max(1, Math.round(srcCanvas.width * sin + srcCanvas.height * cos));
-                const ctx = c.getContext('2d');
-                ctx.translate(c.width / 2, c.height / 2);
-                ctx.rotate(rad);
-                ctx.drawImage(srcCanvas, -srcCanvas.width / 2, -srcCanvas.height / 2);
-                return c;
-            }
-
-            // Generate patches (sliding windows / grid). Early-exit by edge density can be added.
-            async function generatePatches(masterCanvas, grid = patchGrid, sizes = patchSizes) {
-                const patches = [];
-                const w = masterCanvas.width,
-                    h = masterCanvas.height;
-                const minSide = Math.min(w, h);
-                const defaultSizes = sizes || [Math.round(minSide / 2), Math.round(minSide / 3), Math.round(minSide / 4)];
-                const stepX = Math.max(1, Math.floor(w / grid));
-                const stepY = Math.max(1, Math.floor(h / grid));
-                for (const size of defaultSizes) {
-                    for (let y = 0; y < h; y += stepY) {
-                        for (let x = 0; x < w; x += stepX) {
-                            const rw = Math.min(size, w - x);
-                            const rh = Math.min(size, h - y);
-                            if (rw < 48 || rh < 48) continue;
-                            const c = document.createElement('canvas');
-                            c.width = rw;
-                            c.height = rh;
-                            c.getContext('2d').drawImage(masterCanvas, x, y, rw, rh, 0, 0, rw, rh);
-                            patches.push({
-                                canvas: c,
-                                x,
-                                y,
-                                w: rw,
-                                h: rh
-                            });
-                            if (patches.length >= maxPatches) return patches;
+            for (const deg of rotations) {
+                const rotated = rotateCanvas(master, deg);
+                for (const targetW of widthsToTry) {
+                    const canvasToDecode = resizeToWidth(rotated, targetW);
+                    for (const opts of uniqCandidates) {
+                        console.log('[QR Code Processor] trying rotation', deg, 'width', canvasToDecode.width, 'opts', opts);
+                        const barcodes = await decodeFrom(canvasToDecode, opts);
+                        if (barcodes.length) {
+                            const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                            if (text) return { ok: true, text, barcodes, usedOptions: opts };
                         }
                     }
                 }
-                return patches;
             }
 
-            // Try many preprocessing variants per patch
-            async function tryDecodePatches(readBarcodesFn, patches) {
-                for (let i = 0; i < patches.length; i++) {
-                    const p = patches[i];
-                    if (debug) console.log(`[QR] Trying patch ${i + 1}/${patches.length} at (${p.x},${p.y}) size=${p.w}x${p.h}`);
-                    const variants = [];
-
-                    // base variants
-                    variants.push(cloneCanvas(p.canvas));
-                    variants.push(sharpen(cloneCanvas(p.canvas)));
-
-                    // grayscale + contrast
-                    const g = toGrayscale(cloneCanvas(p.canvas));
-                    variants.push(adjustContrast(cloneCanvas(g), 1.4, 6));
-                    // adaptive threshold (only if not too large)
-                    if (Math.max(p.w, p.h) <= 1500) {
-                        variants.push(adaptiveThresholdSimple(cloneCanvas(g), 25, 8));
-                    }
-
-                    // For each variant, try rotations and decode
-                    for (const v of variants) {
-                        for (const ang of tryRotations) {
-                            let rc = ang === 0 ? v : rotateCanvas(v, ang);
-                            if (rc.width < resizeSmallTo) rc = resizeToWidth(rc, resizeSmallTo);
-                            const res = await decodeFromCanvasWithReadBarcodes(rc);
-                            if (res.length) return res;
-                        }
-                    }
-                }
-                return [];
+            // final fallback: try original master without rotation with no options
+            const finalBarcodes = await decodeFrom(master, {});
+            if (finalBarcodes.length) {
+                const text = finalBarcodes[0]?.text || finalBarcodes[0]?.rawValue || '';
+                if (text) return { ok: true, text, barcodes: finalBarcodes, usedOptions: {} };
             }
 
-            // Now run patch scanning
-            const patches = await generatePatches(master, patchGrid);
-            if (debug) console.log(`[QR] Generated ${patches.length} patches, processing...`);
-            const patchRes = await tryDecodePatches(readBarcodes, patches);
-            if (patchRes.length) {
-                const text = patchRes[0]?.text || patchRes[0]?.rawValue || '';
-                if (text) return {
-                    ok: true,
-                    text,
-                    barcodes: patchRes
-                };
-            }
-
-            // Heavy full-image preprocess fallback
-            if (debug) console.log('[QR] Running heavy full-image preprocess fallback');
-            let pre = toGrayscale(cloneCanvas(master));
-            pre = adjustContrast(pre, 1.6, 8);
-            pre = sharpen(pre);
-            pre = adaptiveThresholdSimple(pre, 35, 12);
-            const heavy = await decodeFromCanvasWithReadBarcodes(pre);
-            if (heavy.length) {
-                const text = heavy[0]?.text || heavy[0]?.rawValue || '';
-                if (text) return {
-                    ok: true,
-                    text,
-                    barcodes: heavy
-                };
-            }
-
-            return {
-                ok: false,
-                text: '',
-                barcodes: []
-            };
+            return { ok: false, text: '', barcodes: [] };
         }
 
         // ========================================
