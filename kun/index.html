@@ -318,7 +318,7 @@
                     console.log(config);
                     const barcodes = await readBarcodes(imgData, config);
                     const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
-                    if (text) Array.isArray(barcodes) ? barcodes : [];
+                    if (text) return Array.isArray(barcodes) ? barcodes : [];
                 }                
                 return [];
             }
