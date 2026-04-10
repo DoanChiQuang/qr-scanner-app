@@ -306,7 +306,15 @@
                     willReadFrequently: true
                 });
                 const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const res = await readBarcodes(imgData);
+                const res = await readBarcodes(imgData, {
+                    tryHarder: true,
+                    tryDenoise: true,
+                    tryDownscale: true,
+                    tryInvert: true,
+                    tryRotate: true,
+                    formats: ["QRCode"],
+                    maxNumberOfSymbols: 1,
+                });
                 return Array.isArray(res) ? res : [];
             }
 
