@@ -302,7 +302,7 @@
                 maxPatches = 200,      // cap patches processed
                 tryRotations = [0, 90, 180, 270],
                 resizeSmallTo = 1200,  // upscale small patches to at least this width before decode
-                debug = false
+                debug = true
             } = options;
 
             const bitmap = await createImageBitmap(file);
