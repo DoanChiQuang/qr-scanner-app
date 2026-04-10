@@ -290,34 +290,94 @@
         // ========================================
 
         async function processQRFromImage(file) {
-            const { readBarcodes } = ZXingWASM;
+            const {
+                readBarcodes
+            } = ZXingWASM;
             const bitmap = await createImageBitmap(file);
+            const fitted = formatImageSize(bitmap.width, bitmap.height, 2200);
 
-            const fitted = formatImageSize(bitmap.width, bitmap.height, 2400);
-            const canvas = document.createElement('canvas');
-            canvas.width = fitted.width;
-            canvas.height = fitted.height;
-            canvas.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
-
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
+            const master = document.createElement('canvas');
+            master.width = fitted.width;
+            master.height = fitted.height;
+            master.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
+            
             const configs = [
                 { tryHarder: true, tryDenoise: true, tryDownscale: true, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1, binarizer: "HybridBinarizer" },
                 { tryHarder: true, tryDenoise: true, tryDownscale: false, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1, binarizer: "GlobalHistogramBinarizer" },
                 { tryHarder: true, tryDenoise: true, tryDownscale: true, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1 },
                 { tryHarder: true, tryDenoise: false, tryDownscale: false, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1 }
             ];
+            
+            async function decodeFrom(canvas) {
+                const ctx = canvas.getContext('2d', {
+                    willReadFrequently: true
+                });
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-            for (const config of configs) {
-                console.log(config);
-                const barcodes = await readBarcodes(imgData, config);
-                const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
-                if (text) return { ok: true, text, barcodes };
+                for (const config of configs) {
+                    console.log(config);
+                    const barcodes = await readBarcodes(imgData, config);
+                    const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                    if (text) Array.isArray(barcodes) ? barcodes : [];
+                }                
+                return [];
             }
 
-            return { ok: false, text: '', barcodes: [] };
+            const strategies = [
+                () => decodeFrom(resizeToWidth(cropCenterImage(master, 0.70, 0.85), 1200)),
+                () => decodeFrom(resizeToWidth(master, 1600)),
+                () => decodeFrom(resizeToWidth(master, 2400))
+            ];
+
+            for (const strategy of strategies) {
+                console.log('[QR Code Processor] Running strategy:', strategy.name || 'anonymous');
+                const barcodes = await strategy();
+                if (barcodes.length) {
+                    const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                    if (text) return {
+                        ok: true,
+                        text,
+                        barcodes
+                    };
+                }
+            }
+
+            return {
+                ok: false,
+                text: '',
+                barcodes: []
+            };
         }
+
+        // async function processQRFromImage(file) {
+        //     const { readBarcodes } = ZXingWASM;
+        //     const bitmap = await createImageBitmap(file);
+
+        //     const fitted = formatImageSize(bitmap.width, bitmap.height, 2400);
+        //     const canvas = document.createElement('canvas');
+        //     canvas.width = fitted.width;
+        //     canvas.height = fitted.height;
+        //     canvas.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
+
+        //     const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        //     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        //     const configs = [
+        //         { tryHarder: true, tryDenoise: true, tryDownscale: true, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1, binarizer: "HybridBinarizer" },
+        //         { tryHarder: true, tryDenoise: true, tryDownscale: false, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1, binarizer: "GlobalHistogramBinarizer" },
+        //         { tryHarder: true, tryDenoise: true, tryDownscale: true, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1 },
+        //         { tryHarder: true, tryDenoise: false, tryDownscale: false, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1 }
+        //     ];
+
+        //     for (const config of configs) {
+        //         console.log(config);
+        //         const barcodes = await readBarcodes(imgData, config);
+        //         const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+        //         if (text) return { ok: true, text, barcodes };
+        //     }
+
+        //     return { ok: false, text: '', barcodes: [] };
+        // }
 
         // ========================================
         // AUTH SCREEN
