@@ -289,8 +289,10 @@
         // QR CODE PROCESSOR (For Image Processing)
         // ========================================
 
-        async function processQRFromImage(file, zxingOptions = {}) {
-            const { readBarcodes } = ZXingWASM;
+        async function processQRFromImage(file) {
+            const {
+                readBarcodes
+            } = ZXingWASM;
             const bitmap = await createImageBitmap(file);
             const fitted = formatImageSize(bitmap.width, bitmap.height, 2200);
 
@@ -299,110 +301,39 @@
             master.height = fitted.height;
             master.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
 
-            // safe wrapper: try calling readBarcodes with options, fallback to no-options if it fails
-            async function tryReadBarcodes(imgData, opts) {
-                if (!readBarcodes) return [];
-                if (opts && Object.keys(opts).length) {
-                    try {
-                        const res = await readBarcodes(imgData, opts);
-                        return Array.isArray(res) ? res : [];
-                    } catch (e) {
-                        console.warn('[QR] readBarcodes(opts) failed, falling back to readBarcodes(imgData):', e && e.message);
-                    }
-                }
-                try {
-                    const res = await readBarcodes(imgData);
-                    return Array.isArray(res) ? res : [];
-                } catch (e) {
-                    console.error('[QR] readBarcodes failed:', e && e.message);
-                    return [];
-                }
-            }
-
-            async function decodeFrom(canvas, opts) {
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            async function decodeFrom(canvas) {
+                const ctx = canvas.getContext('2d', {
+                    willReadFrequently: true
+                });
                 const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                return await tryReadBarcodes(imgData, opts);
+                const res = await readBarcodes(imgData);
+                return Array.isArray(res) ? res : [];
             }
 
-            // Build options candidates:
-            // - Start with user-provided options (highest priority)
-            // - Then try sensible defaults
-            // - If ZXingWASM exposes Binarizer enum, try each binarizer value as well
-            const candidates = [];
-
-            // user-supplied first
-            if (zxingOptions && Object.keys(zxingOptions).length) {
-                candidates.push(zxingOptions);
-            }
-
-            // sensible defaults
-            const defaults = [
-                { tryHarder: true, tryRotate: true, tryInverted: true, formats: ['QR_CODE'] },
-                { tryHarder: true, tryRotate: true, formats: ['QR_CODE'] },
-                { tryHarder: true, formats: ['QR_CODE'] },
-                { formats: ['QR_CODE'] },
-                {}
+            const strategies = [
+                () => decodeFrom(resizeToWidth(cropCenterImage(master, 0.70, 0.85), 1200)),
+                () => decodeFrom(resizeToWidth(master, 1600)),
+                () => decodeFrom(resizeToWidth(master, 2400))
             ];
-            candidates.push(...defaults);
 
-            // If ZXingWASM exports a Binarizer enum/object, add candidates combining defaults with each binarizer
-            try {
-                const Binarizer = ZXingWASM && ZXingWASM.Binarizer;
-                if (Binarizer && typeof Binarizer === 'object') {
-                    const binValues = Object.values(Binarizer).filter(v => typeof v === 'string' || typeof v === 'number');
-                    for (const b of binValues) {
-                        // prefer most aggressive default when trying binarizers
-                        candidates.push({ tryHarder: true, tryRotate: true, tryInverted: true, binarizer: b, formats: ['QR_CODE'] });
-                    }
-                }
-            } catch (e) {
-                // ignore if not present
-            }
-
-            // Deduplicate candidate options by JSON string to avoid exact duplicates
-            const seen = new Set();
-            const uniqCandidates = [];
-            for (const c of candidates) {
-                try {
-                    const key = JSON.stringify(c || {});
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        uniqCandidates.push(c);
-                    }
-                } catch (e) {
-                    // non-serializable, just push
-                    uniqCandidates.push(c);
+            for (const strategy of strategies) {
+                console.log('[QR Code Processor] Running strategy:', strategy.name || 'anonymous');
+                const barcodes = await strategy();
+                if (barcodes.length) {
+                    const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                    if (text) return {
+                        ok: true,
+                        text,
+                        barcodes
+                    };
                 }
             }
 
-            // Try combinations: rotations x resize widths x options
-            const rotations = [0, 90, 180, 270];
-            const widthsToTry = [1200, 1600, 2400];
-
-            for (const deg of rotations) {
-                const rotated = rotateCanvas(master, deg);
-                for (const targetW of widthsToTry) {
-                    const canvasToDecode = resizeToWidth(rotated, targetW);
-                    for (const opts of uniqCandidates) {
-                        console.log('[QR Code Processor] trying rotation', deg, 'width', canvasToDecode.width, 'opts', opts);
-                        const barcodes = await decodeFrom(canvasToDecode, opts);
-                        if (barcodes.length) {
-                            const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
-                            if (text) return { ok: true, text, barcodes, usedOptions: opts };
-                        }
-                    }
-                }
-            }
-
-            // final fallback: try original master without rotation with no options
-            const finalBarcodes = await decodeFrom(master, {});
-            if (finalBarcodes.length) {
-                const text = finalBarcodes[0]?.text || finalBarcodes[0]?.rawValue || '';
-                if (text) return { ok: true, text, barcodes: finalBarcodes, usedOptions: {} };
-            }
-
-            return { ok: false, text: '', barcodes: [] };
+            return {
+                ok: false,
+                text: '',
+                barcodes: []
+            };
         }
 
         // ========================================
