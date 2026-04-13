@@ -298,6 +298,7 @@ body {
     align-items: center;    
     gap: 4px;
     margin-top: 30%;
+    z-index: 9999;
 }
 
 .scanner-screen__bib-success-label {
