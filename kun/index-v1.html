@@ -486,7 +486,6 @@
                                 </div>
                             </div>
                         </div>
-
                         <div class="scanner-screen__content">
                             <p class="scanner-screen__instruction" id="checkin-instruction">Đặt mã QR vào khung để quét</p>                            
                             <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
@@ -591,7 +590,6 @@
                 }
 
                 try {
-
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
@@ -666,6 +664,7 @@
         class CheckoutModule {
             constructor() {
                 this.isInit = false;
+                this.videoId = 'checkout-video';
             }
 
             render() {
@@ -683,6 +682,18 @@
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
                                 <span>Chưa có ảnh</span>
                             </div>
+                            <video id="${this.videoId}" width="100%" height="100%"></video>
+                            <img id="checkout-captured-image" src="" alt="Captured" width="100%" height="100%" style="object-fit:contain;display:none;" />
+                            <div id="checkout-corner">
+                                <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--br"></div>
+                            </div>
+                            <div class="scanner-screen__bib-success" id="checkout-bib-success" style="display:none">
+                                <div class="scanner-screen__bib-success-number" id="checkout-bib-success-number"></div>
+                                <div class="scanner-screen__bib-success-label" id="checkout-bib-success-label"></div>
+                            </div>
                             <div class="scanner-screen__info" id="checkout-info-card" style="display:none">
                                 <div class="scanner-screen__info-body">
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkout-info-status">—</span></div>
@@ -695,16 +706,16 @@
                             </div>                            
                         </div>                        
                         <div class="scanner-screen__content"> 
+                            <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
                             <p class="scanner-screen__instruction" id="checkout-instruction">Nhấn "Mở Camera" để chụp ảnh BIB, sau đó nhập số BIB để Xác nhận</p>                           
                         </div>
 
                         <div class="scanner-screen__footer">
                             <div class="scanner-screen__actions" id="checkout-actions-group">
-                                <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-scan">Quét (Scan)</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset" style="display:none">Reset</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-scan">Quét (Scan)</button>
                             </div>
                         </div>
 
@@ -832,14 +843,10 @@
             }
 
             openCamera() {
-                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success').html(`
-                    <div class="scanner-screen__placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span>Chưa có ảnh</span>
-                    </div>
-                `);
-                $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkout-info-card').hide();
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkout-btn-scan, #checkout-btn-open-camera, #checkout-captured-image, #checkout-corner, #checkout-info-card, #checkout-bib-success').hide();
+                $('#checkout-btn-reset').show();
+                $('#checkout-instruction').text('Chụp ảnh BIB chứa QR').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');                
 
                 const handleResult = async (event) => {
                     try {
@@ -850,9 +857,8 @@
                         const url = URL.createObjectURL(file);
                         $('#checkout-instruction').text('Đang xử lý ảnh...');
 
-                        $('#checkout-scanner-frame')
-                            .addClass('scanner-screen__frame--has-image')
-                            .html(`<img src="${url}" alt="Captured" width="100%" height="100%" style="object-fit: contain;" />`);
+                        $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image');
+                        $('#checkout-captured-image').attr('src', url).show();                                                   
 
                         const result = await processQRFromImage(file);
                         console.log('[CheckoutModule] [openCamera] Step 1: QR Processing Result=', result);
@@ -906,24 +912,17 @@
             }
 
             _showResultInfo(data) {
-                $('#checkout-info-card').show();
-                const status = data.status === STATUS.CHECKOUT_SUCCESS || false;
-                $('#checkout-scanner-frame').html(`
-                    <div class="scanner-screen__bib-success">
-                        <div class="scanner-screen__bib-${status ? 'success' : 'error'}-number">${data.bib}</div>
-                        <div class="scanner-screen__bib-${status ? 'success' : 'error'}-label">${data.name}</div>
-                    </div>
-                `).addClass(status ? 'scanner-screen__frame--success' : '');
-
+                $(`#${this.videoId}`).hide();
+                $('#checkout-bib-success').show();
+                $('#checkout-bib-success-number').text(data.bib || '—');
+                $('#checkout-bib-success-label').text(data.name || '—');
                 $('#checkout-info-children-info').text(data.info || '—');
                 $('#checkout-info-parent-name').text(data.parent_name || '—');
                 $('#checkout-info-phone').text(data.parent_phone || '—');
-
-                const statusText = data.status === STATUS.CHECKOUT_SUCCESS ? 'Thành công' : 'Thất bại';
-                const statusClass = data.status === STATUS.CHECKOUT_SUCCESS ?
-                    'scanner-screen__info-status--success' :
-                    'scanner-screen__info-status--error';
-
+                const isSuccess = data.status === STATUS.CHECKOUT_SUCCESS;                               
+                const statusText = isSuccess ? 'Thành công' : 'Thất bại';
+                const statusClass = isSuccess ? 'scanner-screen__info-status--success' : 'scanner-screen__info-status--error';
+                $('#checkout-scanner-frame').addClass(isSuccess ? 'scanner-screen__frame--success' : 'scanner-screen__frame--active');
                 $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                 if (data?.history) {
                     const historyText = data.history.map(item => {
@@ -933,12 +932,13 @@
                     $('#checkout-info-history').html(historyText);
                 }
                 $('#checkout-info-message').text(data.message || '—');
+                $('#checkout-info-card').show();
             }
 
-            _showManualInput() {
-                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image');
-                $('#checkout-instruction').text('Không nhận diện được QR. Thử lại hoặc nhập thủ công số Bib').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
+            _showManualInput() {                
+                $('#checkout-instruction').text('Không nhận diện được QR. Thử lại hoặc nhập thủ công số BIB').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
                 $('#checkout-manual-bib-input, #checkout-btn-reset, #checkout-btn-confirm').show();
+                $('#checkout-manual-bib-input').trigger('focus');
                 $('#checkout-btn-open-camera').hide();
             }
 
