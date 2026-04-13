@@ -643,11 +643,11 @@
                 this.scanner.stop();
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
                 $('#checkin-instruction').text('Đặt mã QR vào khung để quét').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--primary').addClass('scanner-screen__btn--secondary').text('Không có QR ? (Mở Camera)').show();                                
-                $('#checkin-btn-start-scan').text('Quét QR').show();                
+                $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--primary').addClass('scanner-screen__btn--secondary').text('Không có QR ? (Mở Camera)').show();
+                $('#checkin-btn-start-scan').text('Quét QR').show();
                 $(`#${this.videoId}, #checkin-corner`).show();
                 $('#checkin-captured-image, #checkin-info-card, #checkin-btn-reset-scan, #checkin-manual-bib-input, #checkin-file-input, #checkin-btn-confirm, #checkin-bib-success').hide();
-                $('#checkin-captured-image').attr('src', '');                
+                $('#checkin-captured-image').attr('src', '');
             }
 
             goBack() {
@@ -846,7 +846,7 @@
                 $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
                 $('#checkout-btn-scan, #checkout-btn-open-camera, #checkout-captured-image, #checkout-corner, #checkout-info-card, #checkout-bib-success').hide();
                 $('#checkout-btn-reset').show();
-                $('#checkout-instruction').text('Chụp ảnh BIB chứa QR').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');                
+                $('#checkout-instruction').text('Chụp ảnh BIB chứa QR').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 const handleResult = async (event) => {
                     try {
@@ -858,7 +858,7 @@
                         $('#checkout-instruction').text('Đang xử lý ảnh...');
 
                         $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image');
-                        $('#checkout-captured-image').attr('src', url).show();                                                   
+                        $('#checkout-captured-image').attr('src', url).show();
 
                         const result = await processQRFromImage(file);
                         console.log('[CheckoutModule] [openCamera] Step 1: QR Processing Result=', result);
@@ -884,7 +884,7 @@
                             formData.append('match_id', CONFIG.MATCH_ID);
                             formData.append('action', CONFIG.CHECKOUT_ACTION);
                             formData.append('file', compressedFile);
-                            const data = await apiRequest('kun/checkinout-confirm', {
+                            const data = await apiRequest('c7ddfbbd-cdb9-4bf5-b9b4-c907dc433252', {
                                 method: 'POST',
                                 body: formData
                             });
@@ -919,7 +919,7 @@
                 $('#checkout-info-children-info').text(data.info || '—');
                 $('#checkout-info-parent-name').text(data.parent_name || '—');
                 $('#checkout-info-phone').text(data.parent_phone || '—');
-                const isSuccess = data.status === STATUS.CHECKOUT_SUCCESS;                               
+                const isSuccess = data.status === STATUS.CHECKOUT_SUCCESS;
                 const statusText = isSuccess ? 'Thành công' : 'Thất bại';
                 const statusClass = isSuccess ? 'scanner-screen__info-status--success' : 'scanner-screen__info-status--error';
                 $('#checkout-scanner-frame').addClass(isSuccess ? 'scanner-screen__frame--success' : 'scanner-screen__frame--active');
@@ -935,7 +935,7 @@
                 $('#checkout-info-card').show();
             }
 
-            _showManualInput() {                
+            _showManualInput() {
                 $('#checkout-instruction').text('Không nhận diện được QR. Thử lại hoặc nhập thủ công số BIB').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
                 $('#checkout-manual-bib-input, #checkout-btn-reset, #checkout-btn-confirm').show();
                 $('#checkout-manual-bib-input').trigger('focus');
@@ -973,7 +973,7 @@
                     formData.append('match_id', CONFIG.MATCH_ID);
                     formData.append('action', CONFIG.CHECKOUT_ACTION);
                     if (compressedFile) formData.append('file', compressedFile);
-                    const data = await apiRequest('kun/checkinout-confirm', {
+                    const data = await apiRequest('c7ddfbbd-cdb9-4bf5-b9b4-c907dc433252', {
                         method: 'POST',
                         body: formData
                     });
@@ -1010,15 +1010,12 @@
                 // hide overlay if present
                 try { $('#checkout-scan-overlay').addClass('hidden'); $('#checkout-scan-result-bib').text('—'); } catch (e) { }
 
-                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success').html(`
-                    <div class="scanner-screen__placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span>Chưa có ảnh</span>
-                    </div>
-                `);
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
                 $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkout-info-card, #checkout-manual-bib-input, #checkout-btn-confirm').hide();
+                $(`#${this.videoId}, #checkout-corner`).show();
                 $('#checkout-btn-open-camera').show();
+                $('#checkout-captured-image, #checkout-info-card, #checkout-btn-reset-scan, #checkout-manual-bib-input, #checkout-file-input, #checkout-btn-confirm, #checkout-bib-success').hide();
+                $('#checkout-captured-image').attr('src', '');
             }
         }
 
