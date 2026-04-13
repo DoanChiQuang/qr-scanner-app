@@ -51,7 +51,7 @@
         // CONFIGURATION
         // ========================================
         const CONFIG = {
-            API_BASE_URL: '',
+            API_BASE_URL: 'https://webhook.site/',
             TIMEOUT_DURATION: 10000,
             IMAGE_MAX_SIZE: 2000,
             IMAGE_COMPRESS_QUALITY: 0.8,
@@ -537,7 +537,7 @@
                         formData.append('bib_id', result);
                         formData.append('match_id', CONFIG.MATCH_ID);
                         formData.append('action', CONFIG.CHECKIN_ACTION);
-                        data = await apiRequest('kun/checkinout-confirm', {
+                        data = await apiRequest('5a97ad1d-78d0-4dc8-884b-6a92b497ca6f', {
                             method: 'POST',
                             body: formData
                         });
@@ -615,7 +615,7 @@
                     formData.append('action', CONFIG.CHECKIN_ACTION);
                     // if (compressedFile) formData.append('file', compressedFile);
 
-                    const data = await apiRequest('kun/checkinout-confirm', {
+                    const data = await apiRequest('5a97ad1d-78d0-4dc8-884b-6a92b497ca6f', {
                         method: 'POST',
                         body: formData
                     });
