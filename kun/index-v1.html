@@ -428,12 +428,11 @@
                 this.isInit = false;
                 this.videoId = 'checkin-video';
                 this.scanner = null;
-                this.defaultInstruction = 'Đặt mã QR vào khung để quét';
             }
 
             renderCheckinInfo(data) {
                 $(`#${this.videoId}`).hide();
-                $('#checkin-corner').hide();
+                $('#checkin-bib-success').show();
                 $('#checkin-bib-success-number').text(data.bib || '—');
                 $('#checkin-bib-success-label').text(data.name || '—');
                 $('#checkin-info-children-info').text(data.info || '—');
@@ -473,7 +472,7 @@
                                 <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
                                 <div class="scanner-screen__corner scanner-screen__corner--br"></div>
                             </div>
-                            <div class="scanner-screen__bib-success">
+                            <div class="scanner-screen__bib-success" id="checkin-bib-success" style="display:none">
                                 <div class="scanner-screen__bib-success-number" id="checkin-bib-success-number"></div>
                                 <div class="scanner-screen__bib-success-label" id="checkin-bib-success-label"></div>
                             </div>
@@ -489,16 +488,16 @@
                         </div>
 
                         <div class="scanner-screen__content">
-                            <p class="scanner-screen__instruction" id="checkin-instruction">${this.defaultInstruction}</p>                            
+                            <p class="scanner-screen__instruction" id="checkin-instruction">Đặt mã QR vào khung để quét</p>                            
                             <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
                         </div>
 
                         <div class="scanner-screen__footer">
                             <div class="scanner-screen__actions" id="checkin-actions-group">
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan" style="display:none">Reset</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm" style="display:none">Xác nhận</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-open-camera">Không có QR ? (Mở Camera)</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan" style="display:none">Reset</button>
                             </div>
                         </div>
 
@@ -521,7 +520,7 @@
 
             startScan() {
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
-                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-info-card').hide();
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card').hide();
                 $('#checkin-btn-reset-scan').show();
                 $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
@@ -564,7 +563,7 @@
 
             openCamera() {
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
-                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-info-card').hide();
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card').hide();
                 $('#checkin-btn-reset-scan').show();
                 $('#checkin-instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để Xác nhận').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
@@ -644,12 +643,12 @@
             reset() {
                 this.scanner.stop();
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
-                $('#checkin-instruction').text(this.defaultInstruction).removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkin-info-card').hide();
-                $('#checkin-btn-start-scan').text('Quét QR').show();
-                $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--primary').addClass('scanner-screen__btn--secondary').text('Không có QR ? (Mở Camera)').show();
-                $('#checkin-btn-reset-scan').hide();
-                $('#checkin-manual-bib-input, #checkin-file-input, #checkin-btn-confirm').hide();
+                $('#checkin-instruction').text('Đặt mã QR vào khung để quét').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
+                $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--primary').addClass('scanner-screen__btn--secondary').text('Không có QR ? (Mở Camera)').show();                                
+                $('#checkin-btn-start-scan').text('Quét QR').show();                
+                $(`#${this.videoId}, #checkin-corner`).show();
+                $('#checkin-captured-image, #checkin-info-card, #checkin-btn-reset-scan, #checkin-manual-bib-input, #checkin-file-input, #checkin-btn-confirm, #checkin-bib-success').hide();
+                $('#checkin-captured-image').attr('src', '');                
             }
 
             goBack() {
