@@ -191,7 +191,7 @@
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
                     mode: 'cors',
-                    credentials: 'include',
+                    // credentials: 'include',
                     ...options,
                 });
                 const result = await response.json();
@@ -520,7 +520,7 @@
 
             startScan() {
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
-                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card').hide();
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
                 $('#checkin-btn-reset-scan').show();
                 $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
@@ -563,7 +563,7 @@
 
             openCamera() {
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
-                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card').hide();
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
                 $('#checkin-btn-reset-scan').show();
                 $('#checkin-instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để Xác nhận').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
