@@ -665,6 +665,7 @@
             constructor() {
                 this.isInit = false;
                 this.videoId = 'checkout-video';
+                this._capturedFile = null;
             }
 
             render() {
@@ -714,8 +715,8 @@
                             <div class="scanner-screen__actions" id="checkout-actions-group">
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset" style="display:none">Reset</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-scan">Quét (Scan)</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-open-camera">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-scan">Quét QR</button>
                             </div>
                         </div>
 
@@ -736,22 +737,13 @@
             }
 
             async startCameraScan() {
-                // local-only: wait 2s, then start live scan; capture a still only when QR is detected
+                $(`#${this.videoId}`).show();
                 $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
-                $('#checkout-scanner-frame').html(`
-                    <div class="scanner-scan-area">
-                        <video id="checkout-video" playsinline muted></video>
-                        <div id="checkout-countdown" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-                            <div id="checkout-countdown-number" style="font-size:96px;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,0.7);display:none">2</div>
-                        </div>
-                    </div>
-                `);
-                $('#checkout-instruction').text('Chuẩn bị quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkout-info-card').hide();
-                $('#checkout-btn-scan, #checkout-btn-open-camera').hide();
+                $('#checkout-btn-scan, #checkout-btn-open-camera, #checkout-captured-image, #checkout-corner, #checkout-info-card, #checkout-bib-success').hide();
                 $('#checkout-btn-reset').show();
+                $('#checkout-instruction').text('Chuẩn bị quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                const video = document.getElementById('checkout-video');
+                const video = $(`#${this.videoId}`);
                 const canvas = document.createElement('canvas');
                 let stream = null;
 
@@ -761,31 +753,18 @@
                 };
 
                 try {
-                    // request camera immediately so permission prompt / preview happen during countdown
                     const constraints = { video: { width: { ideal: 2560 }, height: { ideal: 1440 }, facingMode: { ideal: 'environment' } } };
                     const getStreamPromise = navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
 
-                    // 2s visible countdown while camera prompt/preview may appear
-                    const countdownEl = document.getElementById('checkout-countdown-number');
-                    countdownEl.style.display = 'block';
-                    for (let i = 2; i > 0; i--) {
-                        countdownEl.textContent = String(i);
-                        await new Promise(r => setTimeout(r, 1000));
-                    }
-                    countdownEl.style.display = 'none';
-
-                    // await camera stream after countdown (it may already be granted)
                     try {
                         stream = await getStreamPromise;
                     } catch (e) {
-                        // fallback: try again without constraints
                         stream = await navigator.mediaDevices.getUserMedia({ video: true });
                     }
 
                     video.srcObject = stream;
                     await video.play();
 
-                    // start live scanning loop; capture only when QR is detected
                     const ctx = canvas.getContext('2d');
                     let rafId = null;
 
@@ -810,19 +789,21 @@
                                     const blob = await new Promise(resolve => capCanvas.toBlob(resolve, 'image/jpeg', 0.92));
                                     const file = new File([blob], `VM_CHECKOUT_CAPTURE_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
 
+                                    // store captured file on the instance as a simple, cross-browser fallback
+                                    try {
+                                        this._capturedFile = file;
+                                    } catch (e) {
+                                        console.warn('[CheckoutModule] Unable to store captured file on instance', e);
+                                    }
+
                                     stopStream();
                                     if (rafId) cancelAnimationFrame(rafId);
 
                                     // show captured preview
                                     const url = URL.createObjectURL(file);
-                                    $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image').html(`<img src="${url}" alt="Captured" width="100%" height="100%" style="object-fit: contain;" />`);
-
-                                    // populate and show UI
-                                    $('#checkout-manual-bib-input').val(text).show().trigger('focus');
-                                    $('#checkout-btn-confirm').show();
-                                    $('#checkout-instruction').text('QR đã nhận diện — Kiểm tra và nhấn Xác nhận').addClass('scanner-screen__instruction--success');
-
-                                    const localData = { bib: text, name: '—', parent_name: '—', parent_phone: '—', info: 'Local decode (no API)', history: [], status: null, message: 'Đã quét (local)' };
+                                    $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image');
+                                    $('#checkout-captured-image').attr('src', url).show();
+                                    const localData = { bib: text, name: '—', parent_name: '—', parent_phone: '—', info: '-', history: [], status: null, message: '-' };
                                     this._showResultInfo(localData);
                                     return;
                                 }
@@ -952,7 +933,7 @@
 
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkout-file-input')[0];
-                    const file = fileInput?.files?.[0] || null;
+                    const file = fileInput?.files?.[0] || this._capturedFile || null;
 
                     const compressedBlob = await imageCompression(file, {
                         maxSizeMB: 0.3,
@@ -1005,17 +986,17 @@
 
             reset() {
                 // ensure any active camera is stopped (best-effort)
-                try { const v = document.getElementById('checkout-video'); if (v && v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); } } catch (e) { }
-
-                // hide overlay if present
-                try { $('#checkout-scan-overlay').addClass('hidden'); $('#checkout-scan-result-bib').text('—'); } catch (e) { }
-
+                try { const v = document.getElementById('checkout-video'); if (v && v.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); } } catch (e) { }                
                 $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
                 $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
                 $(`#${this.videoId}, #checkout-corner`).show();
                 $('#checkout-btn-open-camera').show();
+                $('#checkout-btn-scan').show();
+                $('#checkout-btn-reset').hide();
                 $('#checkout-captured-image, #checkout-info-card, #checkout-btn-reset-scan, #checkout-manual-bib-input, #checkout-file-input, #checkout-btn-confirm, #checkout-bib-success').hide();
-                $('#checkout-captured-image').attr('src', '');                
+                $('#checkout-captured-image').attr('src', '');
+                try { this._capturedFile = null; } catch (e) { }
+                try { const fi = document.getElementById('checkout-file-input'); if (fi) fi.value = ''; } catch (e) { }
             }
         }
 
