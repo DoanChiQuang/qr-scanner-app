@@ -754,7 +754,7 @@
                 try {
                     const constraints = { video: { width: { ideal: 2560 }, height: { ideal: 1440 }, facingMode: { ideal: 'environment' } } };
                     const getStreamPromise = navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
-                    
+
                     try {
                         stream = await getStreamPromise;
                     } catch (e) {
@@ -794,7 +794,9 @@
                                     // show captured preview
                                     const url = URL.createObjectURL(file);
                                     $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image');
-                                    $('#checkout-captured-image').attr('src', url).show();                                                                        
+                                    $('#checkout-captured-image').attr('src', url).show();
+                                    $('#checkout-manual-bib-input').val(text).show();
+                                    $('#checkout-btn-confirm').show();
                                     const localData = { bib: text, name: '—', parent_name: '—', parent_phone: '—', info: '-', history: [], status: null, message: '-' };
                                     this._showResultInfo(localData);
                                     return;
@@ -806,12 +808,16 @@
                         rafId = requestAnimationFrame(loop);
                     };
 
-                    // give user 2 seconds to position before starting detection
+                    // visible countdown: 2 -> 1 -> start
                     try {
-                        $('#checkout-instruction').text('Bắt đầu quét sau 2 giây...');
+                        for (let i = 2; i > 0; i--) {
+                            $('#checkout-instruction').text(`Bắt đầu quét: ${i}`);
+                            // wait 1 second
+                            // eslint-disable-next-line no-await-in-loop
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                        $('#checkout-instruction').text('Đang quét...');
                     } catch (e) { }
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    try { $('#checkout-instruction').text('Đang quét...'); } catch (e) { }
                     loop();
                 } catch (error) {
                     console.log('[CheckoutModule] [startCameraScan] Error:', error);

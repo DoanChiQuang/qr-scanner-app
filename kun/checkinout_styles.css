@@ -297,8 +297,7 @@ body {
     flex-direction: column;
     align-items: center;    
     gap: 4px;
-    margin-top: 30%;
-    z-index: 9999;
+    margin-top: 30%;    
 }
 
 .scanner-screen__bib-success-label {
