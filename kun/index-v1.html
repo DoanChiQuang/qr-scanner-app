@@ -519,6 +519,7 @@
             }
 
             startScan() {
+                $(`#${this.videoId}`).show();
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
                 $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
                 $('#checkin-btn-reset-scan').show();
