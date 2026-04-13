@@ -57,7 +57,7 @@
             IMAGE_COMPRESS_QUALITY: 0.8,
             CHECKIN_ACTION: 1,
             CHECKOUT_ACTION: 2,
-            MATCH_ID: '<?php echo $this->matchId ?>'
+            MATCH_ID: 75
         };
 
         const STATUS = {
@@ -537,7 +537,7 @@
                         formData.append('bib_id', result);
                         formData.append('match_id', CONFIG.MATCH_ID);
                         formData.append('action', CONFIG.CHECKIN_ACTION);
-                        data = await apiRequest('5a97ad1d-78d0-4dc8-884b-6a92b497ca6f', {
+                        data = await apiRequest('c7ddfbbd-cdb9-4bf5-b9b4-c907dc433252', {
                             method: 'POST',
                             body: formData
                         });
@@ -615,7 +615,7 @@
                     formData.append('action', CONFIG.CHECKIN_ACTION);
                     // if (compressedFile) formData.append('file', compressedFile);
 
-                    const data = await apiRequest('5a97ad1d-78d0-4dc8-884b-6a92b497ca6f', {
+                    const data = await apiRequest('c7ddfbbd-cdb9-4bf5-b9b4-c907dc433252', {
                         method: 'POST',
                         body: formData
                     });
