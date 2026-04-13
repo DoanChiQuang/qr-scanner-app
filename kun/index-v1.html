@@ -742,7 +742,7 @@
                 $('#checkout-btn-reset').show();
                 $('#checkout-instruction').text('Chuẩn bị quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
-                const video = $(`#${this.videoId}`);
+                const video = document.getElementById(this.videoId);
                 const canvas = document.createElement('canvas');
                 let stream = null;
 
