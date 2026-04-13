@@ -787,6 +787,14 @@
 
                                     const blob = await new Promise(resolve => capCanvas.toBlob(resolve, 'image/jpeg', 0.92));
                                     const file = new File([blob], `VM_CHECKOUT_CAPTURE_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+                                    try {
+                                        const fileInputEl = document.getElementById('checkout-file-input');
+                                        if (fileInputEl && window.DataTransfer) {
+                                            const dt = new DataTransfer();
+                                            dt.items.add(file);
+                                            fileInputEl.files = dt.files;
+                                        }
+                                    } catch (e) { }
 
                                     stopStream();
                                     if (rafId) cancelAnimationFrame(rafId);
@@ -928,13 +936,13 @@
             }
 
             async confirmCheckout() {
-                try {
-                    const bib = ($('#checkout-manual-bib-input').val() || '').trim();
-                    if (!bib) {
-                        showToast('Vui lòng nhập số BIB', 'error', 5000);
-                        return;
-                    }
+                const bib = ($('#checkout-manual-bib-input').val() || '').trim();
+                if (!bib) {
+                    showToast('Vui lòng nhập số BIB', 'error', 5000);
+                    return;
+                }
 
+                try {
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkout-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
