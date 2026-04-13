@@ -754,14 +754,6 @@
                 try {
                     const constraints = { video: { width: { ideal: 2560 }, height: { ideal: 1440 }, facingMode: { ideal: 'environment' } } };
                     const getStreamPromise = navigator.mediaDevices.getUserMedia(constraints).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
-
-                    const countdownEl = document.getElementById('checkout-countdown-number');
-                    countdownEl.style.display = 'block';
-                    for (let i = 2; i > 0; i--) {
-                        countdownEl.textContent = String(i);
-                        await new Promise(r => setTimeout(r, 1000));
-                    }
-                    countdownEl.style.display = 'none';
                     
                     try {
                         stream = await getStreamPromise;
@@ -814,6 +806,12 @@
                         rafId = requestAnimationFrame(loop);
                     };
 
+                    // give user 2 seconds to position before starting detection
+                    try {
+                        $('#checkout-instruction').text('Bắt đầu quét sau 2 giây...');
+                    } catch (e) { }
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    try { $('#checkout-instruction').text('Đang quét...'); } catch (e) { }
                     loop();
                 } catch (error) {
                     console.log('[CheckoutModule] [startCameraScan] Error:', error);
