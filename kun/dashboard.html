@@ -1,70 +1,60 @@
 <!DOCTYPE html>
 <html lang="vi">
 
-<head>    
+<head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        brand: '#C92A57',
-                        'brand-dark': '#a8224a',
-                    }
-                }
-            }
-        }
-    </script>
+    <link href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+    <script src="https://unpkg.com/gridjs/dist/gridjs.umd.js"></script>
 </head>
 
 <body class="bg-gray-100 text-gray-800 min-h-screen">
     <!-- Header -->
-    <header class="bg-gradient-to-r from-[#C92A57] to-[#e8446a] text-white px-6 py-4 flex items-center justify-between shadow">
+    <header class="bg-[#9f224e] text-white px-6 py-4 flex items-center justify-between shadow">
         <h1 class="text-lg font-semibold">Kun Check-in / Check-out Dashboard</h1>
-        <button onclick="Dashboard.refresh()" class="px-4 py-1.5 text-sm bg-white/20 hover:bg-white/30 rounded-md transition">&#x21bb; Refresh</button>
+        <button onclick="Dashboard.refresh()"
+            class="px-4 py-1.5 text-sm bg-white/20 hover:bg-white/30 rounded-md transition">&#x21bb; Refresh</button>
     </header>
 
     <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <!-- Stat Cards -->
-        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <section class="grid grid-cols-2 lg:grid-cols-2 gap-4">
             <div class="bg-white rounded-xl shadow-sm p-5">
                 <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Total Check-in</div>
-                <div class="text-3xl font-bold text-green-500" id="stat-total-checkin">-</div>
+                <div class="text-3xl font-bold text-green-700" id="stat-total-checkin">2000</div>
             </div>
             <div class="bg-white rounded-xl shadow-sm p-5">
                 <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Total Check-out</div>
-                <div class="text-3xl font-bold text-orange-500" id="stat-total-checkout">-</div>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm p-5">
-                <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Unique Check-in (BIB)</div>
-                <div class="text-3xl font-bold text-blue-500" id="stat-unique-checkin">-</div>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm p-5">
-                <div class="text-xs text-gray-400 uppercase tracking-wide mb-1">Unique Check-out (BIB)</div>
-                <div class="text-3xl font-bold text-purple-500" id="stat-unique-checkout">-</div>
+                <div class="text-3xl font-bold text-orange-700" id="stat-total-checkout">1500</div>
             </div>
         </section>
 
         <!-- Chart Filter -->
         <section class="bg-white rounded-xl shadow-sm p-5">
-            <div class="flex flex-wrap items-center gap-3 mb-5">
-                <span class="text-sm font-medium text-gray-600">Lọc biểu đồ:</span>
-                <button data-action="0" onclick="Dashboard.setChartAction(0)" class="chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-[#C92A57] text-white border-[#C92A57]">Tất cả</button>
-                <button data-action="1" onclick="Dashboard.setChartAction(1)" class="chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-white text-gray-600 border-gray-300 hover:border-[#C92A57] hover:text-[#C92A57]">Check-in</button>
-                <button data-action="2" onclick="Dashboard.setChartAction(2)" class="chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-white text-gray-600 border-gray-300 hover:border-[#C92A57] hover:text-[#C92A57]">Check-out</button>
-                <button id="mock-toggle" onclick="Dashboard.toggleMock()" class="ml-auto px-3 py-1.5 text-sm rounded-md bg-gray-100 border border-gray-200">Use Mock Data</button>
-            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Thống kê theo Độ tuổi (prefix BIB)</h3>
-                    <div class="relative h-64"><canvas id="chart-prefix"></canvas></div>
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Thống kê theo Giới Tính</h3>
+                    <div class="mb-2 flex items-center gap-3">
+                        <label class="text-sm text-gray-600">Lọc:</label>
+                        <select id="chart-filter-value-gender"
+                            class="px-3 py-1 rounded-md border border-gray-300 text-sm">
+                            <option value="all">Tất cả</option>
+                        </select>
+                    </div>
+                    <div class="relative h-64"><canvas id="chart-gender"></canvas></div>
                 </div>
                 <div>
-                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Thống kê theo Giới tính</h3>
-                    <div class="relative h-64"><canvas id="chart-gender"></canvas></div>
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Thống kê theo Độ Tuổi</h3>
+                    <div class="mb-2 flex items-center gap-3">
+                        <label class="text-sm text-gray-600">Lọc:</label>
+                        <select id="chart-filter-value-prefix"
+                            class="px-3 py-1 rounded-md border border-gray-300 text-sm">
+                            <option value="all">Tất cả</option>
+                        </select>
+                    </div>
+                    <div class="relative h-64"><canvas id="chart-prefix"></canvas></div>
                 </div>
             </div>
         </section>
@@ -72,47 +62,11 @@
         <!-- Management Table -->
         <section class="bg-white rounded-xl shadow-sm p-5">
             <h3 class="text-base font-semibold mb-4">Quản lý Check-in / Check-out</h3>
-            <div class="flex flex-wrap items-center gap-3 mb-4">
-                <input type="text" id="filter-bib" placeholder="BIB ID (4 số)" maxlength="4"
-                    class="w-36 px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C92A57]/40 focus:border-[#C92A57]">
-                <select id="filter-action"
-                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#C92A57]/40 focus:border-[#C92A57]">
-                    <option value="0">Tất cả</option>
-                    <option value="1">Check-in</option>
-                    <option value="2">Check-out</option>
-                </select>
-                <button onclick="Dashboard.searchList()" class="px-5 py-1.5 text-sm font-medium text-white bg-[#C92A57] hover:bg-[#a8224a] rounded-md transition">Tìm kiếm</button>
-                <button onclick="Dashboard.resetFilter()" class="px-4 py-1.5 text-sm text-gray-600 bg-gray-200 hover:bg-gray-300 rounded-md transition">Reset</button>
+            <div id="log-table">
+                <div class="p-6 text-center text-gray-400">Loading...</div>
             </div>
 
-            <div class="overflow-auto max-h-[500px] border border-gray-200 rounded-lg">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 sticky top-0">
-                        <tr>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">BIB</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Họ tên</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Giới tính</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Năm sinh</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Loại</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Scanned by</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Thời gian</th>
-                            <th class="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Ảnh</th>
-                        </tr>
-                    </thead>
-                    <tbody id="log-tbody" class="divide-y divide-gray-100">
-                        <tr><td colspan="9" class="text-center text-gray-400 py-8">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="flex justify-center items-center gap-3 mt-4">
-                <button id="btn-prev" onclick="Dashboard.prevPage()" disabled
-                    class="px-4 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition">&laquo; Trước</button>
-                <span class="text-sm text-gray-500" id="page-info">Trang 1</span>
-                <button id="btn-next" onclick="Dashboard.nextPage()"
-                    class="px-4 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition">Sau &raquo;</button>
-            </div>
+            <!-- Grid.js renders pagination controls inside the table container -->
         </section>
     </main>
 
@@ -124,49 +78,23 @@
             var currentPage = 0;
             var chartAction = 0;
             var charts = {};
-            var useMock = false;
-
-            var mockData = {
-                stats: {
-                    totals: { total_checkin: 1234, total_checkout: 987, unique_checkin: 890, unique_checkout: 765 },
-                    by_prefix: [ { prefix_bib_id: 'A', total: 450 }, { prefix_bib_id: 'B', total: 300 }, { prefix_bib_id: 'C', total: 200 }, { prefix_bib_id: 'D', total: 150 } ],
-                    by_gender: [ { gender: 1, total: 900 }, { gender: 2, total: 321 } ]
-                },
-                list: (function(){
-                    var rows = [];
-                    for (var i=1;i<=20;i++) {
-                        rows.push({ prefix_bib_id: 'A', bib_id: 1000+i, user_name: 'Người dùng ' + i, gender: i%2?1:2, birth_year: '01/01/' + (1990 + (i%10)), action: i%2?1:2, scanned_by: 'Scanner ' + ((i%3)+1), created_at: '2026-04-09 10:' + (i<10?('0'+i):i), image_url: '' });
-                    }
-                    return rows;
-                })()
-            };
-
+            var gridInstance = null;
 
             function fetchApi(params) {
-                if (useMock) {
-                    return new Promise(function (resolve) {
-                        setTimeout(function () {
-                            if (params.type === 'stats') {
-                                resolve({ code: 200, data: mockData.stats });
-                            } else if (params.type === 'list') {
-                                resolve({ code: 200, data: mockData.list });
-                            } else {
-                                resolve({ code: 400, data: null });
-                            }
-                        }, 250);
-                    });
-                }
                 var query = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
                 return fetch(API_URL + '?' + query).then(function (r) { return r.json(); });
             }
 
-            function formatNum(n) { return parseInt(n).toLocaleString('vi-VN'); }
+            function formatNum(n) { return parseInt(n || 0).toLocaleString('vi-VN'); }
+
+            // tiny DOM helpers: $ selector and $$ for multiple
+            function $(sel) { return (typeof sel === 'string') ? document.querySelector(sel) : sel; }
+            function $$(sel) { return Array.from(document.querySelectorAll(sel)); }
+            function el(tag) { return document.createElement(tag); }
 
             function escapeHtml(str) {
-                if (!str) return '';
-                var d = document.createElement('div');
-                d.appendChild(document.createTextNode(str));
-                return d.innerHTML;
+                if (str == null) return '';
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
             }
 
             function extractYear(birthYear) {
@@ -175,89 +103,65 @@
                 return p.length === 3 ? p[2] : birthYear;
             }
 
-            /* ── Chart Action Filter Buttons ── */
             function updateActionButtons() {
-                document.querySelectorAll('.chart-action-btn').forEach(function (btn) {
+                $$('.chart-action-btn').forEach(function (btn) {
                     var a = parseInt(btn.getAttribute('data-action'));
                     if (a === chartAction) {
-                        btn.className = 'chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-[#C92A57] text-white border-[#C92A57]';
+                        btn.className = 'chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-[#2563eb] text-white border-[#2563eb]';
                     } else {
-                        btn.className = 'chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-white text-gray-600 border-gray-300 hover:border-[#C92A57] hover:text-[#C92A57]';
+                        btn.className = 'chart-action-btn px-4 py-1.5 text-sm rounded-full border transition bg-white text-gray-600 border-gray-300 hover:border-[#2563eb] hover:text-[#2563eb]';
                     }
                 });
             }
 
-            /* ── Stats ── */
-            function loadStats() {
-                fetchApi({ type: 'stats', match_id: MATCH_ID, action: chartAction }).then(function (res) {
-                    if (res.code !== 200 || !res.data) return;
-                    var d = res.data;
-                    var t = d.totals || {};
-                    document.getElementById('stat-total-checkin').textContent = formatNum(t.total_checkin || 0);
-                    document.getElementById('stat-total-checkout').textContent = formatNum(t.total_checkout || 0);
-                    document.getElementById('stat-unique-checkin').textContent = formatNum(t.unique_checkin || 0);
-                    document.getElementById('stat-unique-checkout').textContent = formatNum(t.unique_checkout || 0);
-
-                    renderChart('chart-prefix', 'Độ tuổi', (d.by_prefix || []).map(function (r) {
-                        return { label: 'Prefix ' + r.prefix_bib_id, value: parseInt(r.total) || 0 };
-                    }), '#3b82f6');
-
-                    renderChart('chart-gender', 'Giới tính', (d.by_gender || []).map(function (r) {
-                        return { label: r.gender == 1 ? 'Nam' : (r.gender == 2 ? 'Nữ' : 'Khác'), value: parseInt(r.total) || 0 };
-                    }), '#a855f7');
-                }).catch(function () {
-                    ['chart-prefix', 'chart-gender'].forEach(function (id) {
-                        var c = document.getElementById(id);
-                        if (c) c.parentElement.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-400 text-sm">Lỗi tải dữ liệu</div>';
-                    });
-                });
-            }
-
-            function generateColors(n) {
-                var palette = [
-                    '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#60a5fa','#34d399','#f472b6'
-                ];
-                var out = [];
-                for (var i = 0; i < n; i++) out.push(palette[i % palette.length]);
-                return out;
-            }
-
-            function renderChart(canvasId, label, data) {
+            function renderChart(canvasId, label, data, color) {
                 if (charts[canvasId]) charts[canvasId].destroy();
-                var canvas = document.getElementById(canvasId);
+                var canvas = $('#' + canvasId);
                 if (!canvas) return;
                 if (!data || data.length === 0) {
                     canvas.parentElement.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-400 text-sm">Chưa có dữ liệu</div>';
                     return;
                 }
-                var labels = data.map(function (d) { return d.label; });
-                var values = data.map(function (d) { return d.value; });
-                var colors = generateColors(values.length);
-                var total = values.reduce(function (s, v) { return s + v; }, 0) || 1;
+
+                function hexToRgb(hex) {
+                    hex = (hex || '#000000').replace('#', '');
+                    if (hex.length === 3) hex = hex.split('').map(function (h) { return h + h; }).join('');
+                    var num = parseInt(hex, 16);
+                    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+                }
+
+                var values = data.map(function (d) { return d.value || 0; });
+                var labels = data.map(function (d) { return d.label || '-'; });
+                var rgb = hexToRgb(color);
+                var bgColors = values.map(function (_, i) {
+                    var alpha = 0.9 - (i * (0.5 / Math.max(values.length, 1)));
+                    if (alpha < 0.35) alpha = 0.35;
+                    return 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + alpha.toFixed(2) + ')';
+                });
+                var borderColors = values.map(function () { return 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',1)'; });
 
                 charts[canvasId] = new Chart(canvas, {
                     type: 'pie',
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: label,
                             data: values,
-                            backgroundColor: colors,
-                            borderColor: '#ffffff',
-                            borderWidth: 2
+                            backgroundColor: bgColors,
+                            borderColor: borderColors,
+                            borderWidth: 1
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: { position: 'right', labels: { boxWidth: 12, padding: 10 } },
+                            legend: { display: true, position: 'bottom' },
                             tooltip: {
                                 callbacks: {
                                     label: function (ctx) {
                                         var v = ctx.parsed || 0;
-                                        var pct = ((v / total) * 100).toFixed(1);
-                                        return ctx.label + ': ' + v.toLocaleString('vi-VN') + ' (' + pct + '%)';
+                                        var label = ctx.label || '';
+                                        return label + ': ' + v.toLocaleString('vi-VN');
                                     }
                                 }
                             }
@@ -266,84 +170,146 @@
                 });
             }
 
-            /* ── Table ── */
-            function loadList() {
-                var bibId = document.getElementById('filter-bib').value.trim();
-                var action = document.getElementById('filter-action').value;
-                fetchApi({
-                    type: 'list', match_id: MATCH_ID,
-                    bib_id: bibId || 0, action: action,
-                    limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE
-                }).then(function (res) {
-                    var tbody = document.getElementById('log-tbody');
-                    if (res.code !== 200 || !res.data || res.data.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Không có dữ liệu</td></tr>';
-                        updatePagination(0);
+            // populate select options for each chart using stats data (if provided)
+            function populateChartFilterValuesFor(chartKey, dataArr) {
+                var selId = chartKey === 'gender' ? 'chart-filter-value-gender' : 'chart-filter-value-prefix';
+                var sel = $('#' + selId);
+                if (!sel) return;
+                sel.innerHTML = '';
+                var optAll = el('option'); optAll.value = 'all'; optAll.text = 'Tất cả'; sel.appendChild(optAll);
+                if (dataArr && Array.isArray(dataArr)) {
+                    if (chartKey === 'gender') {
+                        dataArr.forEach(function (r) {
+                            var val = String(r.gender || r.key || r.value || '');
+                            var txt = r.gender == 1 ? 'Nam' : (r.gender == 2 ? 'Nữ' : ('T.' + val));
+                            var o = el('option'); o.value = val; o.text = txt; sel.appendChild(o);
+                        });
+                    } else {
+                        dataArr.forEach(function (r) {
+                            var p = r.prefix_bib_id || r.key || r.value || '';
+                            if (!p) return;
+                            var o = el('option'); o.value = p; o.text = 'Prefix ' + p; sel.appendChild(o);
+                        });
+                    }
+                }
+            }
+
+            // compute counts by fetching the list (server-side pagination may limit results; use large limit)
+            function computeCheckCountsAsync(filterType, filterValue) {
+                var params = { type: 'list', match_id: MATCH_ID, bib_id: 0, action: 0, limit: 100000, offset: 0 };
+                return fetchApi(params).then(function (res) {
+                    if (!res || res.code !== 200 || !Array.isArray(res.data)) return { checkin: 0, checkout: 0 };
+                    var rows = res.data;
+                    if (filterType === 'gender' && filterValue !== 'all') {
+                        rows = rows.filter(function (r) { return String(r.gender) === String(filterValue); });
+                    } else if (filterType === 'prefix' && filterValue !== 'all') {
+                        rows = rows.filter(function (r) { return (r.prefix_bib_id || '') === filterValue; });
+                    }
+                    var checkin = rows.filter(function (r) { return r.action == 1; }).length;
+                    var checkout = rows.filter(function (r) { return r.action == 2; }).length;
+                    return { checkin: checkin, checkout: checkout };
+                }).catch(function () { return { checkin: 0, checkout: 0 }; });
+            }
+
+            function updateChartFromFilter(chartKey) {
+                var selId = chartKey === 'gender' ? 'chart-filter-value-gender' : 'chart-filter-value-prefix';
+                var sel = $('#' + selId);
+                if (!sel) return;
+                var value = sel.value;
+                var filterType = chartKey === 'gender' ? 'gender' : 'prefix';
+                computeCheckCountsAsync(filterType, value).then(function (res) {
+                    var counts = [{ label: 'Check-in', value: res.checkin }, { label: 'Check-out', value: res.checkout }];
+                    if (chartKey === 'gender') renderChart('chart-gender', 'Checkin vs Checkout', counts, '#7c3aed');
+                    else renderChart('chart-prefix', 'Checkin vs Checkout', counts, '#06b6d4');
+                });
+            }
+
+            function loadStats() {
+                return fetchApi({ type: 'stats', match_id: MATCH_ID, action: chartAction }).then(function (res) {
+                    if (!res || res.code !== 200 || !res.data) {
+                        ['chart-prefix', 'chart-gender'].forEach(function (id) {
+                            var c = $('#' + id);
+                            if (c) c.parentElement.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-400 text-sm">Lỗi tải dữ liệu</div>';
+                        });
                         return;
                     }
-                    var html = '';
-                    res.data.forEach(function (row, i) {
-                        var bibFull = row.prefix_bib_id + String(row.bib_id).padStart(4, '0');
+                    var d = res.data;
+                    var t = d.totals || {};
+                    var sIn = $('#stat-total-checkin'); if (sIn) sIn.textContent = formatNum(t.total_checkin || 0);
+                    var sOut = $('#stat-total-checkout'); if (sOut) sOut.textContent = formatNum(t.total_checkout || 0);
+
+                    populateChartFilterValuesFor('gender', d.by_gender || []);
+                    populateChartFilterValuesFor('prefix', d.by_prefix || []);
+                    updateChartFromFilter('gender');
+                    updateChartFromFilter('prefix');
+                }).catch(function () {
+                    ['chart-prefix', 'chart-gender'].forEach(function (id) {
+                        var c = $('#' + id);
+                        if (c) c.parentElement.innerHTML = '<div class="flex items-center justify-center h-64 text-gray-400 text-sm">Lỗi tải dữ liệu</div>';
+                    });
+                });
+            }
+
+            function loadList() {
+                var bibEl = $('#filter-bib'); var bibId = bibEl ? bibEl.value.trim() : 0;
+                var actionEl = $('#filter-action'); var action = actionEl ? actionEl.value : 0;
+                var offset = currentPage * PAGE_SIZE;
+                fetchApi({ type: 'list', match_id: MATCH_ID, bib_id: bibId || 0, action: action, limit: PAGE_SIZE, offset: offset }).then(function (res) {
+                    var container = $('#log-table');
+                    if (!res || res.code !== 200 || !res.data || res.data.length === 0) {
+                        if (container) container.innerHTML = '<div class="text-center text-gray-400 py-8">Không có dữ liệu</div>';
+                        return;
+                    }
+                    var rows = res.data.map(function (row, i) {
+                        var bibFull = (row.prefix_bib_id || '') + String(row.bib_id).padStart(4, '0');
                         var gender = row.gender == 1 ? 'Nam' : (row.gender == 2 ? 'Nữ' : '-');
                         var birthYear = extractYear(row.birth_year);
                         var badge = row.action == 1
                             ? '<span class="inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">Check-in</span>'
                             : '<span class="inline-block px-2.5 py-0.5 text-xs font-semibold rounded-full bg-orange-100 text-orange-700">Check-out</span>';
-                        var imgHtml = row.image_url
-                            ? '<a href="' + escapeHtml(row.image_url) + '" target="_blank" class="text-blue-600 hover:underline">Xem</a>'
-                            : '-';
+                        var imgHtml = row.image_url ? '<a href="' + escapeHtml(row.image_url) + '" target="_blank" class="text-blue-600 hover:underline">Xem</a>' : '-';
                         var rowNum = currentPage * PAGE_SIZE + i + 1;
-                        html += '<tr class="hover:bg-gray-50">' +
-                            '<td class="px-3 py-2">' + rowNum + '</td>' +
-                            '<td class="px-3 py-2 font-semibold">' + escapeHtml(bibFull) + '</td>' +
-                            '<td class="px-3 py-2">' + escapeHtml(row.user_name || '-') + '</td>' +
-                            '<td class="px-3 py-2">' + gender + '</td>' +
-                            '<td class="px-3 py-2">' + escapeHtml(birthYear) + '</td>' +
-                            '<td class="px-3 py-2">' + badge + '</td>' +
-                            '<td class="px-3 py-2">' + escapeHtml(row.scanned_by || '-') + '</td>' +
-                            '<td class="px-3 py-2">' + escapeHtml(row.created_at || '-') + '</td>' +
-                            '<td class="px-3 py-2">' + imgHtml + '</td>' +
-                            '</tr>';
+                        return [rowNum, escapeHtml(bibFull), escapeHtml(row.user_name || '-'), gender, escapeHtml(birthYear), badge, escapeHtml(row.scanned_by || '-'), escapeHtml(row.created_at || '-'), imgHtml];
                     });
-                    tbody.innerHTML = html;
-                    updatePagination(res.data.length);
+
+                    if (gridInstance) {
+                        gridInstance.updateConfig({ data: rows }).forceRender();
+                    } else {
+                        container.innerHTML = '';
+                        gridInstance = new gridjs.Grid({
+                            columns: [{ name: '#', width: '64px' }, 'BIB', 'Họ tên', 'Giới tính', 'Năm sinh', { name: 'Loại', formatter: function (cell) { return gridjs.html(cell); } }, 'Scanned by', 'Thời gian', { name: 'Ảnh', formatter: function (cell) { return gridjs.html(cell); } }],
+                            data: rows,
+                            pagination: { enabled: true, limit: PAGE_SIZE },
+                            sort: true,
+                            search: true,
+                            style: { table: { 'white-space': 'nowrap' } }
+                        }).render(container);
+                    }
                 }).catch(function () {
-                    document.getElementById('log-tbody').innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Lỗi tải dữ liệu</td></tr>';
+                    var lt = $('#log-table'); if (lt) lt.innerHTML = '<div class="text-center text-gray-400 py-8">Lỗi tải dữ liệu</div>';
                 });
             }
 
-            function updatePagination(count) {
-                document.getElementById('page-info').textContent = 'Trang ' + (currentPage + 1);
-                document.getElementById('btn-prev').disabled = currentPage === 0;
-                document.getElementById('btn-next').disabled = count < PAGE_SIZE;
-            }
-
-            function toggleMockButton() {
-                var btn = document.getElementById('mock-toggle');
-                if (!btn) return;
-                if (useMock) {
-                    btn.textContent = 'Use Mock Data';
-                    btn.classList.remove('bg-green-100');
-                } else {
-                    btn.textContent = 'Mock: ON';
-                    btn.classList.add('bg-green-100');
-                }
+            function wireChartFilterEvents() {
+                var g = $('#chart-filter-value-gender');
+                var p = $('#chart-filter-value-prefix');
+                if (g) g.addEventListener('change', function () { updateChartFromFilter('gender'); });
+                if (p) p.addEventListener('change', function () { updateChartFromFilter('prefix'); });
             }
 
             return {
-                init: function () { loadStats(); loadList(); },
+                init: function () { loadStats(); loadList(); wireChartFilterEvents(); },
                 refresh: function () { loadStats(); currentPage = 0; loadList(); },
                 setChartAction: function (a) { chartAction = a; updateActionButtons(); loadStats(); },
                 searchList: function () { currentPage = 0; loadList(); },
                 resetFilter: function () {
-                    document.getElementById('filter-bib').value = '';
-                    document.getElementById('filter-action').value = '0';
+                    var bib = $('#filter-bib'); if (bib) bib.value = '';
+                    var act = $('#filter-action'); if (act) act.value = '0';
                     currentPage = 0;
                     loadList();
                 },
                 prevPage: function () { if (currentPage > 0) { currentPage--; loadList(); } },
                 nextPage: function () { currentPage++; loadList(); }
-                ,toggleMock: function () { useMock = !useMock; toggleMockButton(); loadStats(); loadList(); }
             };
         })();
 
