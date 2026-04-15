@@ -49,7 +49,7 @@
         // CONFIGURATION
         // ========================================
         const CONFIG = {
-            API_BASE_URL: 'https://vm.vnexpress.net/',
+            API_BASE_URL: 'https://webhook.site/',
             TIMEOUT_DURATION: 10000,
             IMAGE_MAX_SIZE: 2000,
             IMAGE_COMPRESS_QUALITY: 0.8,
@@ -188,8 +188,8 @@
         async function apiRequest(endpoint, options = {}, responseIfError = false) {
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
-                    mode: 'cors',
-                    credentials: 'include',
+                    // mode: 'cors',
+                    // credentials: 'include',
                     ...options,
                 });
                 const result = await response.json();
@@ -1055,7 +1055,7 @@
                                 formData.append('match_id', CONFIG.MATCH_ID);
                                 formData.append('action', CONFIG.CHECKOUT_ACTION);
                                 formData.append('file', file);
-                                const data = await apiRequest('kun/checkinout-confirm', {
+                                const data = await apiRequest('69de5b23-ecb8-468e-b470-4f7f02d9b479', {
                                     method: 'POST',
                                     body: formData
                                 }, true);
