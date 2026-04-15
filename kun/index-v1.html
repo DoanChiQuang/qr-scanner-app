@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
 
-<head>
-    <?php echo $this->headTitle($this->title); ?>
+<head>    
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
@@ -23,13 +22,11 @@
         src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
-
-    <? if ($this->debug): ?>
-        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-        <script>
-            eruda.init();
-        </script>
-    <? endif; ?>
+    
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+    </script>
 
     <!-- Captcha -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -58,7 +55,7 @@
             IMAGE_COMPRESS_QUALITY: 0.8,
             CHECKIN_ACTION: 1,
             CHECKOUT_ACTION: 2,
-            MATCH_ID: '<?php echo $this->matchId ?>'
+            MATCH_ID: 77
         };
 
         const STATUS = {
