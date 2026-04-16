@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <?php echo $this->headTitle($this->title); ?>
+    <!-- <?php echo $this->headTitle($this->title); ?> -->
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
 
     <!-- CSS -->
-    <link href="<?php echo $this->configView['css_new']; ?>/kun/checkinout_styles.css" rel="stylesheet" type="text/css">
+    <link href="checkinout_styles.css" rel="stylesheet" type="text/css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <!-- Libraries -->
@@ -24,12 +24,12 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
 
-    <? if ($this->debug): ?>
+    <!-- <? if ($this->debug): ?> -->
         <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
         <script>
             eruda.init();
         </script>
-    <? endif; ?>
+    <!-- <? endif; ?> -->
 
     <!-- Captcha -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -1002,7 +1002,7 @@
             }
 
             handleEvents() {
-                $('#checkin-btn-start-scan').on('click', () => this.startScan());
+                $('#checkin-btn-start-scan').on('click', () => this.startScanV2());
                 $('#checkin-btn-open-camera').on('click', () => this.openCamera());
                 $('#checkin-btn-confirm').on('click', () => this.confirmCheckin());
                 $('#checkin-btn-back').on('click', () => this.goBack());
@@ -1075,16 +1075,18 @@
                         return;
                     }
 
+                    console.log('[CheckinModule] [startScanV2] QR Code Result=', result);
+
                     let data = null;
                     if (result) {
-                        const formData = new FormData();
-                        formData.append('bib_id', result);
-                        formData.append('match_id', CONFIG.MATCH_ID);
-                        formData.append('action', CONFIG.CHECKIN_ACTION);
-                        data = await apiRequest('kun/checkinout-confirm', {
-                            method: 'POST',
-                            body: formData
-                        }, true);
+                        // const formData = new FormData();
+                        // formData.append('bib_id', result);
+                        // formData.append('match_id', CONFIG.MATCH_ID);
+                        // formData.append('action', CONFIG.CHECKIN_ACTION);
+                        // data = await apiRequest('kun/checkinout-confirm', {
+                        //     method: 'POST',
+                        //     body: formData
+                        // }, true);
                     }
 
                     console.log('[CheckinModule] [startScanV2] Response Data=', data);
