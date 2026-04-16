@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 
-<head>    
+<head>
+    <?php echo $this->headTitle($this->title); ?>
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
@@ -10,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
 
     <!-- CSS -->
-    <link href="checkinout_styles.css" rel="stylesheet" type="text/css">
+    <link href="<?php echo $this->configView['css_new']; ?>/kun/checkinout_styles.css" rel="stylesheet" type="text/css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <!-- Libraries -->
@@ -22,11 +23,13 @@
         src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>
-        eruda.init();
-    </script>
+
+    <? if ($this->debug): ?>
+        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+        <script>
+            eruda.init();
+        </script>
+    <? endif; ?>
 
     <!-- Captcha -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -49,13 +52,13 @@
         // CONFIGURATION
         // ========================================
         const CONFIG = {
-            API_BASE_URL: 'https://webhook.site/',
+            API_BASE_URL: 'https://vm.vnexpress.net/',
             TIMEOUT_DURATION: 10000,
             IMAGE_MAX_SIZE: 2000,
             IMAGE_COMPRESS_QUALITY: 0.8,
             CHECKIN_ACTION: 1,
             CHECKOUT_ACTION: 2,
-            MATCH_ID: 77
+            MATCH_ID: '<?php echo $this->matchId ?>'
         };
 
         const STATUS = {
@@ -188,8 +191,8 @@
         async function apiRequest(endpoint, options = {}, responseIfError = false) {
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
-                    // mode: 'cors',
-                    // credentials: 'include',
+                    mode: 'cors',
+                    credentials: 'include',
                     ...options,
                 });
                 const result = await response.json();
@@ -324,7 +327,20 @@
             async initVideoWithStream(videoEl, stream) {
                 if (!videoEl) return;
                 videoEl.srcObject = stream;
+                // Ensure iOS Safari plays inline instead of forcing fullscreen
                 try {
+                    try {
+                        videoEl.setAttribute('playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.setAttribute('webkit-playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.muted = true;
+                    } catch (e) {}
+                    try {
+                        videoEl.playsInline = true;
+                    } catch (e) {}
                     await videoEl.play();
                 } catch (e) {
                     // ignore play errors
@@ -432,14 +448,14 @@
                 try {
                     this._stream = await this.requestCameraStream({
                         video: {
+                            facingMode: "environment",
                             width: {
+                                min: 1280,
                                 ideal: 2560
                             },
                             height: {
+                                min: 720,
                                 ideal: 1440
-                            },
-                            facingMode: {
-                                ideal: 'environment'
                             }
                         }
                     });
@@ -539,6 +555,205 @@
                         $(`#${this.boxCountdownId}`).text('');
                     }
                 } catch (e) {}
+                try {
+                    if (this._controller && typeof this._controller.stop === 'function') this._controller.stop();
+                } catch (e) {}
+                this._controller = null;
+                try {
+                    if (this._raf) cancelAnimationFrame(this._raf);
+                } catch (e) {}
+                this._raf = null;
+                try {
+                    if (this._stream) this._stream.getTracks().forEach(t => t.stop());
+                } catch (e) {}
+                this._stream = null;
+            }
+        }
+
+        // ========================================
+        // CHECKIN SCANNER (Lightweight wrapper)
+        // - Similar to CheckoutScanner but no image capture
+        // - No box countdown, only returns decoded text via onSuccess
+        // ========================================
+        class CheckinScanner {
+            constructor(videoId) {
+                this.videoId = videoId;
+                this.isScanning = false;
+                this._stream = null;
+                this._controller = null;
+                this._timeoutId = null;
+                this._raf = null;
+            }
+
+            async requestCameraStream(preferredConstraints) {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported');
+                }
+
+                const getStreamPromise = navigator.mediaDevices.getUserMedia(preferredConstraints).catch(() => navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment'
+                    }
+                }));
+
+                try {
+                    return await getStreamPromise;
+                } catch (e) {
+                    return await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+                }
+            }
+
+            async initVideoWithStream(videoEl, stream) {
+                if (!videoEl) return;
+                videoEl.srcObject = stream;
+                // Ensure iOS Safari plays inline instead of forcing fullscreen
+                try {
+                    try {
+                        videoEl.setAttribute('playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.setAttribute('webkit-playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.muted = true;
+                    } catch (e) {}
+                    try {
+                        videoEl.playsInline = true;
+                    } catch (e) {}
+                    await videoEl.play();
+                } catch (e) {
+                    // ignore play errors
+                }
+            }
+
+            startDetectionLoop({
+                video,
+                onBarcode,
+                onError,
+                setRafId
+            }) {
+                let rafId = null;
+                let running = true;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const loop = async () => {
+                    if (!running) return;
+                    try {
+                        canvas.width = video.videoWidth || 1280;
+                        canvas.height = video.videoHeight || 720;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const {
+                            readBarcodes
+                        } = ZXingWASM;
+                        const res = await readBarcodes(imgData, {
+                            tryHarder: true,
+                            tryInvert: true,
+                            tryRotate: true,
+                            tryDownscale: true,
+                            formats: ["QRCode"],
+                            maxNumberOfSymbols: 1
+                        });
+                        if (Array.isArray(res) && res.length) {
+                            const text = res[0]?.text || res[0]?.rawValue || '';
+                            if (text) {
+                                running = false;
+                                if (onBarcode) await onBarcode(text);
+                                return;
+                            }
+                        }
+                    } catch (err) {
+                        if (onError) onError(err);
+                    }
+                    rafId = requestAnimationFrame(loop);
+                    if (setRafId) setRafId(rafId);
+                };
+
+                rafId = requestAnimationFrame(loop);
+                if (setRafId) setRafId(rafId);
+
+                return {
+                    stop() {
+                        running = false;
+                        try {
+                            if (rafId) cancelAnimationFrame(rafId);
+                        } catch (e) {}
+                        rafId = null;
+                    }
+                };
+            }
+
+            async start(options = {}) {
+                const {
+                    onSuccess,
+                    onError,
+                    onTimeout,
+                    timeout = CONFIG.TIMEOUT_DURATION
+                } = options;
+                if (this.isScanning) {
+                    showToast('CheckinScanner already running', 'error', 3000);
+                    return false;
+                }
+
+                this.isScanning = true;
+                this._raf = null;
+                const video = document.getElementById(this.videoId);
+                try {
+                    this._stream = await this.requestCameraStream({
+                        video: {
+                            facingMode: 'environment',
+                            width: {
+                                min: 1280,
+                                ideal: 2560
+                            },
+                            height: {
+                                min: 720,
+                                ideal: 1440
+                            }
+                        }
+                    });
+                    await this.initVideoWithStream(video, this._stream);
+
+                    this._timeoutId = setTimeout(() => {
+                        this.stop();
+                        if (onTimeout) onTimeout();
+                    }, timeout);
+
+                    this._controller = this.startDetectionLoop({
+                        video,
+                        onBarcode: async (text) => {
+                            try {
+                                this.stop();
+                                if (onSuccess) onSuccess(text);
+                            } catch (err) {
+                                if (onError) onError(err);
+                            }
+                        },
+                        onError: (err) => {
+                            if (onError) onError(err);
+                        },
+                        setRafId: (id) => {
+                            this._raf = id;
+                        }
+                    });
+
+                    return true;
+                } catch (err) {
+                    this.stop();
+                    if (onError) onError(err);
+                    return false;
+                }
+            }
+
+            stop() {
+                this.isScanning = false;
+                if (this._timeoutId) {
+                    clearTimeout(this._timeoutId);
+                    this._timeoutId = null;
+                }
                 try {
                     if (this._controller && typeof this._controller.stop === 'function') this._controller.stop();
                 } catch (e) {}
@@ -701,6 +916,7 @@
                 this.isInit = false;
                 this.videoId = 'checkin-video';
                 this.scanner = null;
+                this.checkinScanner = null;
             }
 
             renderCheckinInfo(data) {
@@ -839,6 +1055,72 @@
                 });
             }
 
+            // startScanV2: alternative start using CheckinScanner (no image capture)
+            async startScanV2() {
+                this._showAlert('reset');
+                $(`#${this.videoId}`).show();
+                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
+                $('#checkin-btn-reset-scan').show();
+
+                const handleResult = async (result, isScanSuccess) => {
+                    console.log('[CheckinModule] [startScanV2] Result=', result, ' Success=', isScanSuccess);
+                    try {
+                        if (this.checkinScanner) this.checkinScanner.stop();
+                    } catch (e) {}
+
+                    if (!isScanSuccess) {
+                        this._showAlert('error', 'Không nhận diện được QR');
+                        $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
+                        return;
+                    }
+
+                    let data = null;
+                    if (result) {
+                        const formData = new FormData();
+                        formData.append('bib_id', result);
+                        formData.append('match_id', CONFIG.MATCH_ID);
+                        formData.append('action', CONFIG.CHECKIN_ACTION);
+                        data = await apiRequest('kun/checkinout-confirm', {
+                            method: 'POST',
+                            body: formData
+                        }, true);
+                    }
+
+                    console.log('[CheckinModule] [startScanV2] Response Data=', data);
+                    const isSuccess = data.status == STATUS.CHECKIN_SUCCESS || false;
+                    if (isSuccess) {
+                        this.renderCheckinInfo(data);
+                    } else {
+                        this._showAlert('error', data.message || 'Checkin không thành công');
+                    }
+                    $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
+                };
+
+                // create and start CheckinScanner
+                try {
+                    this.checkinScanner = new CheckinScanner(this.videoId);
+                    const started = await this.checkinScanner.start({
+                        onSuccess: (text) => handleResult(text, true),
+                        onError: () => handleResult(null, false),
+                        onTimeout: () => handleResult(null, false),
+                        timeout: CONFIG.TIMEOUT_DURATION
+                    });
+                    if (!started) {
+                        $(`#${this.videoId}`).hide();
+                        this._showAlert('error', 'Không mở được Camera');
+                    }
+                } catch (err) {
+                    console.error('startScanV2 error', err);
+                    $(`#${this.videoId}`).hide();
+                    this._showAlert('error', 'Không mở được Camera');
+                    try {
+                        if (this.checkinScanner) this.checkinScanner.stop();
+                    } catch (e) {}
+                    this.checkinScanner = null;
+                }
+            }
+
             openCamera() {
                 this._showAlert('reset');
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
@@ -917,6 +1199,15 @@
             }
 
             reset() {
+                try {
+                    if (this.checkinScanner) {
+                        try {
+                            this.checkinScanner.stop();
+                        } catch (e) {}
+                        this.checkinScanner = null;
+                    }
+                } catch (e) {}
+
                 this.scanner.stop();
                 this._showAlert('reset');
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
@@ -1055,7 +1346,7 @@
                                 formData.append('match_id', CONFIG.MATCH_ID);
                                 formData.append('action', CONFIG.CHECKOUT_ACTION);
                                 formData.append('file', file);
-                                const data = await apiRequest('69de5b23-ecb8-468e-b470-4f7f02d9b479', {
+                                const data = await apiRequest('kun/checkinout-confirm', {
                                     method: 'POST',
                                     body: formData
                                 }, true);
