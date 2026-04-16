@@ -52,7 +52,7 @@
         // CONFIGURATION
         // ========================================
         const CONFIG = {
-            API_BASE_URL: 'https://vm.vnexpress.net/',
+            API_BASE_URL: '',
             TIMEOUT_DURATION: 10000,
             IMAGE_MAX_SIZE: 2000,
             IMAGE_COMPRESS_QUALITY: 0.8,
@@ -1619,11 +1619,11 @@
 
         class App {
             static async start() {
-                const authScreen = new AuthScreen();
-                if (!authScreen.isLoggedIn()) {
-                    authScreen.render(() => App.showScreenManager());
-                    return;
-                }
+                // const authScreen = new AuthScreen();
+                // if (!authScreen.isLoggedIn()) {
+                //     authScreen.render(() => App.showScreenManager());
+                //     return;
+                // }
                 App.showScreenManager();
             }
 
