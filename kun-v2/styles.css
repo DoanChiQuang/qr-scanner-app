@@ -1,0 +1,4 @@
+/* Minimal custom styles for kun-v2 */
+body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+video { height: 260px; object-fit: cover; }
+.ring-2 { box-shadow: 0 0 0 4px rgba(0,0,0,0.04); }
