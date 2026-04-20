@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Runner Kid">
+    <title>Runner Kid - Checkin/Checkout</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#9f224e',
+                        primaryLight: '#FDF2F8',
+                        success: '#059669',
+                        successLight: '#ECFDF5',
+                        error: '#DC2626',
+                        errorLight: '#FEF2F2',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --app-height: 100vh;
+        }
+
+        @supports (height: 100svh) {
+            :root { --app-height: 100svh; }
+        }
+
+        @supports (height: 100dvh) {
+            :root { --app-height: 100dvh; }
+        }
+
+        html, body {
+            height: 100%;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #FAFAFA;
+        }
+
+        #main {
+            width: 100%;
+            max-width: 480px;
+            min-height: var(--app-height);
+            margin: 0 auto;
+            background: #FAFAFA;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            background: #0C0C0C;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            z-index: 10;
+        }
+
+        .corner::before, .corner::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 2px;
+        }
+
+        .corner--tl { top: 12px; left: 12px; }
+        .corner--tl::before { width: 24px; height: 3px; top: 0; left: 0; }
+        .corner--tl::after { width: 3px; height: 24px; top: 0; left: 0; }
+
+        .corner--tr { top: 12px; right: 12px; }
+        .corner--tr::before { width: 24px; height: 3px; top: 0; right: 0; }
+        .corner--tr::after { width: 3px; height: 24px; top: 0; right: 0; }
+
+        .corner--bl { bottom: 12px; left: 12px; }
+        .corner--bl::before { width: 24px; height: 3px; bottom: 0; left: 0; }
+        .corner--bl::after { width: 3px; height: 24px; bottom: 0; left: 0; }
+
+        .corner--br { bottom: 12px; right: 12px; }
+        .corner--br::before { width: 24px; height: 3px; bottom: 0; right: 0; }
+        .corner--br::after { width: 3px; height: 24px; bottom: 0; right: 0; }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .modal-loading {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+        }
+
+        .modal-loading.is-open {
+            display: flex;
+        }
+
+        .result-item {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .captured-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #1a1a1a;
+        }
+
+        .countdown-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.7);
+            font-size: 72px;
+            font-weight: bold;
+            color: white;
+            z-index: 20;
+        }
+
+        .countdown-overlay.is-visible {
+            display: flex;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="main">
+        <!-- Auth Screen -->
+        <div id="auth-screen" class="hidden">
+            <div class="min-h-screen flex flex-col px-5 py-8">
+                <div class="text-center pt-16 mb-10">
+                    <div class="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-gray-900">Runner Kid</h1>
+                    <p class="text-sm text-gray-500 mt-1">Đăng nhập để tiếp tục</p>
+                </div>
+
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Username</label>
+                        <input type="text" id="username" required
+                            class="w-full h-12 px-4 border border-gray-300 rounded-xl text-base bg-white focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            placeholder="Nhập tên của bạn">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Password</label>
+                        <input type="password" id="password" required
+                            class="w-full h-12 px-4 border border-gray-300 rounded-xl text-base bg-white focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            placeholder="Nhập mật khẩu">
+                    </div>
+                    <button type="submit"
+                        class="w-full h-12 bg-primary text-white font-semibold rounded-full text-base mt-2 active:opacity-90">
+                        Xác nhận
+                    </button>
+                </form>
+
+                <div class="mt-auto pt-8 text-center">
+                    <p class="text-xs text-gray-400">Powered by vRace</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen Manager -->
+        <div id="screen-manager" class="hidden">
+            <div class="min-h-screen flex flex-col px-2 py-4">
+                <div class="text-center pt-12 mb-8">
+                    <div class="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-gray-900">Runner Kid</h1>
+                    <p class="text-sm text-gray-500 mt-1">Chọn thao tác để tiếp tục</p>
+                </div>
+
+                <div class="space-y-3 px-1">
+                    <div id="card-checkin" class="bg-white rounded-2xl p-4 border border-gray-100 cursor-pointer active:scale-[0.98] transition-transform">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-primaryLight rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-semibold text-gray-900">Check In</h3>
+                                <p class="text-sm text-gray-500">Quét QR khi vào cổng</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div id="card-checkout" class="bg-white rounded-2xl p-4 border border-gray-100 cursor-pointer active:scale-[0.98] transition-transform">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-semibold text-gray-900">Check Out</h3>
+                                <p class="text-sm text-gray-500">Chụp ảnh QR khi ra cổng</p>
+                            </div>
+                            <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-auto pt-8 text-center">
+                    <button id="btn-logout" class="text-sm text-gray-500 hover:text-primary font-medium">
+                        Đăng xuất
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Checkin Screen -->
+        <div id="checkin-screen" class="hidden">
+            <div class="min-h-screen flex flex-col px-2 py-4">
+                <div class="flex items-center gap-3 mb-4">
+                    <button id="checkin-btn-back" class="w-9 h-9 border border-gray-200 rounded-xl flex items-center justify-center active:bg-gray-100">
+                        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </button>
+                    <h2 class="text-lg font-semibold text-gray-900">Check In</h2>
+                </div>
+
+                <div class="relative">
+                    <div class="video-container" id="checkin-video-container">
+                        <video id="checkin-video" playsinline muted></video>
+                        <div id="checkin-corners">
+                            <div class="corner corner--tl"></div>
+                            <div class="corner corner--tr"></div>
+                            <div class="corner corner--bl"></div>
+                            <div class="corner corner--br"></div>
+                        </div>
+                        <div id="checkin-countdown" class="countdown-overlay"></div>
+                    </div>
+
+                    <div id="checkin-alert" class="mt-3 p-3 rounded-xl text-sm font-medium hidden"></div>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                    <button id="checkin-btn-scan" class="w-full h-12 bg-primary text-white font-semibold rounded-full active:opacity-90">
+                        Quét QR
+                    </button>
+                </div>
+
+                <div class="mt-6">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Danh sách kết quả</h3>
+                    <div id="checkin-results" class="space-y-2 max-h-[40vh] overflow-y-auto">
+                        <div class="text-center py-8 text-gray-400 text-sm">
+                            Chưa có kết quả nào
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Checkout Screen -->
+        <div id="checkout-screen" class="hidden">
+            <div class="min-h-screen flex flex-col px-2 py-4">
+                <div class="flex items-center gap-3 mb-4">
+                    <button id="checkout-btn-back" class="w-9 h-9 border border-gray-200 rounded-xl flex items-center justify-center active:bg-gray-100">
+                        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </button>
+                    <h2 class="text-lg font-semibold text-gray-900">Check Out</h2>
+                </div>
+
+                <div class="relative">
+                    <div class="video-container" id="checkout-video-container">
+                        <video id="checkout-video" playsinline muted></video>
+                        <div id="checkout-corners">
+                            <div class="corner corner--tl"></div>
+                            <div class="corner corner--tr"></div>
+                            <div class="corner corner--bl"></div>
+                            <div class="corner corner--br"></div>
+                        </div>
+                        <div id="checkout-countdown" class="countdown-overlay"></div>
+                    </div>
+
+                    <div id="checkout-alert" class="mt-3 p-3 rounded-xl text-sm font-medium hidden"></div>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                    <button id="checkout-btn-scan" class="w-full h-12 bg-blue-600 text-white font-semibold rounded-full active:opacity-90">
+                        Quét QR
+                    </button>
+                </div>
+
+                <div class="mt-6">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">Danh sách kết quả</h3>
+                    <div id="checkout-results" class="space-y-2 max-h-[40vh] overflow-y-auto">
+                        <div class="text-center py-8 text-gray-400 text-sm">
+                            Chưa có kết quả nào
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="modal-loading" class="modal-loading">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        // ========================================
+        // CONFIGURATION
+        // ========================================
+        const CONFIG = {
+            API_BASE_URL: '',
+            TIMEOUT_DURATION: 15000,
+            CHECKIN_ACTION: 1,
+            CHECKOUT_ACTION: 2,
+            MATCH_ID: '<?php echo $this->matchId ?>'
+        };
+
+        const STATUS = {
+            CHECKIN_SUCCESS: 2,
+            CHECKOUT_SUCCESS: 3
+        };
+
+        // ========================================
+        // UTILITIES
+        // ========================================
+        function setSessionCookie(name, value) {
+            document.cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value) + '; path=/';
+        }
+
+        function getSessionCookie(name) {
+            const match = document.cookie.match(new RegExp('(?:^|; )' + encodeURIComponent(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
+            return match ? decodeURIComponent(match[1]) : null;
+        }
+
+        function deleteCookie(name) {
+            document.cookie = encodeURIComponent(name) + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        }
+
+        function showToast(message, type = 'info', duration = 3000) {
+            const styles = {
+                info: 'linear-gradient(to right, #00b09b, #96c93d)',
+                error: 'linear-gradient(to right, #ff5f6d, #ffc371)',
+                success: 'linear-gradient(to right, #56ab2f, #a8e063)'
+            };
+
+            Toastify({
+                text: message,
+                duration,
+                close: true,
+                gravity: 'top',
+                position: 'center',
+                style: {
+                    background: styles[type] || styles.info
+                }
+            }).showToast();
+        }
+
+        function parseQRCode(qrText) {
+            if (!qrText || typeof qrText !== 'string') return '';
+            return qrText.substring(5, qrText.length - 5);
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
+                    mode: 'cors',
+                    credentials: 'include',
+                    ...options,
+                });
+                const result = await response.json();
+                if (result.code != 200) {
+                    throw new Error(result.message || 'API request failed');
+                }
+                return result.data || false;
+            } catch (error) {
+                console.log('[API] Error:', error.message);
+                return {
+                    code: 500,
+                    message: error.message
+                };
+            }
+        }
+
+        function captureImage(videoEl) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoEl.videoWidth || 1280;
+                    canvas.height = videoEl.videoHeight || 720;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob(blob => {
+                        if (!blob) return reject(new Error('Capture failed'));
+                        resolve(blob);
+                    }, 'image/jpeg', 0.92);
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        // ========================================
+        // QR SCANNER (Base class using ZXing WASM)
+        // ========================================
+        class QRScanner {
+            constructor(videoId, options = {}) {
+                this.videoId = videoId;
+                this.isScanning = false;
+                this.stream = null;
+                this.rafId = null;
+                this.timeoutId = null;
+                this.shouldCapture = options.shouldCapture || false;
+            }
+
+            async requestCameraStream() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported');
+                }
+
+                try {
+                    return await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { min: 1280, ideal: 2560 },
+                            height: { min: 720, ideal: 1440 }
+                        }
+                    });
+                } catch (e) {
+                    return await navigator.mediaDevices.getUserMedia({ video: true });
+                }
+            }
+
+            async initVideo(videoEl, stream) {
+                if (!videoEl) return;
+                videoEl.srcObject = stream;
+                videoEl.setAttribute('playsinline', '');
+                videoEl.muted = true;
+                await videoEl.play();
+            }
+
+            startDetectionLoop({ video, onBarcode, onError }) {
+                let running = true;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const loop = async () => {
+                    if (!running || !this.isScanning) return;
+                    try {
+                        canvas.width = video.videoWidth || 1280;
+                        canvas.height = video.videoHeight || 720;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                        const { readBarcodes } = ZXingWASM;
+                        const res = await readBarcodes(imgData, {
+                            tryHarder: true,
+                            tryInvert: true,
+                            tryRotate: true,
+                            tryDownscale: true,
+                            formats: ['QRCode'],
+                            maxNumberOfSymbols: 1
+                        });
+
+                        if (Array.isArray(res) && res.length) {
+                            const text = res[0]?.text || res[0]?.rawValue || '';
+                            if (text) {
+                                running = false;
+                                if (onBarcode) await onBarcode(text);
+                                return;
+                            }
+                        }
+                    } catch (err) {
+                        if (onError) onError(err);
+                    }
+                    this.rafId = requestAnimationFrame(loop);
+                };
+
+                this.rafId = requestAnimationFrame(loop);
+
+                return {
+                    stop() {
+                        running = false;
+                        if (this.rafId) cancelAnimationFrame(this.rafId);
+                    }
+                };
+            }
+
+            async start(options = {}) {
+                const { onSuccess, onError, onTimeout, timeout = CONFIG.TIMEOUT_DURATION } = options;
+
+                if (this.isScanning) {
+                    showToast('Scanner đang chạy', 'error', 2000);
+                    return false;
+                }
+
+                this.isScanning = true;
+                const video = document.getElementById(this.videoId);
+
+                try {
+                    this.stream = await this.requestCameraStream();
+                    await this.initVideo(video, this.stream);
+
+                    this.timeoutId = setTimeout(() => {
+                        this.stop();
+                        if (onTimeout) onTimeout();
+                    }, timeout);
+
+                    this.controller = this.startDetectionLoop({
+                        video,
+                        onBarcode: async (text) => {
+                            try {
+                                let result = { text };
+                                if (this.shouldCapture) {
+                                    const blob = await captureImage(video);
+                                    const compressedBlob = await imageCompression(blob, {
+                                        maxSizeMB: 0.3,
+                                        maxWidthOrHeight: 1600,
+                                        useWebWorker: true,
+                                    });
+                                    if (!compressedBlob?.size) {
+                                        throw new Error('Compress Image Fail');
+                                    }
+                                    result.file = new File([compressedBlob], `KID_CHECKOUT_${Date.now()}.jpg`, {
+                                        type: compressedBlob.type || 'image/jpeg'
+                                    });
+                                }
+                                this.stop();
+                                if (onSuccess) onSuccess(result);
+                            } catch (err) {
+                                if (onError) onError(err);
+                            }
+                        },
+                        onError: (err) => {
+                            if (onError) onError(err);
+                        }
+                    });
+
+                    return true;
+                } catch (err) {
+                    this.stop();
+                    if (onError) onError(err);
+                    return false;
+                }
+            }
+
+            stop() {
+                this.isScanning = false;
+                if (this.timeoutId) {
+                    clearTimeout(this.timeoutId);
+                    this.timeoutId = null;
+                }
+                if (this.rafId) {
+                    cancelAnimationFrame(this.rafId);
+                    this.rafId = null;
+                }
+                if (this.controller) {
+                    try { this.controller.stop(); } catch (e) {}
+                    this.controller = null;
+                }
+                if (this.stream) {
+                    this.stream.getTracks().forEach(t => t.stop());
+                    this.stream = null;
+                }
+            }
+        }
+
+        // ========================================
+        // AUTH SCREEN
+        // ========================================
+        class AuthScreen {
+            constructor() {
+                this.session = getSessionCookie('kid_session');
+            }
+
+            isLoggedIn() {
+                return !!this.session;
+            }
+
+            render(onSuccess) {
+                $('#auth-screen').removeClass('hidden').show();
+                $('#screen-manager, #checkin-screen, #checkout-screen').hide();
+
+                $('#login-form').off('submit').on('submit', async (e) => {
+                    e.preventDefault();
+                    const username = $('#username').val().trim();
+                    const password = $('#password').val().trim();
+
+                    if (!username || !password) {
+                        showToast('Vui lòng nhập đầy đủ thông tin', 'error');
+                        return;
+                    }
+
+                    try {
+                        $('#modal-loading').addClass('is-open');
+
+                        const formData = new FormData();
+                        formData.append('username', username);
+                        formData.append('password', password);
+
+                        const data = await apiRequest('kun/checkinout-login', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (!data) {
+                            showToast('Đăng nhập thất bại', 'error');
+                            $('#modal-loading').removeClass('is-open');
+                            return;
+                        }
+
+                        this.session = username;
+                        setSessionCookie('kid_session', username);
+                        showToast('Xin chào, ' + username, 'success');
+                        $('#auth-screen').hide();
+                        if (onSuccess) onSuccess();
+
+                    } catch (err) {
+                        showToast(err.message || 'Đăng nhập thất bại', 'error');
+                    } finally {
+                        $('#modal-loading').removeClass('is-open');
+                    }
+                });
+            }
+
+            logout() {
+                this.session = null;
+                deleteCookie('kid_session');
+                this.render(() => App.showScreenManager());
+            }
+        }
+
+        // ========================================
+        // CHECKIN MODULE (Scan liên tục, không chụp)
+        // ========================================
+        class CheckinModule {
+            constructor() {
+                this.videoId = 'checkin-video';
+                this.scanner = null;
+                this.results = [];
+                this.isProcessing = false;
+            }
+
+            render() {
+                $('#checkin-screen').removeClass('hidden').show();
+                $('#screen-manager, #auth-screen, #checkout-screen').hide();
+                this.resetUI();
+                this.bindEvents();
+            }
+
+            resetUI() {
+                $('#checkin-video').hide();
+                $('#checkin-corners').hide();
+                $('#checkin-alert').hide().removeClass('bg-successLight text-success bg-errorLight text-error');
+                $('#checkin-btn-scan').text('Quét QR').prop('disabled', false);
+                this.results = [];
+                this.renderResults();
+            }
+
+            bindEvents() {
+                $('#checkin-btn-back').off('click').on('click', () => this.goBack());
+                $('#checkin-btn-scan').off('click').on('click', () => this.startScan());
+            }
+
+            renderResults() {
+                const $container = $('#checkin-results');
+                if (this.results.length === 0) {
+                    $container.html('<div class="text-center py-8 text-gray-400 text-sm">Chưa có kết quả nào</div>');
+                    return;
+                }
+
+                const html = this.results.map((item, index) => `
+                    <div class="result-item bg-white rounded-xl p-3 border border-gray-100 flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${item.success ? 'bg-successLight' : 'bg-errorLight'}">
+                            ${item.success
+                                ? '<svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
+                                : '<svg class="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'
+                            }
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-semibold text-gray-900">${item.bib || '—'}</div>
+                            <div class="text-xs text-gray-500">${item.name || item.message || '—'}</div>
+                        </div>
+                        <div class="text-xs text-gray-400">${item.time}</div>
+                    </div>
+                `).join('');
+
+                $container.html(html);
+            }
+
+            async startScan() {
+                if (this.isProcessing) return;
+
+                this.isProcessing = true;
+                $('#checkin-video').show();
+                $('#checkin-corners').show();
+                $('#checkin-alert').hide();
+                $('#checkin-btn-scan').text('Đang quét...').prop('disabled', true);
+
+                try {
+                    this.scanner = new QRScanner(this.videoId, { shouldCapture: false });
+                    const started = await this.scanner.start({
+                        onSuccess: async ({ text }) => {
+                            await this.processQR(text);
+                            this.isProcessing = false;
+                            $('#checkin-btn-scan').text('Tiếp tục quét').prop('disabled', false);
+                            this.startScan();
+                        },
+                        onError: (err) => {
+                            console.error('Scan error:', err);
+                            this.showAlert('Không nhận diện được QR', 'error');
+                            this.isProcessing = false;
+                            $('#checkin-btn-scan').text('Tiếp tục quét').prop('disabled', false);
+                        },
+                        onTimeout: () => {
+                            this.showAlert('Hết thời gian quét', 'error');
+                            this.isProcessing = false;
+                            $('#checkin-btn-scan').text('Tiếp tục quét').prop('disabled', false);
+                        },
+                        timeout: CONFIG.TIMEOUT_DURATION
+                    });
+
+                    if (!started) {
+                        this.showAlert('Không mở được Camera', 'error');
+                        this.isProcessing = false;
+                        $('#checkin-btn-scan').text('Quét QR').prop('disabled', false);
+                    }
+                } catch (err) {
+                    console.error('Start scan error:', err);
+                    this.showAlert('Lỗi: ' + err.message, 'error');
+                    this.isProcessing = false;
+                    $('#checkin-btn-scan').text('Quét QR').prop('disabled', false);
+                }
+            }
+
+            async processQR(qrText) {
+                const bib = parseQRCode(qrText);
+                console.log('[Checkin] QR Text:', qrText, '-> BIB:', bib);
+
+                if (!bib) {
+                    this.addResult({ bib: qrText, success: false, message: 'QR không hợp lệ' });
+                    this.showAlert('QR không hợp lệ', 'error');
+                    return;
+                }
+
+                try {
+                    const formData = new FormData();
+                    formData.append('bib_id', bib);
+                    formData.append('match_id', CONFIG.MATCH_ID);
+                    formData.append('action', CONFIG.CHECKIN_ACTION);
+
+                    const data = await apiRequest('kun/checkinout-confirm', {
+                        method: 'POST',
+                        body: formData
+                    }, true);
+
+                    const isSuccess = data?.status === STATUS.CHECKIN_SUCCESS;
+
+                    if (isSuccess) {
+                        this.addResult({
+                            bib: data.bib || bib,
+                            name: data.name || '',
+                            success: true
+                        });
+                        this.showAlert('Check-in thành công!', 'success');
+                    } else {
+                        this.addResult({
+                            bib,
+                            success: false,
+                            message: data?.message || 'Check-in thất bại'
+                        });
+                        this.showAlert(data?.message || 'Check-in thất bại', 'error');
+                    }
+                } catch (err) {
+                    this.addResult({ bib, success: false, message: err.message });
+                    this.showAlert('Lỗi: ' + err.message, 'error');
+                }
+            }
+
+            addResult(item) {
+                item.time = moment().format('HH:mm:ss');
+                this.results.unshift(item);
+                this.renderResults();
+            }
+
+            showAlert(message, type) {
+                const $alert = $('#checkin-alert');
+                $alert.text(message)
+                    .removeClass('hidden bg-successLight text-success bg-errorLight text-error')
+                    .addClass(type === 'success' ? 'bg-successLight text-success' : 'bg-errorLight text-error');
+            }
+
+            goBack() {
+                if (this.scanner) {
+                    try { this.scanner.stop(); } catch (e) {}
+                    this.scanner = null;
+                }
+                this.isProcessing = false;
+                $('#checkin-screen').hide();
+                $('#screen-manager').show();
+            }
+        }
+
+        // ========================================
+        // CHECKOUT MODULE (Scan + Chụp, Queue xử lý)
+        // ========================================
+        class CheckoutModule {
+            constructor() {
+                this.videoId = 'checkout-video';
+                this.scanner = null;
+                this.results = [];
+                this.isProcessing = false;
+                this.isQueueRunning = false;
+            }
+
+            render() {
+                $('#checkout-screen').removeClass('hidden').show();
+                $('#screen-manager, #auth-screen, #checkin-screen').hide();
+                this.resetUI();
+                this.bindEvents();
+            }
+
+            resetUI() {
+                $('#checkout-video').hide();
+                $('#checkout-corners').hide();
+                $('#checkout-countdown').removeClass('is-visible').text('');
+                $('#checkout-alert').hide().removeClass('bg-successLight text-success bg-errorLight text-error');
+                $('#checkout-btn-scan').text('Quét QR').prop('disabled', false);
+                this.results = [];
+                this.renderResults();
+            }
+
+            bindEvents() {
+                $('#checkout-btn-back').off('click').on('click', () => this.goBack());
+                $('#checkout-btn-scan').off('click').on('click', () => this.startScan());
+            }
+
+            renderResults() {
+                const $container = $('#checkout-results');
+                if (this.results.length === 0) {
+                    $container.html('<div class="text-center py-8 text-gray-400 text-sm">Chưa có kết quả nào</div>');
+                    return;
+                }
+
+                const html = this.results.map((item) => `
+                    <div class="result-item bg-white rounded-xl p-3 border border-gray-100 flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${item.success ? 'bg-successLight' : 'bg-errorLight'}">
+                            ${item.success
+                                ? '<svg class="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
+                                : '<svg class="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>'
+                            }
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-semibold text-gray-900">${item.bib || '—'}</div>
+                            <div class="text-xs text-gray-500">${item.name || item.message || '—'}</div>
+                        </div>
+                        <div class="text-xs text-gray-400">${item.time}</div>
+                    </div>
+                `).join('');
+
+                $container.html(html);
+            }
+
+            async startScan() {
+                if (this.isProcessing) return;
+
+                this.isProcessing = true;
+                $('#checkout-video').show();
+                $('#checkout-corners').show();
+                $('#checkout-alert').hide();
+                $('#checkout-btn-scan').text('Đang quét...').prop('disabled', true);
+
+                await this.showCountdown(1000);
+
+                try {
+                    this.scanner = new QRScanner(this.videoId, { shouldCapture: true });
+                    const started = await this.scanner.start({
+                        onSuccess: async ({ text, file }) => {
+                            $('#checkout-video').hide();
+                            $('#checkout-corners').hide();
+                            await this.processQR(text, file);
+                            this.isProcessing = false;
+                            $('#checkout-btn-scan').text('Quét tiếp').prop('disabled', false);
+                        },
+                        onError: (err) => {
+                            console.error('Scan error:', err);
+                            this.showAlert('Không nhận diện được QR', 'error');
+                            this.isProcessing = false;
+                            $('#checkout-video').hide();
+                            $('#checkout-corners').hide();
+                            $('#checkout-btn-scan').text('Quét tiếp').prop('disabled', false);
+                        },
+                        onTimeout: () => {
+                            this.showAlert('Hết thời gian quét', 'error');
+                            this.isProcessing = false;
+                            $('#checkout-video').hide();
+                            $('#checkout-corners').hide();
+                            $('#checkout-btn-scan').text('Quét tiếp').prop('disabled', false);
+                        },
+                        timeout: CONFIG.TIMEOUT_DURATION
+                    });
+
+                    if (!started) {
+                        this.showAlert('Không mở được Camera', 'error');
+                        this.isProcessing = false;
+                        $('#checkout-btn-scan').text('Quét QR').prop('disabled', false);
+                    }
+                } catch (err) {
+                    console.error('Start scan error:', err);
+                    this.showAlert('Lỗi: ' + err.message, 'error');
+                    this.isProcessing = false;
+                    $('#checkout-btn-scan').text('Quét QR').prop('disabled', false);
+                }
+            }
+
+            async showCountdown(ms) {
+                const $countdown = $('#checkout-countdown');
+                const end = Date.now() + ms;
+
+                return new Promise(resolve => {
+                    $countdown.addClass('is-visible');
+                    const tick = () => {
+                        const remaining = Math.ceil((end - Date.now()) / 1000);
+                        if (remaining > 0) {
+                            $countdown.text(remaining);
+                            requestAnimationFrame(tick);
+                        } else {
+                            $countdown.removeClass('is-visible').text('');
+                            resolve();
+                        }
+                    };
+                    tick();
+                });
+            }
+
+            async processQR(qrText, file) {
+                const bib = parseQRCode(qrText);
+                console.log('[Checkout] QR Text:', qrText, '-> BIB:', bib);
+
+                if (!bib) {
+                    this.addResult({ bib: qrText, success: false, message: 'QR không hợp lệ' });
+                    this.showAlert('QR không hợp lệ', 'error');
+                    return;
+                }
+
+                try {
+                    const formData = new FormData();
+                    formData.append('bib_id', bib);
+                    formData.append('match_id', CONFIG.MATCH_ID);
+                    formData.append('action', CONFIG.CHECKOUT_ACTION);
+                    if (file) formData.append('file', file);
+
+                    const data = await apiRequest('kun/checkinout-confirm', {
+                        method: 'POST',
+                        body: formData
+                    }, true);
+
+                    const isSuccess = data?.status === STATUS.CHECKOUT_SUCCESS;
+
+                    if (isSuccess) {
+                        this.addResult({
+                            bib: data.bib || bib,
+                            name: data.name || '',
+                            success: true
+                        });
+                        this.showAlert('Check-out thành công!', 'success');
+                    } else {
+                        this.addResult({
+                            bib,
+                            success: false,
+                            message: data?.message || 'Check-out thất bại'
+                        });
+                        this.showAlert(data?.message || 'Check-out thất bại', 'error');
+                    }
+                } catch (err) {
+                    this.addResult({ bib, success: false, message: err.message });
+                    this.showAlert('Lỗi: ' + err.message, 'error');
+                }
+            }
+
+            addResult(item) {
+                item.time = moment().format('HH:mm:ss');
+                this.results.unshift(item);
+                this.renderResults();
+            }
+
+            showAlert(message, type) {
+                const $alert = $('#checkout-alert');
+                $alert.text(message)
+                    .removeClass('hidden bg-successLight text-success bg-errorLight text-error')
+                    .addClass(type === 'success' ? 'bg-successLight text-success' : 'bg-errorLight text-error');
+            }
+
+            goBack() {
+                if (this.scanner) {
+                    try { this.scanner.stop(); } catch (e) {}
+                    this.scanner = null;
+                }
+                this.isProcessing = false;
+                $('#checkout-screen').hide();
+                $('#screen-manager').show();
+            }
+        }
+
+        // ========================================
+        // APP
+        // ========================================
+        class App {
+            static async start() {
+                const authScreen = new AuthScreen();
+                if (!authScreen.isLoggedIn()) {
+                    authScreen.render(() => App.showScreenManager());
+                    return;
+                }
+                App.showScreenManager();
+            }
+
+            static showScreenManager() {
+                $('#screen-manager').removeClass('hidden').show();
+                $('#auth-screen, #checkin-screen, #checkout-screen').hide();
+
+                const checkinModule = new CheckinModule();
+                const checkoutModule = new CheckoutModule();
+
+                $('#card-checkin').off('click').on('click', () => {
+                    $('#screen-manager').hide();
+                    checkinModule.render();
+                });
+
+                $('#card-checkout').off('click').on('click', () => {
+                    $('#screen-manager').hide();
+                    checkoutModule.render();
+                });
+
+                $('#btn-logout').off('click').on('click', () => {
+                    const authScreen = new AuthScreen();
+                    authScreen.logout();
+                });
+            }
+        }
+
+        // ========================================
+        // INITIALIZE
+        // ========================================
+        $(document).ready(() => App.start());
+    </script>
+</body>
+
+</html>
