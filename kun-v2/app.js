@@ -9,6 +9,9 @@
     scan: '/scan'
   };
 
+  // If true, skip login/session checks (kiosk mode)
+  const SKIP_LOGIN = true;
+
   const elements = {
     loginView: document.getElementById('loginView'),
     dashboardView: document.getElementById('dashboardView'),
@@ -23,6 +26,13 @@
     video: document.getElementById('video'),
     resultList: document.getElementById('resultList')
   };
+
+  // Auto-show dashboard when login is skipped
+  document.addEventListener('DOMContentLoaded', () => {
+    if (SKIP_LOGIN) {
+      showDashboard({ name: 'Kiosk' });
+    }
+  });
 
   let currentMode = 'checkin';
   let codeReader = null; // kept for compatibility
@@ -107,10 +117,12 @@
   async function startScanning() {
     if (scanning) return; scanning = true;
     // ensure session still valid
-    try {
-      const s = await getJson(API.session);
-      if (!s.ok) { appendResult({ bib:'', name:'', message: 'Session expired', time: new Date().toLocaleTimeString() }); return; }
-    } catch (err) { appendResult({ message: 'Network error while checking session', time: new Date().toLocaleTimeString() }); }
+    if (!SKIP_LOGIN) {
+      try {
+        const s = await getJson(API.session);
+        if (!s.ok) { appendResult({ bib:'', name:'', message: 'Session expired', time: new Date().toLocaleTimeString() }); return; }
+      } catch (err) { appendResult({ message: 'Network error while checking session', time: new Date().toLocaleTimeString() }); }
+    }
     // prefer zxing-wasm readBarcodes when available
     const readBarcodes = window.ZXingWASM?.readBarcodes || window.ZXing?.readBarcodes || window.ZXingWASM?.readBarcodes;
     if (!readBarcodes) {
