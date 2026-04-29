@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <!-- <?php echo $this->headTitle($this->title); ?> -->
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport"
@@ -10,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
 
     <!-- CSS -->
-    <link rel="stylesheet" href="styles.css" />
+    <link href="checkinout_styles.css" rel="stylesheet" type="text/css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <!-- Libraries -->
@@ -21,13 +22,13 @@
     <script type="text/javascript"
         src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-    <script src="moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
 
     <!-- <? if ($this->debug): ?> -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>
-        eruda.init();
-    </script>
+        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+        <script>
+            eruda.init();
+        </script>
     <!-- <? endif; ?> -->
 
     <!-- Captcha -->
@@ -51,21 +52,14 @@
         // CONFIGURATION
         // ========================================
         const CONFIG = {
-            API_BASE_URL: 'https://webhook.site/',
+            API_BASE_URL: '',
             TIMEOUT_DURATION: 10000,
             IMAGE_MAX_SIZE: 2000,
             IMAGE_COMPRESS_QUALITY: 0.8,
             CHECKIN_ACTION: 1,
             CHECKOUT_ACTION: 2,
-            MATCH_ID: 77
+            MATCH_ID: '<?php echo $this->matchId ?>'
         };
-
-        const ACCOUNTS = [
-            { username: 'user1', password: '111111' },
-            { username: 'user2', password: '222222' },
-            { username: 'user3', password: '333333' },
-            { username: 'user4', password: '444444' },
-        ];
 
         const STATUS = {
             CHECKIN_SUCCESS: 2,
@@ -159,7 +153,7 @@
                 setTimeout(() => {
                     try {
                         window.open(url, '_blank', 'noopener');
-                    } catch (e) { }
+                    } catch (e) {}
                 }, 300);
             }
 
@@ -194,7 +188,7 @@
             };
         }
 
-        async function apiRequest(endpoint, options = {}) {
+        async function apiRequest(endpoint, options = {}, responseIfError = false) {
             try {
                 const response = await fetch(`${CONFIG.API_BASE_URL}${endpoint}`, {
                     mode: 'cors',
@@ -209,6 +203,12 @@
                 return result.data || false;
             } catch (error) {
                 console.log('[API] Error:', error.message);
+                if (responseIfError) {
+                    return {
+                        code: 500,
+                        message: error.message
+                    };
+                }
                 return false;
             }
         }
@@ -230,7 +230,8 @@
                     onSuccess,
                     onError,
                     onTimeout,
-                    timeout = CONFIG.TIMEOUT_DURATION
+                    timeout = CONFIG.TIMEOUT_DURATION,
+                    previewDelayMs = 0
                 } = options;
 
                 if (this.isScanning) {
@@ -289,31 +290,538 @@
         // QR CODE PROCESSOR (For Image Processing)
         // ========================================
 
-        async function processQRFromImage(file) {
-            const { readBarcodes } = ZXingWASM;
-            const bitmap = await createImageBitmap(file);
+        // ========================================
+        // CHECKOUT SCANNER (Library-like wrapper)
+        // ========================================
 
-            const fitted = formatImageSize(bitmap.width, bitmap.height, 2400);
-            const canvas = document.createElement('canvas');
-            canvas.width = fitted.width;
-            canvas.height = fitted.height;
-            canvas.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
-
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            const configs = [                
-                { tryHarder: true, tryDenoise: true, tryDownscale: true, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1 },
-                { tryHarder: true, tryDenoise: false, tryDownscale: false, tryInvert: true, tryRotate: true, formats: ["QRCode"], maxNumberOfSymbols: 1 }
-            ];
-
-            for (const config of configs) {
-                const barcodes = await readBarcodes(imgData, config);
-                const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
-                if (text) return { ok: true, text, barcodes };
+        class CheckoutScanner {
+            constructor(videoId, boxCountdownId) {
+                this.videoId = videoId;
+                this.boxCountdownId = boxCountdownId;
+                this.isScanning = false;
+                this._stream = null;
+                this._controller = null;
+                this._timeoutId = null;
             }
 
-            return { ok: false, text: '', barcodes: [] };
+            async requestCameraStream(preferredConstraints) {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported');
+                }
+
+                const getStreamPromise = navigator.mediaDevices.getUserMedia(preferredConstraints).catch(() => navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment'
+                    }
+                }));
+
+                try {
+                    return await getStreamPromise;
+                } catch (e) {
+                    return await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+                }
+            }
+
+            async initVideoWithStream(videoEl, stream) {
+                if (!videoEl) return;
+                videoEl.srcObject = stream;
+                // Ensure iOS Safari plays inline instead of forcing fullscreen
+                try {
+                    try {
+                        videoEl.setAttribute('playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.setAttribute('webkit-playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.muted = true;
+                    } catch (e) {}
+                    try {
+                        videoEl.playsInline = true;
+                    } catch (e) {}
+                    await videoEl.play();
+                } catch (e) {
+                    // ignore play errors
+                }
+            }
+
+            stopStream(stream) {
+                try {
+                    if (stream) stream.getTracks().forEach(t => t.stop());
+                } catch (e) {}
+            }
+
+            capture(videoEl) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const capCanvas = document.createElement('canvas');
+                        capCanvas.width = videoEl.videoWidth || 1280;
+                        capCanvas.height = videoEl.videoHeight || 720;
+                        const capCtx = capCanvas.getContext('2d');
+                        capCtx.drawImage(videoEl, 0, 0, capCanvas.width, capCanvas.height);
+                        capCanvas.toBlob(blob => {
+                            if (!blob) return reject(new Error('Capture failed'));
+                            resolve(blob);
+                        }, 'image/jpeg', 0.92);
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            }
+
+            startDetectionLoop({
+                video,
+                onBarcode,
+                onError,
+                setRafId
+            }) {
+                let rafId = null;
+                let running = true;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const loop = async () => {
+                    if (!running) return;
+                    try {
+                        canvas.width = video.videoWidth || 1280;
+                        canvas.height = video.videoHeight || 720;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const {
+                            readBarcodes
+                        } = ZXingWASM;
+                        const res = await readBarcodes(imgData, {
+                            tryHarder: true,
+                            tryInvert: true,
+                            tryRotate: true,
+                            tryDownscale: true,
+                            formats: ["QRCode"],
+                            maxNumberOfSymbols: 1
+                        });
+                        if (Array.isArray(res) && res.length) {
+                            const text = res[0]?.text || res[0]?.rawValue || '';
+                            if (text) {
+                                running = false;
+                                if (onBarcode) await onBarcode(text);
+                                return;
+                            }
+                        }
+                    } catch (err) {
+                        if (onError) onError(err);
+                    }
+                    rafId = requestAnimationFrame(loop);
+                    if (setRafId) setRafId(rafId);
+                };
+
+                rafId = requestAnimationFrame(loop);
+                if (setRafId) setRafId(rafId);
+
+                return {
+                    stop() {
+                        running = false;
+                        try {
+                            if (rafId) cancelAnimationFrame(rafId);
+                        } catch (e) {}
+                        rafId = null;
+                    }
+                };
+            }
+
+            async start(options = {}) {
+                const {
+                    onSuccess,
+                    onError,
+                    onTimeout,
+                    timeout = CONFIG.TIMEOUT_DURATION,
+                    previewDelayMs = 0
+                } = options;
+                if (this.isScanning) {
+                    showToast('CheckoutScanner already running', 'error', 3000);
+                    return false;
+                }
+
+                this.isScanning = true;
+                this._raf = null;
+                const video = document.getElementById(this.videoId);
+                try {
+                    this._stream = await this.requestCameraStream({
+                        video: {
+                            facingMode: "environment",
+                            width: {
+                                min: 1280,
+                                ideal: 2560
+                            },
+                            height: {
+                                min: 720,
+                                ideal: 1440
+                            }
+                        }
+                    });
+                    await this.initVideoWithStream(video, this._stream);
+
+                    const pd = Number(previewDelayMs) || 0;
+                    if (pd > 0) {
+                        const $box = $(`#${this.boxCountdownId}`);
+                        $box.show();
+                        const end = Date.now() + pd;
+                        const tick = () => $box.text(Math.max(0, Math.ceil((end - Date.now()) / 1000)) || '');
+                        tick();
+                        this._countdownInterval = setInterval(tick, 100);
+                        await new Promise(resolve => {
+                            this._previewTimer = setTimeout(() => {
+                                clearInterval(this._countdownInterval);
+                                this._countdownInterval = null;
+                                $box.hide().text('');
+                                resolve();
+                            }, pd);
+                        });
+                        this._previewTimer = null;
+                    }
+
+                    this._timeoutId = setTimeout(() => {
+                        this.stop();
+                        if (onTimeout) onTimeout();
+                    }, timeout);
+
+                    this._controller = this.startDetectionLoop({
+                        video,
+                        onBarcode: async (text) => {
+                            try {
+                                const blob = await this.capture(video);
+
+                                const compressedBlob = await imageCompression(blob, {
+                                    maxSizeMB: 0.3,
+                                    maxWidthOrHeight: 1600,
+                                    useWebWorker: true,
+                                });
+
+                                if (!compressedBlob?.size) {
+                                    throw new Error("Compress Image Fail");
+                                }
+
+                                const file = new File([compressedBlob], `VM_CHECKOUT_CAPTURE_${Date.now()}.jpg`, {
+                                    type: compressedBlob.type || 'image/jpeg'
+                                });
+
+                                // stop scanning before callback
+                                this.stop();
+                                if (onSuccess) onSuccess({
+                                    text,
+                                    file
+                                });
+                            } catch (err) {
+                                if (onError) onError(err);
+                            }
+                        },
+                        onError: (err) => {
+                            if (onError) onError(err);
+                        },
+                        setRafId: (id) => {
+                            this._raf = id;
+                        }
+                    });
+
+                    return true;
+                } catch (err) {
+                    this.stop();
+                    if (onError) onError(err);
+                    return false;
+                }
+            }
+
+            stop() {
+                this.isScanning = false;
+                if (this._timeoutId) {
+                    clearTimeout(this._timeoutId);
+                    this._timeoutId = null;
+                }
+                try {
+                    if (this._previewTimer) {
+                        clearTimeout(this._previewTimer);
+                    }
+                } catch (e) {}
+                this._previewTimer = null;
+                try {
+                    if (this._countdownInterval) {
+                        clearInterval(this._countdownInterval);
+                        this._countdownInterval = null;
+                    }
+                } catch (e) {}
+                try {
+                    if (this.boxCountdownId) {
+                        $(`#${this.boxCountdownId}`).hide();
+                        $(`#${this.boxCountdownId}`).text('');
+                    }
+                } catch (e) {}
+                try {
+                    if (this._controller && typeof this._controller.stop === 'function') this._controller.stop();
+                } catch (e) {}
+                this._controller = null;
+                try {
+                    if (this._raf) cancelAnimationFrame(this._raf);
+                } catch (e) {}
+                this._raf = null;
+                try {
+                    if (this._stream) this._stream.getTracks().forEach(t => t.stop());
+                } catch (e) {}
+                this._stream = null;
+            }
+        }
+
+        // ========================================
+        // CHECKIN SCANNER (Lightweight wrapper)
+        // - Similar to CheckoutScanner but no image capture
+        // - No box countdown, only returns decoded text via onSuccess
+        // ========================================
+        class CheckinScanner {
+            constructor(videoId) {
+                this.videoId = videoId;
+                this.isScanning = false;
+                this._stream = null;
+                this._controller = null;
+                this._timeoutId = null;
+                this._raf = null;
+            }
+
+            async requestCameraStream(preferredConstraints) {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported');
+                }
+
+                const getStreamPromise = navigator.mediaDevices.getUserMedia(preferredConstraints).catch(() => navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment'
+                    }
+                }));
+
+                try {
+                    return await getStreamPromise;
+                } catch (e) {
+                    return await navigator.mediaDevices.getUserMedia({
+                        video: true
+                    });
+                }
+            }
+
+            async initVideoWithStream(videoEl, stream) {
+                if (!videoEl) return;
+                videoEl.srcObject = stream;
+                // Ensure iOS Safari plays inline instead of forcing fullscreen
+                try {
+                    try {
+                        videoEl.setAttribute('playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.setAttribute('webkit-playsinline', '');
+                    } catch (e) {}
+                    try {
+                        videoEl.muted = true;
+                    } catch (e) {}
+                    try {
+                        videoEl.playsInline = true;
+                    } catch (e) {}
+                    await videoEl.play();
+                } catch (e) {
+                    // ignore play errors
+                }
+            }
+
+            startDetectionLoop({
+                video,
+                onBarcode,
+                onError,
+                setRafId
+            }) {
+                let rafId = null;
+                let running = true;
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const loop = async () => {
+                    if (!running) return;
+                    try {
+                        canvas.width = video.videoWidth || 1280;
+                        canvas.height = video.videoHeight || 720;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const {
+                            readBarcodes
+                        } = ZXingWASM;
+                        const res = await readBarcodes(imgData, {
+                            tryHarder: true,
+                            tryInvert: true,
+                            tryRotate: true,
+                            tryDownscale: true,
+                            formats: ["QRCode"],
+                            maxNumberOfSymbols: 1
+                        });
+                        if (Array.isArray(res) && res.length) {
+                            const text = res[0]?.text || res[0]?.rawValue || '';
+                            if (text) {
+                                running = false;
+                                if (onBarcode) await onBarcode(text);
+                                return;
+                            }
+                        }
+                    } catch (err) {
+                        if (onError) onError(err);
+                    }
+                    rafId = requestAnimationFrame(loop);
+                    if (setRafId) setRafId(rafId);
+                };
+
+                rafId = requestAnimationFrame(loop);
+                if (setRafId) setRafId(rafId);
+
+                return {
+                    stop() {
+                        running = false;
+                        try {
+                            if (rafId) cancelAnimationFrame(rafId);
+                        } catch (e) {}
+                        rafId = null;
+                    }
+                };
+            }
+
+            async start(options = {}) {
+                const {
+                    onSuccess,
+                    onError,
+                    onTimeout,
+                    timeout = CONFIG.TIMEOUT_DURATION
+                } = options;
+                if (this.isScanning) {
+                    showToast('CheckinScanner already running', 'error', 3000);
+                    return false;
+                }
+
+                this.isScanning = true;
+                this._raf = null;
+                const video = document.getElementById(this.videoId);
+                try {
+                    this._stream = await this.requestCameraStream({
+                        video: {
+                            facingMode: 'environment',
+                            width: {
+                                min: 1280,
+                                ideal: 2560
+                            },
+                            height: {
+                                min: 720,
+                                ideal: 1440
+                            }
+                        }
+                    });
+                    await this.initVideoWithStream(video, this._stream);
+
+                    this._timeoutId = setTimeout(() => {
+                        this.stop();
+                        if (onTimeout) onTimeout();
+                    }, timeout);
+
+                    this._controller = this.startDetectionLoop({
+                        video,
+                        onBarcode: async (text) => {
+                            try {
+                                this.stop();
+                                if (onSuccess) onSuccess(text);
+                            } catch (err) {
+                                if (onError) onError(err);
+                            }
+                        },
+                        onError: (err) => {
+                            if (onError) onError(err);
+                        },
+                        setRafId: (id) => {
+                            this._raf = id;
+                        }
+                    });
+
+                    return true;
+                } catch (err) {
+                    this.stop();
+                    if (onError) onError(err);
+                    return false;
+                }
+            }
+
+            stop() {
+                this.isScanning = false;
+                if (this._timeoutId) {
+                    clearTimeout(this._timeoutId);
+                    this._timeoutId = null;
+                }
+                try {
+                    if (this._controller && typeof this._controller.stop === 'function') this._controller.stop();
+                } catch (e) {}
+                this._controller = null;
+                try {
+                    if (this._raf) cancelAnimationFrame(this._raf);
+                } catch (e) {}
+                this._raf = null;
+                try {
+                    if (this._stream) this._stream.getTracks().forEach(t => t.stop());
+                } catch (e) {}
+                this._stream = null;
+            }
+        }
+
+
+        async function processQRFromImage(file) {
+            const {
+                readBarcodes
+            } = ZXingWASM;
+            const bitmap = await createImageBitmap(file);
+            const fitted = formatImageSize(bitmap.width, bitmap.height, 2400);
+
+            const master = document.createElement('canvas');
+            master.width = fitted.width;
+            master.height = fitted.height;
+            master.getContext('2d').drawImage(bitmap, 0, 0, fitted.width, fitted.height);
+
+            async function decodeFrom(canvas) {
+                const ctx = canvas.getContext('2d', {
+                    willReadFrequently: true
+                });
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const res = await readBarcodes(imgData, {
+                    tryHarder: true,
+                    tryInvert: true,
+                    tryRotate: true,
+                    tryDownscale: true,
+                    formats: ["QRCode"],
+                    maxNumberOfSymbols: 1,
+                });
+                return Array.isArray(res) ? res : [];
+            }
+
+            const strategies = [
+                () => decodeFrom(resizeToWidth(cropCenterImage(master, 0.70, 0.85), 1200)),
+                () => decodeFrom(resizeToWidth(master, 1600)),
+                () => decodeFrom(resizeToWidth(master, 2400))
+            ];
+
+            for (const strategy of strategies) {
+                console.log('[QR Code Processor] Running strategy:', strategy.name || 'anonymous');
+                const barcodes = await strategy();
+                if (barcodes.length) {
+                    const text = barcodes[0]?.text || barcodes[0]?.rawValue || '';
+                    if (text) return {
+                        ok: true,
+                        text,
+                        barcodes
+                    };
+                }
+            }
+
+            return {
+                ok: false,
+                text: '',
+                barcodes: []
+            };
         }
 
         // ========================================
@@ -362,7 +870,7 @@
             }
 
             bindEvents(onSuccess) {
-                $('#form').on('submit', (e) => {
+                $('#form').on('submit', async (e) => {
                     e.preventDefault();
                     const username = ($('#username').val() || '').trim();
                     const password = ($('#password').val() || '').trim();
@@ -375,16 +883,26 @@
                         return;
                     }
 
-                    if (!ACCOUNTS.some(acc => acc.username === username && acc.password === password)) {
-                        showToast('Tên hoặc mật khẩu không đúng', 'error');
-                        return;
-                    }
+                    try {
+                        $('#modal').addClass('is-open');
+                        const formData = new FormData();
+                        formData.append('username', username);
+                        formData.append('password', password);
 
-                    setCookie('username', username);
-                    this.username = username;
-                    showToast('Xin chào, ' + username, 'success');
-                    $('#auth-screen-wrapper').hide();
-                    if (onSuccess) onSuccess();
+                        await apiRequest('kun/checkinout-login', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        this.username = username;
+                        showToast('Xin chào, ' + username, 'success');
+                        $('#auth-screen-wrapper').hide();
+                        if (onSuccess) onSuccess();
+                    } catch (err) {
+                        showToast(err.message || 'Đăng nhập thất bại', 'error', 4000);
+                    } finally {
+                        $('#modal').removeClass('is-open');
+                    }
                 });
             }
         }
@@ -398,39 +916,22 @@
                 this.isInit = false;
                 this.videoId = 'checkin-video';
                 this.scanner = null;
-                this.defaultInstruction = 'Đặt mã QR vào khung để quét';
-            }
-
-            getVideoFrameMarkup() {
-                return `
-                    <video id="${this.videoId}" width="100%" height="100%"></video>
-                    <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
-                    <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
-                    <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
-                    <div class="scanner-screen__corner scanner-screen__corner--br"></div>
-                `;
-            }
-
-            renderVideoFrame() {
-                $('#checkin-scanner-frame').html(this.getVideoFrameMarkup());
+                this.checkinScanner = null;
             }
 
             renderCheckinInfo(data) {
-                $('#checkin-scanner-frame').html(`
-                    <div class="scanner-screen__bib-success">
-                        <div class="scanner-screen__bib-success-label">BIB</div>
-                        <div class="scanner-screen__bib-success-number">${data.bib}</div>
-                    </div>
-                `).addClass('scanner-screen__frame--success');
-                $('#checkin-info-children-name').text(data.name || '—');
-                $('#checkin-info-parent-name').text(data.parent_name || '—');
-                $('#checkin-info-phone').text(data.phone || '—');
+                $(`#${this.videoId}`).hide();
+                $('#checkin-bib-success').show();
+                $('#checkin-bib-success-number').text(data.bib || '—');
+                $('#checkin-bib-success-label').text(data.name || '—');
+                $('#checkin-info-children-info').text(data.info || '—');
 
-                const statusText = data.status === STATUS.CHECKIN_SUCCESS ? 'Thành công' : 'Thất bại';
-                const statusClass = data.status === STATUS.CHECKIN_SUCCESS ?
-                    'scanner-screen__info-status--success' :
-                    'scanner-screen__info-status--error';
-
+                const parentInfo = [data.parent_name, data.parent_phone].filter(Boolean).join(' - ') || '—';
+                $('#checkin-info-parent-info').text(parentInfo);
+                const isSuccess = data.status === STATUS.CHECKIN_SUCCESS;
+                const statusText = isSuccess ? 'Thành công' : 'Thất bại';
+                const statusClass = isSuccess ? 'scanner-screen__info-status--success' : 'scanner-screen__info-status--error';
+                $('#checkin-scanner-frame').addClass(isSuccess ? 'scanner-screen__frame--success' : 'scanner-screen__frame--active');
                 $('#checkin-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                 if (data?.history) {
                     const historyText = data.history.map(item => {
@@ -452,27 +953,42 @@
                             <h2 class="scanner-screen__title">Check In</h2>
                         </div>
 
-                        <div class="scanner-screen__frame" id="checkin-scanner-frame">${this.getVideoFrameMarkup()}</div>
-
-                        <div class="scanner-screen__content">
-                            <p class="scanner-screen__instruction" id="checkin-instruction">${this.defaultInstruction}</p>
-
+                        <div class="scanner-screen__frame" id="checkin-scanner-frame">
+                            <div id="checkin-alert" class="scanner-screen__alert" style="display:none">
+                                <div class="scanner-screen__alert-icon" id="checkin-alert-icon"></div>
+                                <div class="scanner-screen__alert-message" id="checkin-alert-message"></div>
+                            </div>
+                            <video id="${this.videoId}" width="100%" height="100%"></video>
+                            <img id="checkin-captured-image" src="" alt="Captured" width="100%" height="100%" style="object-fit:contain;display:none;" />
+                            <div id="checkin-corner">
+                                <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--br"></div>
+                            </div>
+                            <div class="scanner-screen__bib-success" id="checkin-bib-success" style="display:none">
+                                <div class="scanner-screen__bib-success-number" id="checkin-bib-success-number"></div>
+                                <div class="scanner-screen__bib-success-label" id="checkin-bib-success-label"></div>
+                            </div>
                             <div class="scanner-screen__info" id="checkin-info-card" style="display:none">
                                 <div class="scanner-screen__info-body">                                    
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkin-info-status">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Bé</span><span class="scanner-screen__info-value" id="checkin-info-children-name">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Người thân</span><span class="scanner-screen__info-value" id="checkin-info-parent-name">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkin-info-phone">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Bé</span><span class="scanner-screen__info-value" id="checkin-info-children-info">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Người thân</span><span class="scanner-screen__info-value" id="checkin-info-parent-info">—</span></div>                                    
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Lịch sử</span><span class="scanner-screen__info-value" id="checkin-info-history">—</span></div>                                    
                                 </div>
                             </div>
+                        </div>
+                        <div class="scanner-screen__content">                            
+                            <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
+                        </div>
 
+                        <div class="scanner-screen__footer">
                             <div class="scanner-screen__actions" id="checkin-actions-group">
-                                <input class="scanner-screen__bib-input" id="checkin-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm" style="display:none">Xác nhận</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-open-camera">Không có QR ? (Mở Camera)</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-reset-scan" style="display:none">Reset</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-confirm" style="display:none">Xác nhận</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkin-btn-open-camera">Không có QR ? (Mở Camera)</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkin-btn-start-scan">Quét QR</button>
                             </div>
                         </div>
 
@@ -486,7 +1002,7 @@
             }
 
             handleEvents() {
-                $('#checkin-btn-start-scan').on('click', () => this.startScan());
+                $('#checkin-btn-start-scan').on('click', () => this.startScanV2());
                 $('#checkin-btn-open-camera').on('click', () => this.openCamera());
                 $('#checkin-btn-confirm').on('click', () => this.confirmCheckin());
                 $('#checkin-btn-back').on('click', () => this.goBack());
@@ -494,17 +1010,21 @@
             }
 
             startScan() {
-                $('#checkin-btn-start-scan, #checkin-btn-open-camera').hide();
+                this._showAlert('reset');
+                $(`#${this.videoId}`).show();
+                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
                 $('#checkin-btn-reset-scan').show();
-                $('#checkin-instruction').text('Đang quét...').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkin-info-card').hide();
 
-                const handleResult = async (result, isSuccess) => {
-                    console.log('[CheckinModule] [startScan] Step 1: Result=', result, ' Success=', isSuccess);
+                const handleResult = async (result, isScanSuccess) => {
+                    console.log('[CheckinModule] [startScan] Step 1: Result=', result, ' Success=', isScanSuccess);
                     this.scanner.stop();
 
-                    // const result = parseScannedData(deobfuscateData(result));
-                    // console.log('[CheckinModule] [startScan] Step 2: Parsed Result=', result);
+                    if (!isScanSuccess) {
+                        this._showAlert('error', 'Không nhận diện được QR');
+                        $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
+                        return;
+                    }
 
                     let data = null;
                     if (result) {
@@ -512,21 +1032,19 @@
                         formData.append('bib_id', result);
                         formData.append('match_id', CONFIG.MATCH_ID);
                         formData.append('action', CONFIG.CHECKIN_ACTION);
-                        formData.append('username', getCookie('username') || '');
                         data = await apiRequest('kun/checkinout-confirm', {
                             method: 'POST',
                             body: formData
-                        });
+                        }, true);
                     }
 
-                    console.log('[CheckinModule] [startScan] Step 3: Response Data=', data);
-                    if (isSuccess && data) {
-                        $('#checkin-instruction').hide();
+                    console.log('[CheckinModule] [startScan] Step 2: Response Data=', data);
+                    const isSuccess = data.status == STATUS.CHECKIN_SUCCESS || false;
+                    if (isSuccess) {
                         this.renderCheckinInfo(data);
                     } else {
-                        $('#checkin-instruction').text('Quét thất bại. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
+                        this._showAlert('error', data.message || 'Checkin không thành công');
                     }
-
                     $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
                 };
 
@@ -537,28 +1055,87 @@
                 });
             }
 
-            openCamera() {
-                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image');
-                this.renderVideoFrame();
-                $('#checkin-btn-start-scan, #checkin-btn-open-camera').hide();
+            // startScanV2: alternative start using CheckinScanner (no image capture)
+            async startScanV2() {
+                this._showAlert('reset');
+                $(`#${this.videoId}`).show();
+                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
                 $('#checkin-btn-reset-scan').show();
-                $('#checkin-instruction').text('Chụp ảnh BIB, sau đó nhập số BIB để Xác nhận').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkin-info-card').hide();
+
+                const handleResult = async (result, isScanSuccess) => {
+                    console.log('[CheckinModule] [startScanV2] Result=', result, ' Success=', isScanSuccess);
+                    try {
+                        if (this.checkinScanner) this.checkinScanner.stop();
+                    } catch (e) {}
+
+                    if (!isScanSuccess) {
+                        this._showAlert('error', 'Không nhận diện được QR');
+                        $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
+                        return;
+                    }
+
+                    console.log('[CheckinModule] [startScanV2] QR Code Result=', result);
+
+                    let data = null;
+                    if (result) {
+                        // const formData = new FormData();
+                        // formData.append('bib_id', result);
+                        // formData.append('match_id', CONFIG.MATCH_ID);
+                        // formData.append('action', CONFIG.CHECKIN_ACTION);
+                        // data = await apiRequest('kun/checkinout-confirm', {
+                        //     method: 'POST',
+                        //     body: formData
+                        // }, true);
+                    }
+
+                    console.log('[CheckinModule] [startScanV2] Response Data=', data);
+                    const isSuccess = data.status == STATUS.CHECKIN_SUCCESS || false;
+                    if (isSuccess) {
+                        this.renderCheckinInfo(data);
+                    } else {
+                        this._showAlert('error', data.message || 'Checkin không thành công');
+                    }
+                    $('#checkin-btn-start-scan').text('Tiếp tục quét').show();
+                };
+
+                // create and start CheckinScanner
+                try {
+                    this.checkinScanner = new CheckinScanner(this.videoId);
+                    const started = await this.checkinScanner.start({
+                        onSuccess: (text) => handleResult(text, true),
+                        onError: () => handleResult(null, false),
+                        onTimeout: () => handleResult(null, false),
+                        timeout: CONFIG.TIMEOUT_DURATION
+                    });
+                    if (!started) {
+                        $(`#${this.videoId}`).hide();
+                        this._showAlert('error', 'Không mở được Camera');
+                    }
+                } catch (err) {
+                    console.error('startScanV2 error', err);
+                    $(`#${this.videoId}`).hide();
+                    this._showAlert('error', 'Không mở được Camera');
+                    try {
+                        if (this.checkinScanner) this.checkinScanner.stop();
+                    } catch (e) {}
+                    this.checkinScanner = null;
+                }
+            }
+
+            openCamera() {
+                this._showAlert('reset');
+                $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkin-btn-start-scan, #checkin-btn-open-camera, #checkin-captured-image, #checkin-corner, #checkin-info-card, #checkin-bib-success').hide();
+                $('#checkin-btn-reset-scan').show();
 
                 const handleResult = (event) => {
                     const file = event.target.files[0];
                     if (!file) return;
 
                     const url = URL.createObjectURL(file);
-                    $('#checkin-scanner-frame')
-                        .addClass('scanner-screen__frame--has-image')
-                        .html(`<img src="${url}" alt="Captured" width="100%" height="100%" style="object-fit: contain;" />`);
-
-                    $('#checkin-instruction')
-                        .text('Nhập số BIB, sau đó nhấn Xác nhận')
-                        .addClass('scanner-screen__instruction--success')
-                        .removeClass('scanner-screen__instruction--error');
-
+                    $('#checkin-scanner-frame').addClass('scanner-screen__frame--has-image');
+                    $('#checkin-captured-image').attr('src', url).show();
                     $('#checkin-manual-bib-input').show().trigger('focus');
                     $('#checkin-btn-confirm').show();
                 };
@@ -574,7 +1151,6 @@
                 }
 
                 try {
-
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkin-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
@@ -597,26 +1173,25 @@
                     formData.append('bib_id', bib);
                     formData.append('match_id', CONFIG.MATCH_ID);
                     formData.append('action', CONFIG.CHECKIN_ACTION);
-                    formData.append('username', getCookie('username') || '');
                     // if (compressedFile) formData.append('file', compressedFile);
 
                     const data = await apiRequest('kun/checkinout-confirm', {
                         method: 'POST',
                         body: formData
-                    });
+                    }, true);
 
                     console.log('[CheckinModule] [confirmCheckin] Step 2: API Response Data=', data);
                     downloadBlob(compressedFile, `VM_CHECKIN_${bib}_${Date.now()}.jpg`);
 
-                    if (data) {
-                        $('#checkin-instruction').hide();
+                    const isSuccess = data.status == STATUS.CHECKIN_SUCCESS || false;
+                    if (isSuccess) {
                         this.renderCheckinInfo(data);
                     } else {
-                        $('#checkin-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
+                        this._showAlert('error', data.message || 'Checkin không thành công');
                     }
                 } catch (error) {
                     console.log('[CheckinModule] [confirmCheckin] Error:', error);
-                    $('#checkin-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
+                    this._showAlert('error', error.message || 'Lỗi khi xác nhận check-in');
                 } finally {
                     $('#checkin-manual-bib-input, #checkin-btn-confirm').hide();
                     $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
@@ -626,21 +1201,49 @@
             }
 
             reset() {
+                try {
+                    if (this.checkinScanner) {
+                        try {
+                            this.checkinScanner.stop();
+                        } catch (e) {}
+                        this.checkinScanner = null;
+                    }
+                } catch (e) {}
+
                 this.scanner.stop();
+                this._showAlert('reset');
                 $('#checkin-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--active scanner-screen__frame--success');
-                this.renderVideoFrame();
-                $('#checkin-instruction').text(this.defaultInstruction).removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkin-info-card').hide();
-                $('#checkin-btn-start-scan').text('Quét QR').show();
                 $('#checkin-btn-open-camera').removeClass('scanner-screen__btn--primary').addClass('scanner-screen__btn--secondary').text('Không có QR ? (Mở Camera)').show();
-                $('#checkin-btn-reset-scan').hide();
-                $('#checkin-manual-bib-input, #checkin-file-input, #checkin-btn-confirm').hide();
+                $('#checkin-btn-start-scan').text('Quét QR').show();
+                $(`#${this.videoId}, #checkin-corner`).show();
+                $('#checkin-captured-image, #checkin-info-card, #checkin-btn-reset-scan, #checkin-manual-bib-input, #checkin-file-input, #checkin-btn-confirm, #checkin-bib-success').hide();
+                $('#checkin-captured-image').attr('src', '');
             }
 
             goBack() {
                 this.reset();
                 $('#checkin-screen-wrapper').hide();
                 $('#screen-manager').show();
+            }
+
+            _showAlert(type = 'success', message) {
+                switch (type) {
+                    case 'success':
+                        $('#checkin-alert-icon').html('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>').removeClass('scanner-screen__alert-icon--error').addClass('scanner-screen__alert-icon--success');
+                        $('#checkin-alert-message').text(message).addClass('scanner-screen__alert-message--success').removeClass('scanner-screen__alert-message--error');
+                        $('#checkin-alert').removeClass('scanner-screen__alert--error').addClass('scanner-screen__alert--success').show();
+                        break;
+                    case 'error':
+                        $('#checkin-alert-icon').html('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>').removeClass('scanner-screen__alert-icon--success').addClass('scanner-screen__alert-icon--error');
+                        $('#checkin-alert-message').text(message).addClass('scanner-screen__alert-message--error').removeClass('scanner-screen__alert-message--success');
+                        $('#checkin-alert').removeClass('scanner-screen__alert--success').addClass('scanner-screen__alert--error').show();
+                        break;
+                    case 'reset':
+                        $('#checkin-alert-icon').html('').removeClass('scanner-screen__alert-icon--success scanner-screen__alert-icon--error');
+                        $('#checkin-alert-message').text('').removeClass('scanner-screen__alert-message--success scanner-screen__alert-message--error');
+                        $('#checkin-alert').hide();
+                        break;
+                }
             }
         }
 
@@ -651,6 +1254,10 @@
         class CheckoutModule {
             constructor() {
                 this.isInit = false;
+                this.videoId = 'checkout-video';
+                this._checkoutStream = null;
+                this._checkoutCountdownTimers = [];
+                this.checkoutScanner = null;
             }
 
             render() {
@@ -662,33 +1269,43 @@
                             </button>
                             <h2 class="scanner-screen__title">Check Out</h2>
                         </div>
-
                         <div class="scanner-screen__frame" id="checkout-scanner-frame">
-                            <div class="scanner-screen__placeholder">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                                <span>Chưa có ảnh</span>
+                            <div class="box-countdown" id="checkout-countdown" style="display:none"></div>
+                            <div id="checkout-alert" class="scanner-screen__alert" style="display:none">
+                                <div class="scanner-screen__alert-icon" id="checkout-alert-icon"></div>
+                                <div class="scanner-screen__alert-message" id="checkout-alert-message"></div>
                             </div>
-                        </div>
-
-                        <div class="scanner-screen__content">
-                            <p class="scanner-screen__instruction" id="checkout-instruction">Chụp ảnh QR trên BIB</p>
-
+                            <video id="${this.videoId}" width="100%" height="100%"></video>
+                            <img id="checkout-captured-image" src="" alt="Captured" width="100%" height="100%" style="object-fit:contain;display:none;" />
+                            <div id="checkout-corner">
+                                <div class="scanner-screen__corner scanner-screen__corner--tl"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--tr"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--bl"></div>
+                                <div class="scanner-screen__corner scanner-screen__corner--br"></div>
+                            </div>
+                            <div class="scanner-screen__bib-success" id="checkout-bib-success" style="display:none">
+                                <div class="scanner-screen__bib-success-number" id="checkout-bib-success-number"></div>
+                                <div class="scanner-screen__bib-success-label" id="checkout-bib-success-label"></div>
+                            </div>
                             <div class="scanner-screen__info" id="checkout-info-card" style="display:none">
                                 <div class="scanner-screen__info-body">
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Mã BIB</span><span class="scanner-screen__info-value" id="checkout-info-bib">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Họ tên</span><span class="scanner-screen__info-value" id="checkout-info-name">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">SĐT</span><span class="scanner-screen__info-value" id="checkout-info-phone">—</span></div>
                                     <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Trạng thái</span><span class="scanner-screen__info-value" id="checkout-info-status">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Thông báo</span><span class="scanner-screen__info-value" id="checkout-info-message">—</span></div>
-                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Lịch sử</span><span class="scanner-screen__info-value" id="checkout-info-history">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Bé</span><span class="scanner-screen__info-value" id="checkout-info-children-info">—</span></div>
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Người thân</span><span class="scanner-screen__info-value" id="checkout-info-parent-info">—</span></div>                                    
+                                    <div class="scanner-screen__info-row"><span class="scanner-screen__info-label">Lịch sử</span><span class="scanner-screen__info-value" id="checkout-info-history">—</span></div>                                    
                                 </div>
-                            </div>
+                            </div>                            
+                        </div>                        
+                        <div class="scanner-screen__content"> 
+                            <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />                            
+                        </div>
 
+                        <div class="scanner-screen__footer">
                             <div class="scanner-screen__actions" id="checkout-actions-group">
-                                <input class="scanner-screen__bib-input" id="checkout-manual-bib-input" type="number" min="0" max="999999" inputmode="numeric" placeholder="Nhập số BIB" style="display:none" />
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
-                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-open-camera">Mở camera</button>
                                 <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-reset" style="display:none">Reset</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-confirm" style="display:none">Xác nhận</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--secondary" id="checkout-btn-open-camera">Mở camera</button>
+                                <button class="scanner-screen__btn scanner-screen__btn--primary" id="checkout-btn-scan">Quét QR</button>
                             </div>
                         </div>
 
@@ -701,33 +1318,104 @@
             }
 
             handleEvents() {
+                $('#checkout-btn-scan').on('click', () => this.startCameraScan());
                 $('#checkout-btn-open-camera').on('click', () => this.openCamera());
                 $('#checkout-btn-confirm').on('click', () => this.confirmCheckout());
                 $('#checkout-btn-back').on('click', () => this.goBack());
                 $('#checkout-btn-reset').on('click', () => this.reset());
             }
 
+            async startCameraScan() {
+                this._showAlert('reset');
+                $(`#${this.videoId}`).show();
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkout-btn-scan, #checkout-btn-open-camera, #checkout-captured-image, #checkout-corner, #checkout-info-card, #checkout-bib-success').hide();
+                $('#checkout-btn-reset').show();
+                try {
+                    this.checkoutScanner = new CheckoutScanner(this.videoId, 'checkout-countdown');
+                    const started = await this.checkoutScanner.start({
+                        onSuccess: async ({
+                            text,
+                            file
+                        }) => {
+                            try {
+                                const url = URL.createObjectURL(file);
+                                $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image');
+                                $('#checkout-captured-image').attr('src', url).show();
+
+                                const formData = new FormData();
+                                formData.append('bib_id', text);
+                                formData.append('match_id', CONFIG.MATCH_ID);
+                                formData.append('action', CONFIG.CHECKOUT_ACTION);
+                                formData.append('file', file);
+                                const data = await apiRequest('kun/checkinout-confirm', {
+                                    method: 'POST',
+                                    body: formData
+                                }, true);
+                                downloadBlob(file, `VM_CHECKOUT_${text}_${Date.now()}.jpg`);
+
+                                const isSucess = data.status == STATUS.CHECKOUT_SUCCESS || false;
+                                if (isSucess) {
+                                    this._showAlert('success', 'Checkout thành công');
+                                    this._showResultInfo(data);
+                                } else {
+                                    this._showAlert('error', data.message || 'Checkout không thành công');
+                                }
+                            } catch (err) {
+                                console.log('[CheckoutModule] [startCameraScan] onSuccess error', err);
+                                this._showAlert('error', err.message || 'Lỗi xử lý ảnh');
+                            } finally {
+                                $(`#${this.videoId}`).hide();
+                                $('#checkout-btn-scan').text('Tiếp tục quét').show();
+                            }
+                        },
+                        onError: (err) => {
+                            console.log('[CheckoutModule] [startCameraScan] scanner error', err);
+                            $(`#${this.videoId}`).hide();
+                            this._showAlert('error', 'Không nhận diện được QR');
+                            $('#checkout-btn-scan').text('Tiếp tục quét').show();
+                        },
+                        onTimeout: () => {
+                            $(`#${this.videoId}`).hide();
+                            this._showAlert('error', 'Hết thời gian quét');
+                            $('#checkout-btn-scan').text('Tiếp tục quét').show();
+                        },
+                        timeout: CONFIG.TIMEOUT_DURATION,
+                        previewDelayMs: 1000
+                    });
+
+                    if (!started) {
+                        $(`#${this.videoId}`).hide();
+                        this._showAlert('error', 'Không mở được Camera');
+                    }
+                } catch (error) {
+                    console.log('[CheckoutModule] [startCameraScan] Error:', error);
+                    $(`#${this.videoId}`).hide();
+                    this._showAlert('error', 'Không mở được Camera');
+                    try {
+                        if (this.checkoutScanner) this.checkoutScanner.stop();
+                    } catch (e) {}
+                    this.checkoutScanner = null;
+                }
+            }
+
             openCamera() {
-                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image').html(`
-                    <div class="scanner-screen__placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span>Chưa có ảnh</span>
-                    </div>
-                `);
-                $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkout-info-card').hide();
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
+                $('#checkout-btn-scan, #checkout-btn-open-camera, #checkout-captured-image, #checkout-corner, #checkout-info-card, #checkout-bib-success').hide();
+                $('#checkout-btn-reset').show();
+                $('#checkout-instruction').text('Chụp ảnh BIB chứa QR').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
 
                 const handleResult = async (event) => {
                     try {
+                        $('#modal').addClass('is-open');
                         const file = event.target.files[0];
                         if (!file) return;
 
                         const url = URL.createObjectURL(file);
                         $('#checkout-instruction').text('Đang xử lý ảnh...');
 
-                        $('#checkout-scanner-frame')
-                            .addClass('scanner-screen__frame--has-image')
-                            .html(`<img src="${url}" alt="Captured" width="100%" height="100%" style="object-fit: contain;" />`);
+                        $('#checkout-scanner-frame').addClass('scanner-screen__frame--has-image');
+                        $('#checkout-captured-image').attr('src', url).show();
 
                         const result = await processQRFromImage(file);
                         console.log('[CheckoutModule] [openCamera] Step 1: QR Processing Result=', result);
@@ -752,7 +1440,6 @@
                             formData.append('bib_id', result.text);
                             formData.append('match_id', CONFIG.MATCH_ID);
                             formData.append('action', CONFIG.CHECKOUT_ACTION);
-                            formData.append('username', getCookie('username') || '');
                             formData.append('file', compressedFile);
                             const data = await apiRequest('kun/checkinout-confirm', {
                                 method: 'POST',
@@ -760,17 +1447,23 @@
                             });
                             downloadBlob(compressedFile, `VM_CHECKOUT_${result.text}_${Date.now()}.jpg`);
 
-                            if (data) {
+                            const isSucess = data.status == STATUS.CHECKOUT_SUCCESS || false;
+                            $('#checkout-instruction').hide();
+                            if (isSucess && data) {
+                                this._showAlert('success', 'Checkout thành công');
                                 this._showResultInfo(data);
                             } else {
-                                throw new Error('API response invalid');
+                                this._showAlert('error', 'Lỗi Checkout không thành công');
                             }
                         } else {
                             throw new Error('QR code not detected');
                         }
                     } catch (error) {
                         console.log('[CheckoutModule] [openCamera] Error:', error);
+                        this._showAlert('error', error.message || 'Lỗi không mở được Camera');
                         this._showManualInput();
+                    } finally {
+                        $('#modal').removeClass('is-open');
                     }
                 };
 
@@ -778,19 +1471,18 @@
             }
 
             _showResultInfo(data) {
-                $('#checkout-info-card').show();
-                const status = data.status === STATUS.CHECKOUT_SUCCESS || false;
-                $('#checkout-instruction').text(status ? 'Thành công' : 'Thất bại').addClass(status ? 'scanner-screen__instruction--success' : 'scanner-screen__instruction--error').removeClass(status ? 'scanner-screen__instruction--error' : 'scanner-screen__instruction--success');
+                $(`#${this.videoId}`).hide();
+                $('#checkout-bib-success').hide();
+                $('#checkout-bib-success-number').text(data.bib || '—');
+                $('#checkout-bib-success-label').text(data.name || '—');
+                $('#checkout-info-children-info').text(data.info || '—');
 
-                $('#checkout-info-bib').text(data.bib || '—');
-                $('#checkout-info-name').text(data.name || '—');
-                $('#checkout-info-phone').text(data.phone || '—');
-
-                const statusText = data.status === STATUS.CHECKOUT_SUCCESS ? 'Check-out thành công' : 'Check-out thất bại';
-                const statusClass = data.status === STATUS.CHECKOUT_SUCCESS ?
-                    'scanner-screen__info-status--success' :
-                    'scanner-screen__info-status--error';
-
+                const parentInfo = [data.parent_name, data.parent_phone].filter(Boolean).join(' - ') || '—';
+                $('#checkout-info-parent-info').text(parentInfo);
+                const isSuccess = data.status === STATUS.CHECKOUT_SUCCESS;
+                const statusText = isSuccess ? 'Đã ghi nhận' : 'Lỗi';
+                const statusClass = isSuccess ? 'scanner-screen__info-status--success' : 'scanner-screen__info-status--error';
+                $('#checkout-scanner-frame').addClass(isSuccess ? 'scanner-screen__frame--success' : 'scanner-screen__frame--active');
                 $('#checkout-info-status').html(`<span class="scanner-screen__info-status ${statusClass}">${statusText}</span>`);
                 if (data?.history) {
                     const historyText = data.history.map(item => {
@@ -799,24 +1491,44 @@
                     }).join('<br>');
                     $('#checkout-info-history').html(historyText);
                 }
-                $('#checkout-info-message').text(data.message || '—');
+                $('#checkout-info-card').show();
             }
 
             _showManualInput() {
-                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image');
-                $('#checkout-instruction').text('Không nhận diện được QR. Thử lại hoặc nhập thủ công số Bib').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
+                $('#checkout-instruction').text('Không nhận diện được QR. Thử lại hoặc nhập thủ công số BIB').addClass('scanner-screen__instruction--error').removeClass('scanner-screen__instruction--success');
                 $('#checkout-manual-bib-input, #checkout-btn-reset, #checkout-btn-confirm').show();
+                $('#checkout-manual-bib-input').trigger('focus');
                 $('#checkout-btn-open-camera').hide();
             }
 
-            async confirmCheckout() {
-                try {
-                    const bib = ($('#checkout-manual-bib-input').val() || '').trim();
-                    if (!bib) {
-                        showToast('Vui lòng nhập số BIB', 'error', 5000);
-                        return;
-                    }
+            _showAlert(type = 'success', message) {
+                switch (type) {
+                    case 'success':
+                        $('#checkout-alert-icon').html('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>').removeClass('scanner-screen__alert-icon--error').addClass('scanner-screen__alert-icon--success');
+                        $('#checkout-alert-message').text(message).addClass('scanner-screen__alert-message--success').removeClass('scanner-screen__alert-message--error');
+                        $('#checkout-alert').removeClass('scanner-screen__alert--error').addClass('scanner-screen__alert--success').show();
+                        break;
+                    case 'error':
+                        $('#checkout-alert-icon').html('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>').removeClass('scanner-screen__alert-icon--success').addClass('scanner-screen__alert-icon--error');
+                        $('#checkout-alert-message').text(message).addClass('scanner-screen__alert-message--error').removeClass('scanner-screen__alert-message--success');
+                        $('#checkout-alert').removeClass('scanner-screen__alert--success').addClass('scanner-screen__alert--error').show();
+                        break;
+                    case 'reset':
+                        $('#checkout-alert-icon').html('').removeClass('scanner-screen__alert-icon--success scanner-screen__alert-icon--error');
+                        $('#checkout-alert-message').text('').removeClass('scanner-screen__alert-message--success scanner-screen__alert-message--error');
+                        $('#checkout-alert').hide();
+                        break;
+                }
+            }
 
+            async confirmCheckout() {
+                const bib = ($('#checkout-manual-bib-input').val() || '').trim();
+                if (!bib) {
+                    showToast('Vui lòng nhập số BIB', 'error', 5000);
+                    return;
+                }
+
+                try {
                     $('#modal').addClass('is-open');
                     const fileInput = $('#checkout-file-input')[0];
                     const file = fileInput?.files?.[0] || null;
@@ -839,7 +1551,6 @@
                     formData.append('bib_id', bib);
                     formData.append('match_id', CONFIG.MATCH_ID);
                     formData.append('action', CONFIG.CHECKOUT_ACTION);
-                    formData.append('username', getCookie('username') || '');
                     if (compressedFile) formData.append('file', compressedFile);
                     const data = await apiRequest('kun/checkinout-confirm', {
                         method: 'POST',
@@ -859,8 +1570,9 @@
                     $('#checkout-instruction').text('Lỗi. Vui lòng thử lại.').addClass('scanner-screen__instruction--error');
                 } finally {
                     $('#checkout-manual-bib-input, #checkout-btn-confirm').hide();
-                    $('#checkout-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
+                    $('#checkout-btn-scan').text('Tiếp tục quét').show();
                     $('#checkout-manual-bib-input, #checkout-file-input').val('');
+                    $('#checkout-btn-open-camera').removeClass('scanner-screen__btn--secondary').addClass('scanner-screen__btn--primary').text('Mở Camera').show();
                     $('#modal').removeClass('is-open');
                 }
             }
@@ -872,15 +1584,32 @@
             }
 
             reset() {
-                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image').html(`
-                    <div class="scanner-screen__placeholder">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span>Chưa có ảnh</span>
-                    </div>
-                `);
+                try {
+                    if (this.checkoutScanner) {
+                        try {
+                            this.checkoutScanner.stop();
+                        } catch (e) {}
+                        this.checkoutScanner = null;
+                    }
+                } catch (e) {}
+
+                try {
+                    if (Array.isArray(this._checkoutCountdownTimers) && this._checkoutCountdownTimers.length) {
+                        this._checkoutCountdownTimers.forEach(id => clearTimeout(id));
+                        this._checkoutCountdownTimers = [];
+                    }
+                } catch (e) {}
+
+                this._showAlert('reset');
+                $('#checkout-scanner-frame').removeClass('scanner-screen__frame--has-image scanner-screen__frame--success');
                 $('#checkout-instruction').text('Chụp ảnh QR trên BIB').removeClass('scanner-screen__instruction--error scanner-screen__instruction--success');
-                $('#checkout-info-card, #checkout-manual-bib-input, #checkout-btn-confirm').hide();
-                $('#checkout-btn-open-camera').show();
+                $(`#${this.videoId}`).hide();
+                $('#checkout-corner').show();
+                $('#checkout-btn-open-camera').removeClass('scanner-screen__btn--primary').addClass('scanner-screen__btn--secondary').text('Mở Camera').show();
+                $('#checkout-btn-scan').text('Quét QR').show();
+                $('#checkout-btn-reset').hide();
+                $('#checkout-captured-image, #checkout-info-card, #checkout-btn-reset-scan, #checkout-manual-bib-input, #checkout-file-input, #checkout-btn-confirm, #checkout-bib-success').hide();
+                $('#checkout-captured-image').attr('src', '');
             }
         }
 
@@ -890,11 +1619,11 @@
 
         class App {
             static async start() {
-                const authScreen = new AuthScreen();
-                if (!authScreen.isLoggedIn()) {
-                    authScreen.render(() => App.showScreenManager());
-                    return;
-                }
+                // const authScreen = new AuthScreen();
+                // if (!authScreen.isLoggedIn()) {
+                //     authScreen.render(() => App.showScreenManager());
+                //     return;
+                // }
                 App.showScreenManager();
             }
 
@@ -970,9 +1699,6 @@
                         $('#checkout-screen-wrapper').show();
                     }
                 });
-
-                window.checkinModule = checkinModule;
-                window.checkoutModule = checkoutModule;
             }
         }
 
