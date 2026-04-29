@@ -578,11 +578,11 @@
 
         class App {
             static async start() {
-                const auth = await new AuthModule().init();
-                if (!auth.isLoggedIn()) {
-                    auth.render();
-                    return;
-                }
+                // const auth = await new AuthModule().init();
+                // if (!auth.isLoggedIn()) {
+                //     auth.render();
+                //     return;
+                // }
                 await new CheckinModule().init();
             }
         }
