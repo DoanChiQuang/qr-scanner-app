@@ -6,21 +6,22 @@
     <!-- <link type="image/x-icon" href="<?php echo $this->static('images/graphics/favicon.ico') ?>" rel="shortcut icon" /> -->
     <meta http-equiv="X-UA-Compatible" content="IE=100" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
     <!-- zxing-wasm Library -->
     <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
     <!-- <? if ($this->debug): ?> -->
-        <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-        <script>
-            eruda.init();
-        </script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+    </script>
     <!-- <? endif; ?> -->
 
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script src="jquery.min.js"></script>
     <script src="moment.min.js"></script>
 
@@ -222,9 +223,9 @@
                 hasResult: false,
                 ticketDetail: null,
                 timeoutId: null,
-                isCameraGranted: false,
                 stream: null,
-                rafId: null
+                rafId: null,
+                controller: null
             };
             constructor() {
                 this.videoId = 'qr-video';
@@ -344,41 +345,6 @@
                 $(document).on('click', _self.selectors.btnNext, () => _self.nextScanner());
                 $(document).on('click', _self.selectors.btnConfirm, () => _self.handleConfirmCheckin());
             }
-            async grantCameraPermissions() {
-                let _self = this;
-                try {
-                    _self.state.stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: 'environment',
-                            width: {
-                                min: 1280,
-                                ideal: 2560
-                            },
-                            height: {
-                                min: 720,
-                                ideal: 1440
-                            }
-                        }
-                    });
-                    _self.state.isCameraGranted = true;
-                    return true;
-                } catch {
-                    try {
-                        _self.state.stream = await navigator.mediaDevices.getUserMedia({
-                            video: {
-                                facingMode: 'environment'
-                            }
-                        });
-                        _self.state.isCameraGranted = true;
-                        return true;
-                    } catch {
-                        _self.state.stream = null;
-                        _self.state.isCameraGranted = false;
-                        return false;
-                    }
-
-                }
-            }
             async resetScanner() {
                 let _self = this;
                 if (!_self.state.hasResult && !_self.state.stream) {
@@ -396,20 +362,24 @@
             }
             async stopScanner() {
                 let _self = this;
-                if (_self.state.stream) {
-                    try {
-                        _self.state.stream.getTracks().forEach(track => track.stop());
-                    } catch {}
-                    _self.state.stream = null;
-                }
-                if (_self.state.rafId) {
-                    cancelAnimationFrame(_self.state.rafId);
-                    _self.state.rafId = null;
-                }
                 _self.state.isScanning = false;
                 if (_self.state.timeoutId) {
                     clearTimeout(_self.state.timeoutId);
                     _self.state.timeoutId = null;
+                }
+                try {
+                    if (_self.state.controller) _self.state.controller.stop();
+                } catch (e) { }
+                _self.state.controller = null;
+                try {
+                    if (_self.state.rafId) cancelAnimationFrame(_self.state.rafId);
+                } catch (e) { }
+                _self.state.rafId = null;
+                if (_self.state.stream) {
+                    try {
+                        _self.state.stream.getTracks().forEach(track => track.stop());
+                    } catch { }
+                    _self.state.stream = null;
                 }
             }
             async startScanner() {
@@ -423,10 +393,34 @@
                 $(_self.selectors.btnStart).hide();
                 $(_self.selectors.btnReset).show();
                 Logger.log('CheckinModule', 'info', 'Step 2: Requesting Camera Permissions...');
-                if (!_self.state.isCameraGranted && !await _self.grantCameraPermissions()) {
+                try {
+                    // Use robust camera open logic
+                    _self.state.stream = await (async function requestCameraStream() {
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                            throw new Error('Camera API not supported');
+                        }
+                        try {
+                            return await navigator.mediaDevices.getUserMedia({
+                                video: {
+                                    facingMode: 'environment',
+                                    width: { min: 1280, ideal: 2560 },
+                                    height: { min: 720, ideal: 1440 }
+                                }
+                            });
+                        } catch (e) {
+                            try {
+                                return await navigator.mediaDevices.getUserMedia({
+                                    video: { facingMode: 'environment' }
+                                });
+                            } catch (e2) {
+                                return await navigator.mediaDevices.getUserMedia({ video: true });
+                            }
+                        }
+                    })();
+                } catch (err) {
                     _self.state.hasResult = true;
                     ToastService.show('Camera Access Denied', 'error', 5000);
-                    _self.resetScanner();
+                    await _self.resetScanner();
                     return;
                 }
                 _self.state.timeoutId = setTimeout(() => {
@@ -436,40 +430,68 @@
                 }, Config.TIMEOUT_DURATION);
                 Logger.log('CheckinModule', 'info', 'Step 3: Starting QR Code Decoding...');
                 try {
-                    const video = document.getElementById(_self.videoId);                    
-                    video.srcObject = _self.state.stream;
-                    video.setAttribute('playsinline', '');
-                    video.setAttribute('webkit-playsinline', '');
-                    video.muted = true;
-                    video.playsInline = true;
-                    await video.play();
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const scanLoop = async () => {
-                        if (!_self.state.isScanning) return;
-                        try {
-                            canvas.width = video.videoWidth || 640;
-                            canvas.height = video.videoHeight || 480;
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                            const res = await ZXingWASM.readBarcodes(imgData, {
-                                tryHarder: true,
-                                tryInvert: true,
-                                tryRotate: true,
-                                tryDownscale: true,
-                                formats: ['QRCode'],
-                                maxNumberOfSymbols: 1
-                            });
-                            if (Array.isArray(res) && res.length && res[0]?.text) {
-                                _self.state.hasResult = true;
-                                await _self.handleScanResult(res[0].text);
-                                await _self.stopScanner();
-                                return;
+                    const video = document.getElementById(_self.videoId);
+                    // Use robust video init
+                    await (async function initVideo(videoEl, stream) {
+                        videoEl.srcObject = stream;
+                        try { videoEl.setAttribute('playsinline', ''); } catch (e) { }
+                        try { videoEl.setAttribute('webkit-playsinline', ''); } catch (e) { }
+                        try { videoEl.muted = true; } catch (e) { }
+                        try { videoEl.playsInline = true; } catch (e) { }
+                        try { await videoEl.play(); } catch (e) { }
+                    })(video, _self.state.stream);
+                    // Use robust barcode reading loop
+                    const startDetectionLoop = ({ video, onBarcode, onError, setRafId }) => {
+                        let rafId = null;
+                        let running = true;
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const loop = async () => {
+                            if (!running) return;
+                            try {
+                                canvas.width = video.videoWidth || 1280;
+                                canvas.height = video.videoHeight || 720;
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                                const res = await ZXingWASM.readBarcodes(imgData, {
+                                    tryHarder: true,
+                                    tryInvert: true,
+                                    tryRotate: true,
+                                    tryDownscale: true,
+                                    formats: ['QRCode'],
+                                    maxNumberOfSymbols: 1
+                                });
+                                if (Array.isArray(res) && res.length && res[0]?.text) {
+                                    running = false;
+                                    if (onBarcode) await onBarcode(res[0].text);
+                                    return;
+                                }
+                            } catch (err) {
+                                if (onError) onError(err);
                             }
-                        } catch (err) {}
-                        _self.state.rafId = requestAnimationFrame(scanLoop);
+                            rafId = requestAnimationFrame(loop);
+                            if (setRafId) setRafId(rafId);
+                        };
+                        rafId = requestAnimationFrame(loop);
+                        if (setRafId) setRafId(rafId);
+                        return {
+                            stop() {
+                                running = false;
+                                try { if (rafId) cancelAnimationFrame(rafId); } catch (e) { }
+                                rafId = null;
+                            }
+                        };
                     };
-                    _self.state.rafId = requestAnimationFrame(scanLoop);
+                    _self.state.controller = startDetectionLoop({
+                        video,
+                        onBarcode: async (text) => {
+                            _self.state.hasResult = true;
+                            await _self.handleScanResult(text);
+                            await _self.stopScanner();
+                        },
+                        onError: () => { },
+                        setRafId: id => { _self.state.rafId = id; }
+                    });
                 } catch (error) {
                     if (_self.state.isScanning) {
                         ToastService.show(`Scanning Error: ${error.message}`, 'error', 5000);
