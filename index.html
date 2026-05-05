@@ -10,14 +10,40 @@
         content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=0">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="FPT Online" />
+    <link rel="manifest" href="manifest.json'">
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="apple-touch-icon" href="images/graphics/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        #install-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+        }
+
+        #btn-install {
+            display: none;
+            padding: 12px 24px;
+            background: linear-gradient(to right, #007bff, #00b09b);
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        #btn-install:hover {
+            opacity: 0.9;
+        }
+    </style>
     <!-- zxing-wasm Library -->
     <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js"></script>
-    <!-- <? if ($this->debug): ?> -->
+    <!-- <?php if ($this->debug): ?> -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
         eruda.init();
     </script>
-    <!-- <? endif; ?> -->
+    <!-- <?php endif; ?> -->
 
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
@@ -34,6 +60,9 @@
     <div id="turnstile-container"></div>
     <div class="modal" id="modal">
         <div class="spinner"></div>
+    </div>
+    <div id="install-container">
+        <a href="#" class="btn" id="btn-install">Install App</a>
     </div>
     <script>
         class Config {
@@ -201,6 +230,31 @@
                     });
                 }
             }
+
+            static deobfuscateData(encoded, secret = 'sEcReT123') {
+                try {
+                    const b64 = encoded.split('').reverse().join('')
+                        .replace(/-/g, '+')
+                        .replace(/_/g, '/');
+                    return atob(b64).replaceAll(secret, '');
+                } catch {
+                    return '';
+                }
+            }
+
+            static parseScannedData(data) {
+                if (!data || typeof data !== 'string') {
+                    return {
+                        version: '',
+                        fields: []
+                    };
+                }
+                const parts = data.split('|');
+                return {
+                    version: parts[0] || '',
+                    fields: parts.slice(1)
+                };
+            }
         }
 
         // ZXing-wasm version of CheckinModule
@@ -322,6 +376,12 @@
                             <div class="info-row"><span>- Kích thước: </span><span>${ticketDetail.gifts?.option}</span></div>
                             <div class="info-row"><span>- Trạng thái: </span><span>${ticketDetail.gifts.is_delivered == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>
                         ` : ''}
+                        ${ticketDetail?.momo_info != null ? `
+                            <div class="info-row"><span>Thanh toán: </span><span>MOMO</span></div>
+                        ` : ''}
+                        ${ticketDetail?.momo_info != null && ticketDetail?.momo_info.has_momo_gift ? `
+                            <div class="info-row"><span>Quà MoMo: </span><span class="${ticketDetail?.momo_info.is_deliveried == 1 ? 'confirmed' : 'checked'}">${ticketDetail?.momo_info.is_deliveried == 1 ? 'Đã nhận' : 'Chưa nhận'}</span></div>                            
+                        ` : ''}
                         <hr>
                         ${Object.values(ticketDetail?.history || {}).map(item => `
                             <div class="info-row">
@@ -329,9 +389,9 @@
                                 <span class="${item.is_checkin ? 'confirmed' : 'error'}">${item.event_time ? moment.unix(item.event_time).format('DD-MM-YYYY') : ''} <small>(${item.is_checkin ? 'Đã Check-in' : 'Chưa Check-in'})</small></span>
                             </div>
                         `).join('')}
-                        <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name}</div>
-                        <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone}</div>
-                        <div class="info-row"><span>Email: </span>${ticketDetail.contact_email}</div>
+                        <div class="info-row"><span>Họ tên: </span>${ticketDetail.contact_name ? ticketDetail.contact_name : 'N/A'}</div>
+                        <div class="info-row"><span>Số điện thoại: </span>${ticketDetail.contact_phone ? ticketDetail.contact_phone : 'N/A'}</div>
+                        <div class="info-row"><span>Email: </span>${ticketDetail.contact_email ? ticketDetail.contact_email : 'N/A'}</div>
                     `;
                 } catch (error) {
                     Logger.log('CheckinModule', 'error', error.message);
@@ -403,17 +463,27 @@
                             return await navigator.mediaDevices.getUserMedia({
                                 video: {
                                     facingMode: 'environment',
-                                    width: { min: 1280, ideal: 2560 },
-                                    height: { min: 720, ideal: 1440 }
+                                    width: {
+                                        min: 1280,
+                                        ideal: 2560
+                                    },
+                                    height: {
+                                        min: 720,
+                                        ideal: 1440
+                                    }
                                 }
                             });
                         } catch (e) {
                             try {
                                 return await navigator.mediaDevices.getUserMedia({
-                                    video: { facingMode: 'environment' }
+                                    video: {
+                                        facingMode: 'environment'
+                                    }
                                 });
                             } catch (e2) {
-                                return await navigator.mediaDevices.getUserMedia({ video: true });
+                                return await navigator.mediaDevices.getUserMedia({
+                                    video: true
+                                });
                             }
                         }
                     })();
@@ -434,14 +504,29 @@
                     // Use robust video init
                     await (async function initVideo(videoEl, stream) {
                         videoEl.srcObject = stream;
-                        try { videoEl.setAttribute('playsinline', ''); } catch (e) { }
-                        try { videoEl.setAttribute('webkit-playsinline', ''); } catch (e) { }
-                        try { videoEl.muted = true; } catch (e) { }
-                        try { videoEl.playsInline = true; } catch (e) { }
-                        try { await videoEl.play(); } catch (e) { }
+                        try {
+                            videoEl.setAttribute('playsinline', '');
+                        } catch (e) { }
+                        try {
+                            videoEl.setAttribute('webkit-playsinline', '');
+                        } catch (e) { }
+                        try {
+                            videoEl.muted = true;
+                        } catch (e) { }
+                        try {
+                            videoEl.playsInline = true;
+                        } catch (e) { }
+                        try {
+                            await videoEl.play();
+                        } catch (e) { }
                     })(video, _self.state.stream);
                     // Use robust barcode reading loop
-                    const startDetectionLoop = ({ video, onBarcode, onError, setRafId }) => {
+                    const startDetectionLoop = ({
+                        video,
+                        onBarcode,
+                        onError,
+                        setRafId
+                    }) => {
                         let rafId = null;
                         let running = true;
                         const canvas = document.createElement('canvas');
@@ -477,7 +562,9 @@
                         return {
                             stop() {
                                 running = false;
-                                try { if (rafId) cancelAnimationFrame(rafId); } catch (e) { }
+                                try {
+                                    if (rafId) cancelAnimationFrame(rafId);
+                                } catch (e) { }
                                 rafId = null;
                             }
                         };
@@ -490,7 +577,9 @@
                             await _self.stopScanner();
                         },
                         onError: () => { },
-                        setRafId: id => { _self.state.rafId = id; }
+                        setRafId: id => {
+                            _self.state.rafId = id;
+                        }
                     });
                 } catch (error) {
                     if (_self.state.isScanning) {
@@ -598,18 +687,64 @@
             }
         }
 
+        class PwaInstaller {
+            static deferredPrompt = null;
+
+            static init() {
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    PwaInstaller.deferredPrompt = e;
+                    $('#btn-install').show();
+                });
+
+                window.addEventListener('appinstalled', () => {
+                    $('#btn-install').hide();
+                    PwaInstaller.deferredPrompt = null;
+                    ToastService.show('App installed successfully!', 'success');
+                });
+
+                $('#btn-install').on('click', async (e) => {
+                    e.preventDefault();
+                    const prompt = PwaInstaller.deferredPrompt;
+                    if (!prompt) return;
+                    prompt.prompt();
+                    const result = await prompt.userChoice;
+                    if (result.outcome === 'accepted') {
+                        Logger.log('PwaInstaller', 'info', 'User accepted install');
+                    } else {
+                        Logger.log('PwaInstaller', 'info', 'User dismissed install');
+                    }
+                    PwaInstaller.deferredPrompt = null;
+                    $('#btn-install').hide();
+                });
+            }
+        }
+
         class App {
             static async start() {
-                // const auth = await new AuthModule().init();
-                // if (!auth.isLoggedIn()) {
-                //     auth.render();
-                //     return;
-                // }
+                const auth = await new AuthModule().init();
+                if (!auth.isLoggedIn()) {
+                    auth.render();
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const token = urlParams.get('t');
+                    if (token) {
+                        const content = AuthModule.deobfuscateData(token);
+                        const parsed = AuthModule.parseScannedData(content);
+                        if (parsed.version == '1' && parsed.fields.length >= 2) {
+                            $('#email').val(parsed.fields[0]);
+                            $('#password').val(parsed.fields[1]);
+                        }
+                    }
+                    return;
+                }
                 await new CheckinModule().init();
             }
         }
 
-        $(document).ready(() => App.start());
+        $(document).ready(() => {
+            PwaInstaller.init();
+            App.start();
+        });
     </script>
 </body>
 
