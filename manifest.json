@@ -2,7 +2,7 @@
     "name": "QR Scanner",
     "short_name": "QR Scanner",
     "description": "QR Code Check-in Scanner for EsportsFan",
-    "start_url": "/qr-scanner-app/",
+    "start_url": "./",
     "display": "standalone",
     "background_color": "#1a1a1a",
     "theme_color": "#1a1a1a",
